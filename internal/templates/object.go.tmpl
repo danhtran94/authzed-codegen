@@ -1,5 +1,5 @@
 
-{{- /* gotype: github.com/danhtran94/internal/ast.DefinitionNode */ -}}
+{{- /* gotype: github.com/danhtran94/authzed-codegen/internal/generator.DefinitionView */ -}}
 package {{ packageName .ObjectType.Prefix }}
 
 import (
@@ -14,7 +14,7 @@ type Permission{{ $typeName }} authz.Permission
 
 {{ range $rel := .Relations }}const {{ $typeName }}{{ snakeToPascal $rel.Name }} Relation{{ $typeName }} = "{{ $rel.Name }}"
 type {{ $typeName }}{{ snakeToPascal $rel.Name }}Objects struct {
-{{ range $idx, $relType := relationExpressionTypes $rel.Expression }}  {{ typeName $relType }} []{{ typeName $relType }}
+{{ range $idx, $relType := $rel.AllowedTypes }}  {{ typeName $relType }} []{{ typeName $relType }}
 {{ end }}}
 {{ end }}
 type {{ $typeName }} authz.ID
@@ -35,7 +35,7 @@ func ({{ $var }} {{ $typeName }}) ToList() []{{ $typeName }} {
 }
 
 {{ range $rel := .Relations }}func ({{ $var }} {{ $typeName }}) Create{{ snakeToPascal $rel.Name}}Relations(ctx context.Context, objects {{ $typeName }}{{ snakeToPascal $rel.Name }}Objects) error {
-  {{ range $idx, $relType := relationExpressionTypes $rel.Expression }}if len(objects.{{ typeName $relType }}) > 0 {
+  {{ range $idx, $relType := $rel.AllowedTypes }}if len(objects.{{ typeName $relType }}) > 0 {
     err := authz.GetEngine(ctx).CreateRelations(ctx, authz.Resource{
       Type: Type{{ $typeName }},
       ID: authz.ID({{ $var }}),
@@ -48,7 +48,7 @@ func ({{ $var }} {{ $typeName }}) ToList() []{{ $typeName }} {
 }
 {{ end }}{{ $var := .ObjectType.Name }}{{ range $rel := .Relations }}
 func ({{ $var }} {{ $typeName }}) Delete{{ snakeToPascal $rel.Name}}Relations(ctx context.Context, objects {{ $typeName }}{{ snakeToPascal $rel.Name }}Objects) error {
-  {{ range $idx, $relType := relationExpressionTypes $rel.Expression }}if len(objects.{{ typeName $relType }}) > 0 {
+  {{ range $idx, $relType := $rel.AllowedTypes }}if len(objects.{{ typeName $relType }}) > 0 {
     err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
       Type: Type{{ $typeName }},
       ID: authz.ID({{ $var }}),
@@ -59,7 +59,7 @@ func ({{ $var }} {{ $typeName }}) Delete{{ snakeToPascal $rel.Name}}Relations(ct
   }
   {{ end }}return nil
 }
-{{ end }}{{ range $rel := .Relations }}{{ range $idx, $relType := relationExpressionTypes $rel.Expression }}
+{{ end }}{{ range $rel := .Relations }}{{ range $idx, $relType := $rel.AllowedTypes }}
 func ({{ $var }} {{ $typeName }}) Read{{ snakeToPascal $rel.Name}}{{ typeName $relType }}Relations(ctx context.Context) ([]{{ typeName $relType }}, error) {
   ids, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
     Type: Type{{ $typeName }},

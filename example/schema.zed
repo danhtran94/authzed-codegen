@@ -69,3 +69,41 @@ definition menusvc/setting {
 	relation owner: menusvc/company
 	permission write = owner->manage
 }
+
+// extsvc/* — extended fixtures exercising patterns the bookingsvc/menusvc
+// blocks above do not cover. These also exercise comments themselves,
+// which the previous hand-written parser could not tokenize.
+
+definition extsvc/user {}
+definition extsvc/group {}
+definition extsvc/role {}
+
+definition extsvc/folder {
+	// 3-way type union — exercises adapter walking 3 entries in
+	// AllowedDirectRelations and template emitting 3-arm Objects struct.
+	relation viewer: extsvc/user | extsvc/group | extsvc/role
+
+	// Pure wildcard-only relation — HasWildcard = true, AllowedTypes = ["extsvc/user"].
+	// Generated code is identical to the non-wildcard form (data-only bit).
+	relation guest: extsvc/user:*
+
+	// Permission == single relation alias.
+	permission browse = viewer
+}
+
+definition extsvc/document {
+	relation parent: extsvc/folder
+	// 2-way relation that gets walked through an arrow below.
+	relation owner: extsvc/user | extsvc/group
+
+	// Single-arrow permission (no leading identifier) — exercises the
+	// flat for-loop in resolvePermissionExpressionTypes with a single Arrow expr.
+	permission view = parent->browse
+
+	// Mixed identifier + arrow.
+	permission edit = owner + parent->browse
+
+	// Permission that references two sibling permissions in the same definition —
+	// exercises GetPermissionTree's permission-resolver pass.
+	permission admin = view + edit
+}
