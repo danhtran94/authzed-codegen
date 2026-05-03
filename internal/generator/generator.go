@@ -31,7 +31,10 @@ func (g *Generator) GenerateObjectSource(name string) error {
 	tmplStr := g.ObjectTemplates[name]
 
 	defs := ParseDefinitions(g.Definitions)
-	tree := defs.GetPermissionTree()
+	tree, err := defs.GetPermissionTree()
+	if err != nil {
+		return err
+	}
 
 	var mapFuncs = template.FuncMap{
 		"upperFirst":    utilstr.UpperFirst,
@@ -49,7 +52,7 @@ func (g *Generator) GenerateObjectSource(name string) error {
 
 	tmpl := template.New(name).Funcs(mapFuncs)
 
-	tmpl, err := tmpl.Parse(tmplStr)
+	tmpl, err = tmpl.Parse(tmplStr)
 	if err != nil {
 		return err
 	}
@@ -141,53 +144,81 @@ type Definition struct {
 
 type DefinitionsByTypes map[string]*Definition
 
-func (d DefinitionsByTypes) GetPermissionTree() map[string][]string {
+func (d DefinitionsByTypes) GetPermissionTree() (map[string][]string, error) {
 	tree := map[string][]string{}
-	seen := map[string]bool{}
+	cache := map[string][]string{}
 
-	addTree := func(treename string, types []string) {
-		for _, t := range types {
-			seenname := fmt.Sprintf("%s/%s", treename, t)
-			if _, ok := seen[seenname]; !ok {
-				seen[seenname] = true
-				tree[treename] = append(tree[treename], t)
-			}
-		}
-	}
-
-	relationResolver := map[string][]string{}
 	for t, def := range d {
 		if def.Permissions.IsEmpty() {
 			tree[t] = []string{}
+			continue
 		}
+		for n := range def.Permissions {
+			types, err := d.resolveTransitive(t, n, map[string]bool{}, cache)
+			if err != nil {
+				return nil, err
+			}
+			tree[fmt.Sprintf("%s/%s", t, n)] = types
+		}
+	}
 
-		for n, permissions := range def.Permissions {
-			for _, p := range permissions {
-				if p.Kind == "relation" {
-					treename := fmt.Sprintf("%s/%s", t, n)
-					relationResolver[treename] = p.Types
-				}
+	return tree, nil
+}
+
+// resolveTransitive returns the deduplicated set of input types reachable
+// from (defType, perm), walking both relation and permission contributions
+// recursively. visited tracks the current recursion stack for cycle
+// detection; cache memoizes finalized type sets across the whole walk so
+// each (defType, perm) is resolved at most once.
+func (d DefinitionsByTypes) resolveTransitive(defType, perm string, visited map[string]bool, cache map[string][]string) ([]string, error) {
+	key := fmt.Sprintf("%s/%s", defType, perm)
+	if cached, ok := cache[key]; ok {
+		return cached, nil
+	}
+	if visited[key] {
+		return nil, fmt.Errorf("cycle detected at %s", key)
+	}
+	visited[key] = true
+	defer delete(visited, key)
+
+	def, ok := d[defType]
+	if !ok {
+		cache[key] = []string{}
+		return cache[key], nil
+	}
+	permissions, ok := def.Permissions[perm]
+	if !ok {
+		cache[key] = []string{}
+		return cache[key], nil
+	}
+
+	seen := map[string]bool{}
+	out := []string{}
+	add := func(types []string) {
+		for _, t := range types {
+			if !seen[t] {
+				seen[t] = true
+				out = append(out, t)
 			}
 		}
 	}
 
-	for t, def := range d {
-		for n, permissions := range def.Permissions {
-			for _, p := range permissions {
-				treename := fmt.Sprintf("%s/%s", t, n)
-				if p.Kind == "permission" {
-					for _, ref := range p.Types {
-						refperm := fmt.Sprintf("%s/%s", ref, p.Value)
-						addTree(treename, relationResolver[refperm])
-					}
-				} else {
-					addTree(treename, p.Types)
+	for _, p := range permissions {
+		if p.Kind == "permission" {
+			for _, ref := range p.Types {
+				subTypes, err := d.resolveTransitive(ref, p.Value, visited, cache)
+				if err != nil {
+					return nil, err
 				}
+				add(subTypes)
 			}
+		} else {
+			add(p.Types)
 		}
 	}
 
-	return tree
+	cache[key] = out
+	return out, nil
 }
 
 func ParseDefinitions(defs []*DefinitionView) DefinitionsByTypes {

@@ -158,10 +158,11 @@ const EmployeeManage PermissionEmployee = "manage"
 
 type CheckEmployeeManageInputs struct {
   User []User
+  Employee []Employee
 }
 
 func (employee Employee) CheckManage(ctx context.Context, input CheckEmployeeManageInputs) (bool, error) {
-  if len(input.User) == 0 && true {
+  if len(input.User) == 0 && len(input.Employee) == 0 && true {
     return false, authz.ErrNoInput
   }
 
@@ -170,6 +171,15 @@ func (employee Employee) CheckManage(ctx context.Context, input CheckEmployeeMan
       Type: TypeEmployee,
       ID: authz.ID(employee),
     }, authz.Permission(EmployeeManage), TypeUser, authz.IDs(input.User))
+    if err != nil {
+      return false, err
+    }
+  }
+  if len(input.Employee) > 0 {
+    err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
+      Type: TypeEmployee,
+      ID: authz.ID(employee),
+    }, authz.Permission(EmployeeManage), TypeEmployee, authz.IDs(input.Employee))
     if err != nil {
       return false, err
     }
@@ -190,6 +200,17 @@ func LookupManageEmployeeResources(ctx context.Context, input CheckEmployeeManag
 
     return authz.FromIDs[Employee](ids), nil
   }
+  if len(input.Employee) > 0 {
+    ids, err := authz.GetEngine(ctx).LookupResources(ctx,
+      TypeEmployee, authz.Permission(EmployeeManage), 
+      TypeEmployee, authz.IDs(input.Employee),
+    )
+    if err != nil {
+      return nil, err
+    }
+
+    return authz.FromIDs[Employee](ids), nil
+  }
   
   return []Employee{}, nil
 }
@@ -197,10 +218,11 @@ const EmployeeView PermissionEmployee = "view"
 
 type CheckEmployeeViewInputs struct {
   User []User
+  Employee []Employee
 }
 
 func (employee Employee) CheckView(ctx context.Context, input CheckEmployeeViewInputs) (bool, error) {
-  if len(input.User) == 0 && true {
+  if len(input.User) == 0 && len(input.Employee) == 0 && true {
     return false, authz.ErrNoInput
   }
 
@@ -209,6 +231,15 @@ func (employee Employee) CheckView(ctx context.Context, input CheckEmployeeViewI
       Type: TypeEmployee,
       ID: authz.ID(employee),
     }, authz.Permission(EmployeeView), TypeUser, authz.IDs(input.User))
+    if err != nil {
+      return false, err
+    }
+  }
+  if len(input.Employee) > 0 {
+    err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
+      Type: TypeEmployee,
+      ID: authz.ID(employee),
+    }, authz.Permission(EmployeeView), TypeEmployee, authz.IDs(input.Employee))
     if err != nil {
       return false, err
     }
@@ -222,6 +253,17 @@ func LookupViewEmployeeResources(ctx context.Context, input CheckEmployeeViewInp
     ids, err := authz.GetEngine(ctx).LookupResources(ctx,
       TypeEmployee, authz.Permission(EmployeeView), 
       TypeUser, authz.IDs(input.User),
+    )
+    if err != nil {
+      return nil, err
+    }
+
+    return authz.FromIDs[Employee](ids), nil
+  }
+  if len(input.Employee) > 0 {
+    ids, err := authz.GetEngine(ctx).LookupResources(ctx,
+      TypeEmployee, authz.Permission(EmployeeView), 
+      TypeEmployee, authz.IDs(input.Employee),
     )
     if err != nil {
       return nil, err
@@ -247,6 +289,20 @@ func (employee Employee) LookupManageUserSubjects(ctx context.Context) ([]User, 
 
   return authz.FromIDs[User](ids), nil
 }
+func (employee Employee) LookupManageEmployeeSubjects(ctx context.Context) ([]Employee, error) {
+  ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+    authz.Resource{
+      Type: TypeEmployee,
+      ID: authz.ID(employee),
+    }, 
+    authz.Permission(EmployeeManage), TypeEmployee,
+  )
+  if err != nil {
+    return nil, err
+  }
+
+  return authz.FromIDs[Employee](ids), nil
+}
 
 func (employee Employee) LookupViewUserSubjects(ctx context.Context) ([]User, error) {
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
@@ -261,4 +317,18 @@ func (employee Employee) LookupViewUserSubjects(ctx context.Context) ([]User, er
   }
 
   return authz.FromIDs[User](ids), nil
+}
+func (employee Employee) LookupViewEmployeeSubjects(ctx context.Context) ([]Employee, error) {
+  ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+    authz.Resource{
+      Type: TypeEmployee,
+      ID: authz.ID(employee),
+    }, 
+    authz.Permission(EmployeeView), TypeEmployee,
+  )
+  if err != nil {
+    return nil, err
+  }
+
+  return authz.FromIDs[Employee](ids), nil
 }

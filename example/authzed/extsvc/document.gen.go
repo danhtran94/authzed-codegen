@@ -311,10 +311,11 @@ const DocumentAdmin PermissionDocument = "admin"
 type CheckDocumentAdminInputs struct {
   User []User
   Group []Group
+  Role []Role
 }
 
 func (document Document) CheckAdmin(ctx context.Context, input CheckDocumentAdminInputs) (bool, error) {
-  if len(input.User) == 0 && len(input.Group) == 0 && true {
+  if len(input.User) == 0 && len(input.Group) == 0 && len(input.Role) == 0 && true {
     return false, authz.ErrNoInput
   }
 
@@ -332,6 +333,15 @@ func (document Document) CheckAdmin(ctx context.Context, input CheckDocumentAdmi
       Type: TypeDocument,
       ID: authz.ID(document),
     }, authz.Permission(DocumentAdmin), TypeGroup, authz.IDs(input.Group))
+    if err != nil {
+      return false, err
+    }
+  }
+  if len(input.Role) > 0 {
+    err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
+      Type: TypeDocument,
+      ID: authz.ID(document),
+    }, authz.Permission(DocumentAdmin), TypeRole, authz.IDs(input.Role))
     if err != nil {
       return false, err
     }
@@ -356,6 +366,17 @@ func LookupAdminDocumentResources(ctx context.Context, input CheckDocumentAdminI
     ids, err := authz.GetEngine(ctx).LookupResources(ctx,
       TypeDocument, authz.Permission(DocumentAdmin), 
       TypeGroup, authz.IDs(input.Group),
+    )
+    if err != nil {
+      return nil, err
+    }
+
+    return authz.FromIDs[Document](ids), nil
+  }
+  if len(input.Role) > 0 {
+    ids, err := authz.GetEngine(ctx).LookupResources(ctx,
+      TypeDocument, authz.Permission(DocumentAdmin), 
+      TypeRole, authz.IDs(input.Role),
     )
     if err != nil {
       return nil, err
@@ -480,4 +501,18 @@ func (document Document) LookupAdminGroupSubjects(ctx context.Context) ([]Group,
   }
 
   return authz.FromIDs[Group](ids), nil
+}
+func (document Document) LookupAdminRoleSubjects(ctx context.Context) ([]Role, error) {
+  ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+    authz.Resource{
+      Type: TypeDocument,
+      ID: authz.ID(document),
+    }, 
+    authz.Permission(DocumentAdmin), TypeRole,
+  )
+  if err != nil {
+    return nil, err
+  }
+
+  return authz.FromIDs[Role](ids), nil
 }

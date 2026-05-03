@@ -116,7 +116,8 @@ See `docs/ADR-001-parser-migration.md` for the rationale.
 - [ ] Codegen for intersection / exclusion rewrites.
 - [ ] Codegen for wildcard relations (data already preserved on the relation view).
 - [ ] Caveat support.
-- [ ] Resolver: propagate arrow contributions through permission-of-permissions chains (currently only direct relation contributions transit the chain).
+
+> **Resolver note (post-AUZ-002):** `Check<Permission>Inputs` structs include the **full set of input types reachable through the permission chain**, including types contributed via arrow expressions (`->`) inside referenced permissions. Earlier versions silently dropped arrow contributions when one permission referenced another by name. Self-referential schemas (`permission p = p + q`) now exit non-zero with `cycle detected` instead of infinite-looping.
 
 
 ## Contributing
