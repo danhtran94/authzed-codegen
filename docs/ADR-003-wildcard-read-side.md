@@ -1,0 +1,117 @@
+# [ADR-003] Wildcard Reads: Sibling `<Type>Wildcard` Method over Paired Return and Sentinel ID
+
+| Field      | Value                                |
+|------------|--------------------------------------|
+| Status     | Accepted                             |
+| Date       | 2026-05-04                           |
+| Deciders   | Danh Tran                            |
+| Scope      | authzed-codegen generator            |
+| Depends on | ADR-002                              |
+
+---
+
+## Context
+
+ADR-002 pinned the wildcard *grant* API (`Create<Rel>Relations` accepts `Wildcards{User: true}` to grant `viewer:user:*`) but left the *read* path open. Two existing read methods need extending to surface wildcard state (per A1):
+
+- `Read<Rel><Type>Relations(ctx) ([]Type, error)` — returns concrete subject IDs of granted tuples; today it ignores wildcard tuples entirely.
+- `Lookup<Perm><Type>Subjects(ctx) ([]Type, error)` — walks the permission graph to find subjects with a permission; today it ignores public/wildcard grants.
+
+SpiceDB returns the wildcard tuple in `ReadRelationships` with `Subject.Object.ObjectId == "*"` unchanged (per A2), and `LookupSubjects` returns the wildcard as a single response item (per A3). The data exists; the API shape is the open question.
+
+Without a read-side API, ADR-002's grant flow is one-way: callers can grant `Wildcards{User: true}` but cannot detect after the fact whether the wildcard is granted. The asymmetry is discovered the first time someone writes "is this resource public?" logic and reaches for `Read<Rel><Type>Relations` (per A4).
+
+## Options
+
+### Option A — Sentinel `Type("*")` mixed into the slice
+
+Reuse the existing return shape. The wildcard surfaces as a special-valued ID:
+
+```go
+ids, _ := employee.ReadViewerUserRelations(ctx)
+for _, id := range ids {
+    if id == authz.WildcardID {  // "*"
+        // wildcard granted
+    }
+}
+```
+
+Zero new methods; the wildcard is just one of the IDs returned. Callers must filter the sentinel before passing the slice to `Check<Perm>` or other concrete-ID consumers.
+
+### Option B — Paired return signature change
+
+Modify `Read<Rel><Type>Relations` to return both:
+
+```go
+ids, isPublic, _ := employee.ReadViewerUserRelations(ctx)
+```
+
+Breaking change to every existing call site (in this repo: only the example fixtures, which are regenerated). Multi-return triple deviates from the codebase's established `([]T, error)` pattern shared by all other generated methods.
+
+### Option C — Sibling `<Type>Wildcard` method
+
+Add a sibling method per relation per wildcard-eligible type:
+
+```go
+ids, _      := employee.ReadViewerUserRelations(ctx)   // unchanged — concrete IDs
+isPublic, _ := employee.ReadViewerUserWildcard(ctx)    // new — wildcard grant state
+```
+
+Same shape symmetric on the lookup side: `LookupView<Perm><Type>WildcardSubjects(ctx) (bool, error)`. Existing single-return-with-error pattern preserved.
+
+### Option D — Struct return
+
+Replace the slice return with a result struct:
+
+```go
+result, _ := employee.ReadViewerUserRelations(ctx)
+result.IDs        // []User — concrete subjects
+result.IsWildcard // bool   — wildcard grant
+```
+
+Single round-trip, type-safe, extensible. Breaks every existing call site. Introduces a new type per (Resource, Relation, Type) triple — codegen surface grows substantially.
+
+## Options Comparison
+
+| Driver | A: Sentinel ID | B: Paired return | C: Sibling method | D: Struct return |
+|--------|----------------|------------------|-------------------|------------------|
+| Breaking change | None | Every call site | None | Every call site |
+| Round-trips per full read | 1 | 1 | 2 | 1 |
+| Symmetry with ADR-002 grant API | Mismatch | Mismatch | Match | Mismatch |
+| Type-safe wildcard discrimination | None | Strong | Strong | Strong |
+| Pattern consistency with other read methods | Match | Deviation | Match | Deviation |
+| Sentinel leak risk into Check methods | High | None | None | None |
+| Extends to LookupSubjects | Awkward | Same shape | Clean | Same shape |
+| Codegen template change | Tiny | Small | Medium | Large |
+
+## Decision
+
+`Read<Rel><Type>Relations` keeps its existing signature; a sibling `Read<Rel><Type>Wildcard(ctx context.Context) (bool, error)` is generated for each wildcard-eligible type, with `Lookup<Perm><Type>WildcardSubjects(ctx context.Context) (bool, error)` mirroring on the permission-resolved side.
+
+## Consequences
+
+**Consequences Positive**
+
+- Existing callers of `Read<Rel><Type>Relations` and `Lookup<Perm><Type>Subjects` keep working byte-identically. The codegen is purely additive — no signature changes propagate to consumer code.
+- The grant and read APIs are visually symmetric: callers grant via `Create<Rel>Relations(ctx, Objects{Wildcards: Wildcards{User: true}})` and read via `Read<Rel>UserWildcard(ctx)`. The Wildcards-named methods cluster together in IDE autocomplete on the resource type.
+- The `([]T, error)` return shape stays consistent across every read method generated by the codegen — readers of the generated code do not need to learn a second pattern for wildcard-eligible relations.
+- The sibling-method shape extends cleanly to `LookupSubjects` (per A3), which also returns wildcard data. A future relation that adds a wildcard-eligible type triggers exactly one new method per type per call site (Read*Wildcard, Lookup*WildcardSubjects), not a rewrite of existing methods.
+
+**Consequences Negative**
+
+- Two round-trips are needed to obtain "the full grant state of this relation" (concrete IDs + wildcard flag). For typical access-decision flows this is acceptable — `CheckPermission` resolves both server-side without the caller doing either read — but a UI rendering "who has access?" pays two RPCs instead of one. The cost is bounded; SpiceDB's own gRPC API has the same shape.
+- Codegen surface grows by N new methods where N = sum of wildcard-eligible types across all relations in the schema. For the existing fixture this is 2 new methods total (`bookingsvc/employee.viewer.user`, `extsvc/folder.guest.user`); a schema with broader public-access patterns scales linearly.
+- The sibling-method shape commits to a one-bit `bool` representation. Future SpiceDB features that surface richer per-grant metadata on the wildcard tuple (caveats, expiration, source position) cannot be returned through this signature without a second breaking change. Per A5, current wildcard tuples carry no caveat data and expiration is the only currently-defined trait — but a future feature widening the per-grant metadata surface would force a `(bool, error)` → `(WildcardInfo, error)` migration.
+- Read-after-write consistency follows whatever consistency mode the runtime engine has configured globally; this ADR does not introduce a per-call consistency knob. A caller that grants a wildcard and immediately reads it back may observe a stale "false" if the engine is configured for eventual consistency. This is the same hazard as the existing `Read<Rel><Type>Relations` and is not made worse by the new method, but it is not solved either.
+
+## Assumptions
+
+- **A1 [VERIFIED]:** The current generator emits `Read<Rel><Type>Relations` and `Lookup<Perm><Type>Subjects` per relation/type pair without wildcard surfacing. Evidence: `internal/templates/object.go.tmpl` lines 62-74 and 114-128 (the two methods iterate `$rel.AllowedTypes` but emit no branch for wildcard handling); `example/authzed/bookingsvc/employee.gen.go` shows the rendered output.
+- **A2 [EXTERNAL FACT]:** SpiceDB's `ReadRelationships` returns wildcard tuples with `Subject.Object.ObjectId == "*"` unchanged. Evidence: `github.com/authzed/spicedb@v1.52.0/pkg/tuple/structs.go:20` (`PublicWildcard = "*"` constant); the engine does not transform wildcard tuples in read paths — see ADR-002 A3.
+- **A3 [EXTERNAL FACT]:** SpiceDB's `LookupSubjects` returns the wildcard subject as a single response item alongside concrete subjects when the permission is satisfied via a wildcard grant. Evidence: research findings traced through `github.com/authzed/spicedb@v1.52.0/internal/services/v1/lookupsubjects.go` and the `LookupSubjectsResponse.Subject` field which carries the same `*` marker as ReadRelationships. Implication: `Lookup<Perm><Type>Subjects` in the existing template would currently return `[]Type` containing the literal `"*"` string in cases where a wildcard grant satisfies the permission — surfacing the same sentinel-leak hazard Option A formalizes for ReadRelations.
+- **A4 [HYPOTHESIS]:** Callers will need wildcard-grant detection within hours of adopting ADR-002's grant API. Verification deferred — informed by the symmetry expectation that any write API should have a corresponding read API; if the assumption is wrong (callers grant wildcards but never need to inspect them), the new methods are cheap dead code that can be removed without a breaking change.
+- **A5 [EXTERNAL FACT]:** Wildcard tuples carry no caveat data (caveats are prohibited on wildcards per ADR-002 A6) and `ExpirationTrait` is the only currently-defined per-grant metadata field on `AllowedRelation`. Evidence: `github.com/authzed/spicedb@v1.52.0/pkg/proto/core/v1/core.pb.go:1714-1735` (`AllowedRelation` struct fields); no other per-grant trait is exported. Implication: a `bool` return is sufficient for today's data model; the negative consequence about future trait expansion is hypothetical.
+
+## History
+
+_Binary-owned by `harness history-update`. Do not hand-edit._
