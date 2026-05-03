@@ -82,7 +82,3 @@ func Stringers[T ~string](ids []StringConvertable) []T {
 
 	return result
 }
-
-func permStrACL(perm Permission, obj Type, objID ID, sub Type, subID ID) string {
-	return fmt.Sprintf("<%s:%s#%s@%s:%s>", obj, objID, string(perm), sub, subID)
-}

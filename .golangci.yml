@@ -1,41 +1,12 @@
-# Add this section to your existing .golangci.yml
-# under linters-settings:
-
 linters-settings:
   depguard:
     rules:
-      domain-pure:
-        files:
-          - "**/internal/domain/**"
-        deny:
-          - pkg: "*/api"
-            desc: "domain cannot import api layer"
-          - pkg: "*/repo"
-            desc: "domain cannot import repo layer"
-          - pkg: "*/internal/module"
-            desc: "domain cannot import module layer"
-          - pkg: "*/internal/integrate"
-            desc: "domain cannot import integrate layer"
-
-      module-no-outer:
-        files:
-          - "**/internal/module/**"
-        deny:
-          - pkg: "*/api"
-            desc: "module defines interfaces, never imports api directly"
-          - pkg: "*/repo"
-            desc: "module defines interfaces, never imports repo directly"
-
-      pkg-no-domain:
+      pkg-no-internal:
         files:
           - "**/pkg/**"
         deny:
-          - pkg: "*/internal"
-            desc: "pkg must have zero domain coupling"
-          - pkg: "*/api"
-            desc: "pkg must have zero domain coupling"
-          - pkg: "*/repo"
-            desc: "pkg must have zero domain coupling"
+          - pkg: "github.com/danhtran94/authzed-codegen/internal"
+            desc: "pkg/ is the runtime contract consumed by generated code; it must not depend on internal/"
 
 linters:
   enable:
