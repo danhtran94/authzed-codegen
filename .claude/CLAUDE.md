@@ -58,7 +58,7 @@ The SpiceDB compiler accepts the full AuthZED grammar; the **codegen**
 layer is narrower. `internal/generator/adapter.go` rejects unsupported
 constructs at adapt time with schema-relative errors:
 
-- ✓ Union (`+`), arrow (`->`), wildcard data on relations
+- ✓ Union (`+`), arrow (`->`), wildcard relations (`type:*`) — Wildcards sub-struct on Objects + sibling Read/Lookup wildcard methods
 - ✗ Intersection (`&`), exclusion (`-`)
 - ✗ Caveats (`with <caveat>`), expiration traits (`with expiration`)
 - ✗ Sub-relation references (`foo#bar`)

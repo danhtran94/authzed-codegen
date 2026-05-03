@@ -116,8 +116,8 @@ func (document Document) ReadParentFolderRelations(ctx context.Context) ([]Folde
   if err != nil {
     return nil, err
   }
-  
-  return authz.FromIDs[Folder](ids), nil
+
+  return authz.FromIDsExcludingWildcard[Folder](ids), nil
 }
 
 func (document Document) ReadOwnerUserRelations(ctx context.Context) ([]User, error) {
@@ -128,8 +128,8 @@ func (document Document) ReadOwnerUserRelations(ctx context.Context) ([]User, er
   if err != nil {
     return nil, err
   }
-  
-  return authz.FromIDs[User](ids), nil
+
+  return authz.FromIDsExcludingWildcard[User](ids), nil
 }
 
 func (document Document) ReadOwnerGroupRelations(ctx context.Context) ([]Group, error) {
@@ -140,8 +140,8 @@ func (document Document) ReadOwnerGroupRelations(ctx context.Context) ([]Group, 
   if err != nil {
     return nil, err
   }
-  
-  return authz.FromIDs[Group](ids), nil
+
+  return authz.FromIDsExcludingWildcard[Group](ids), nil
 }
 
 const DocumentView PermissionDocument = "view"
@@ -393,42 +393,72 @@ func (document Document) LookupViewUserSubjects(ctx context.Context) ([]User, er
     authz.Resource{
       Type: TypeDocument,
       ID: authz.ID(document),
-    }, 
+    },
     authz.Permission(DocumentView), TypeUser,
   )
   if err != nil {
     return nil, err
   }
 
-  return authz.FromIDs[User](ids), nil
+  return authz.FromIDsExcludingWildcard[User](ids), nil
+}
+
+func (document Document) LookupViewUserWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeDocument,
+      ID: authz.ID(document),
+    },
+    authz.Permission(DocumentView), TypeUser,
+  )
 }
 func (document Document) LookupViewGroupSubjects(ctx context.Context) ([]Group, error) {
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeDocument,
       ID: authz.ID(document),
-    }, 
+    },
     authz.Permission(DocumentView), TypeGroup,
   )
   if err != nil {
     return nil, err
   }
 
-  return authz.FromIDs[Group](ids), nil
+  return authz.FromIDsExcludingWildcard[Group](ids), nil
+}
+
+func (document Document) LookupViewGroupWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeDocument,
+      ID: authz.ID(document),
+    },
+    authz.Permission(DocumentView), TypeGroup,
+  )
 }
 func (document Document) LookupViewRoleSubjects(ctx context.Context) ([]Role, error) {
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeDocument,
       ID: authz.ID(document),
-    }, 
+    },
     authz.Permission(DocumentView), TypeRole,
   )
   if err != nil {
     return nil, err
   }
 
-  return authz.FromIDs[Role](ids), nil
+  return authz.FromIDsExcludingWildcard[Role](ids), nil
+}
+
+func (document Document) LookupViewRoleWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeDocument,
+      ID: authz.ID(document),
+    },
+    authz.Permission(DocumentView), TypeRole,
+  )
 }
 
 func (document Document) LookupEditUserSubjects(ctx context.Context) ([]User, error) {
@@ -436,42 +466,72 @@ func (document Document) LookupEditUserSubjects(ctx context.Context) ([]User, er
     authz.Resource{
       Type: TypeDocument,
       ID: authz.ID(document),
-    }, 
+    },
     authz.Permission(DocumentEdit), TypeUser,
   )
   if err != nil {
     return nil, err
   }
 
-  return authz.FromIDs[User](ids), nil
+  return authz.FromIDsExcludingWildcard[User](ids), nil
+}
+
+func (document Document) LookupEditUserWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeDocument,
+      ID: authz.ID(document),
+    },
+    authz.Permission(DocumentEdit), TypeUser,
+  )
 }
 func (document Document) LookupEditGroupSubjects(ctx context.Context) ([]Group, error) {
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeDocument,
       ID: authz.ID(document),
-    }, 
+    },
     authz.Permission(DocumentEdit), TypeGroup,
   )
   if err != nil {
     return nil, err
   }
 
-  return authz.FromIDs[Group](ids), nil
+  return authz.FromIDsExcludingWildcard[Group](ids), nil
+}
+
+func (document Document) LookupEditGroupWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeDocument,
+      ID: authz.ID(document),
+    },
+    authz.Permission(DocumentEdit), TypeGroup,
+  )
 }
 func (document Document) LookupEditRoleSubjects(ctx context.Context) ([]Role, error) {
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeDocument,
       ID: authz.ID(document),
-    }, 
+    },
     authz.Permission(DocumentEdit), TypeRole,
   )
   if err != nil {
     return nil, err
   }
 
-  return authz.FromIDs[Role](ids), nil
+  return authz.FromIDsExcludingWildcard[Role](ids), nil
+}
+
+func (document Document) LookupEditRoleWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeDocument,
+      ID: authz.ID(document),
+    },
+    authz.Permission(DocumentEdit), TypeRole,
+  )
 }
 
 func (document Document) LookupAdminUserSubjects(ctx context.Context) ([]User, error) {
@@ -479,40 +539,70 @@ func (document Document) LookupAdminUserSubjects(ctx context.Context) ([]User, e
     authz.Resource{
       Type: TypeDocument,
       ID: authz.ID(document),
-    }, 
+    },
     authz.Permission(DocumentAdmin), TypeUser,
   )
   if err != nil {
     return nil, err
   }
 
-  return authz.FromIDs[User](ids), nil
+  return authz.FromIDsExcludingWildcard[User](ids), nil
+}
+
+func (document Document) LookupAdminUserWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeDocument,
+      ID: authz.ID(document),
+    },
+    authz.Permission(DocumentAdmin), TypeUser,
+  )
 }
 func (document Document) LookupAdminGroupSubjects(ctx context.Context) ([]Group, error) {
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeDocument,
       ID: authz.ID(document),
-    }, 
+    },
     authz.Permission(DocumentAdmin), TypeGroup,
   )
   if err != nil {
     return nil, err
   }
 
-  return authz.FromIDs[Group](ids), nil
+  return authz.FromIDsExcludingWildcard[Group](ids), nil
+}
+
+func (document Document) LookupAdminGroupWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeDocument,
+      ID: authz.ID(document),
+    },
+    authz.Permission(DocumentAdmin), TypeGroup,
+  )
 }
 func (document Document) LookupAdminRoleSubjects(ctx context.Context) ([]Role, error) {
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeDocument,
       ID: authz.ID(document),
-    }, 
+    },
     authz.Permission(DocumentAdmin), TypeRole,
   )
   if err != nil {
     return nil, err
   }
 
-  return authz.FromIDs[Role](ids), nil
+  return authz.FromIDsExcludingWildcard[Role](ids), nil
+}
+
+func (document Document) LookupAdminRoleWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeDocument,
+      ID: authz.ID(document),
+    },
+    authz.Permission(DocumentAdmin), TypeRole,
+  )
 }

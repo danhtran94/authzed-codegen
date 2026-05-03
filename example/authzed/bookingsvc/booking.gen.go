@@ -116,8 +116,8 @@ func (booking Booking) ReadOwnerEmployeeRelations(ctx context.Context) ([]Employ
   if err != nil {
     return nil, err
   }
-  
-  return authz.FromIDs[Employee](ids), nil
+
+  return authz.FromIDsExcludingWildcard[Employee](ids), nil
 }
 
 func (booking Booking) ReadCreatorEmployeeRelations(ctx context.Context) ([]Employee, error) {
@@ -128,8 +128,8 @@ func (booking Booking) ReadCreatorEmployeeRelations(ctx context.Context) ([]Empl
   if err != nil {
     return nil, err
   }
-  
-  return authz.FromIDs[Employee](ids), nil
+
+  return authz.FromIDsExcludingWildcard[Employee](ids), nil
 }
 
 func (booking Booking) ReadCreatorCustomerRelations(ctx context.Context) ([]Customer, error) {
@@ -140,8 +140,8 @@ func (booking Booking) ReadCreatorCustomerRelations(ctx context.Context) ([]Cust
   if err != nil {
     return nil, err
   }
-  
-  return authz.FromIDs[Customer](ids), nil
+
+  return authz.FromIDsExcludingWildcard[Customer](ids), nil
 }
 
 const BookingWrite PermissionBooking = "write"
@@ -312,42 +312,72 @@ func (booking Booking) LookupWriteEmployeeSubjects(ctx context.Context) ([]Emplo
     authz.Resource{
       Type: TypeBooking,
       ID: authz.ID(booking),
-    }, 
+    },
     authz.Permission(BookingWrite), TypeEmployee,
   )
   if err != nil {
     return nil, err
   }
 
-  return authz.FromIDs[Employee](ids), nil
+  return authz.FromIDsExcludingWildcard[Employee](ids), nil
+}
+
+func (booking Booking) LookupWriteEmployeeWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeBooking,
+      ID: authz.ID(booking),
+    },
+    authz.Permission(BookingWrite), TypeEmployee,
+  )
 }
 func (booking Booking) LookupWriteCustomerSubjects(ctx context.Context) ([]Customer, error) {
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeBooking,
       ID: authz.ID(booking),
-    }, 
+    },
     authz.Permission(BookingWrite), TypeCustomer,
   )
   if err != nil {
     return nil, err
   }
 
-  return authz.FromIDs[Customer](ids), nil
+  return authz.FromIDsExcludingWildcard[Customer](ids), nil
+}
+
+func (booking Booking) LookupWriteCustomerWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeBooking,
+      ID: authz.ID(booking),
+    },
+    authz.Permission(BookingWrite), TypeCustomer,
+  )
 }
 func (booking Booking) LookupWriteUserSubjects(ctx context.Context) ([]User, error) {
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeBooking,
       ID: authz.ID(booking),
-    }, 
+    },
     authz.Permission(BookingWrite), TypeUser,
   )
   if err != nil {
     return nil, err
   }
 
-  return authz.FromIDs[User](ids), nil
+  return authz.FromIDsExcludingWildcard[User](ids), nil
+}
+
+func (booking Booking) LookupWriteUserWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeBooking,
+      ID: authz.ID(booking),
+    },
+    authz.Permission(BookingWrite), TypeUser,
+  )
 }
 
 func (booking Booking) LookupChangeOwnerEmployeeSubjects(ctx context.Context) ([]Employee, error) {
@@ -355,40 +385,70 @@ func (booking Booking) LookupChangeOwnerEmployeeSubjects(ctx context.Context) ([
     authz.Resource{
       Type: TypeBooking,
       ID: authz.ID(booking),
-    }, 
+    },
     authz.Permission(BookingChangeOwner), TypeEmployee,
   )
   if err != nil {
     return nil, err
   }
 
-  return authz.FromIDs[Employee](ids), nil
+  return authz.FromIDsExcludingWildcard[Employee](ids), nil
+}
+
+func (booking Booking) LookupChangeOwnerEmployeeWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeBooking,
+      ID: authz.ID(booking),
+    },
+    authz.Permission(BookingChangeOwner), TypeEmployee,
+  )
 }
 func (booking Booking) LookupChangeOwnerCustomerSubjects(ctx context.Context) ([]Customer, error) {
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeBooking,
       ID: authz.ID(booking),
-    }, 
+    },
     authz.Permission(BookingChangeOwner), TypeCustomer,
   )
   if err != nil {
     return nil, err
   }
 
-  return authz.FromIDs[Customer](ids), nil
+  return authz.FromIDsExcludingWildcard[Customer](ids), nil
+}
+
+func (booking Booking) LookupChangeOwnerCustomerWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeBooking,
+      ID: authz.ID(booking),
+    },
+    authz.Permission(BookingChangeOwner), TypeCustomer,
+  )
 }
 func (booking Booking) LookupChangeOwnerUserSubjects(ctx context.Context) ([]User, error) {
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeBooking,
       ID: authz.ID(booking),
-    }, 
+    },
     authz.Permission(BookingChangeOwner), TypeUser,
   )
   if err != nil {
     return nil, err
   }
 
-  return authz.FromIDs[User](ids), nil
+  return authz.FromIDsExcludingWildcard[User](ids), nil
+}
+
+func (booking Booking) LookupChangeOwnerUserWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeBooking,
+      ID: authz.ID(booking),
+    },
+    authz.Permission(BookingChangeOwner), TypeUser,
+  )
 }

@@ -68,8 +68,8 @@ func (setting Setting) ReadOwnerCompanyRelations(ctx context.Context) ([]Company
   if err != nil {
     return nil, err
   }
-  
-  return authz.FromIDs[Company](ids), nil
+
+  return authz.FromIDsExcludingWildcard[Company](ids), nil
 }
 
 const SettingWrite PermissionSetting = "write"
@@ -117,12 +117,22 @@ func (setting Setting) LookupWriteUserSubjects(ctx context.Context) ([]User, err
     authz.Resource{
       Type: TypeSetting,
       ID: authz.ID(setting),
-    }, 
+    },
     authz.Permission(SettingWrite), TypeUser,
   )
   if err != nil {
     return nil, err
   }
 
-  return authz.FromIDs[User](ids), nil
+  return authz.FromIDsExcludingWildcard[User](ids), nil
+}
+
+func (setting Setting) LookupWriteUserWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeSetting,
+      ID: authz.ID(setting),
+    },
+    authz.Permission(SettingWrite), TypeUser,
+  )
 }

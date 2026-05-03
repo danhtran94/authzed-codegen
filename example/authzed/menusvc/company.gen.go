@@ -126,8 +126,8 @@ func (company Company) ReadAdminUserRelations(ctx context.Context) ([]User, erro
   if err != nil {
     return nil, err
   }
-  
-  return authz.FromIDs[User](ids), nil
+
+  return authz.FromIDsExcludingWildcard[User](ids), nil
 }
 
 func (company Company) ReadManagerUserRelations(ctx context.Context) ([]User, error) {
@@ -138,8 +138,8 @@ func (company Company) ReadManagerUserRelations(ctx context.Context) ([]User, er
   if err != nil {
     return nil, err
   }
-  
-  return authz.FromIDs[User](ids), nil
+
+  return authz.FromIDsExcludingWildcard[User](ids), nil
 }
 
 func (company Company) ReadEmployeeUserRelations(ctx context.Context) ([]User, error) {
@@ -150,8 +150,8 @@ func (company Company) ReadEmployeeUserRelations(ctx context.Context) ([]User, e
   if err != nil {
     return nil, err
   }
-  
-  return authz.FromIDs[User](ids), nil
+
+  return authz.FromIDsExcludingWildcard[User](ids), nil
 }
 
 const CompanyManage PermissionCompany = "manage"
@@ -277,14 +277,24 @@ func (company Company) LookupManageUserSubjects(ctx context.Context) ([]User, er
     authz.Resource{
       Type: TypeCompany,
       ID: authz.ID(company),
-    }, 
+    },
     authz.Permission(CompanyManage), TypeUser,
   )
   if err != nil {
     return nil, err
   }
 
-  return authz.FromIDs[User](ids), nil
+  return authz.FromIDsExcludingWildcard[User](ids), nil
+}
+
+func (company Company) LookupManageUserWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeCompany,
+      ID: authz.ID(company),
+    },
+    authz.Permission(CompanyManage), TypeUser,
+  )
 }
 
 func (company Company) LookupCreateBookingUserSubjects(ctx context.Context) ([]User, error) {
@@ -292,14 +302,24 @@ func (company Company) LookupCreateBookingUserSubjects(ctx context.Context) ([]U
     authz.Resource{
       Type: TypeCompany,
       ID: authz.ID(company),
-    }, 
+    },
     authz.Permission(CompanyCreateBooking), TypeUser,
   )
   if err != nil {
     return nil, err
   }
 
-  return authz.FromIDs[User](ids), nil
+  return authz.FromIDsExcludingWildcard[User](ids), nil
+}
+
+func (company Company) LookupCreateBookingUserWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeCompany,
+      ID: authz.ID(company),
+    },
+    authz.Permission(CompanyCreateBooking), TypeUser,
+  )
 }
 
 func (company Company) LookupCreateOrderUserSubjects(ctx context.Context) ([]User, error) {
@@ -307,12 +327,22 @@ func (company Company) LookupCreateOrderUserSubjects(ctx context.Context) ([]Use
     authz.Resource{
       Type: TypeCompany,
       ID: authz.ID(company),
-    }, 
+    },
     authz.Permission(CompanyCreateOrder), TypeUser,
   )
   if err != nil {
     return nil, err
   }
 
-  return authz.FromIDs[User](ids), nil
+  return authz.FromIDsExcludingWildcard[User](ids), nil
+}
+
+func (company Company) LookupCreateOrderUserWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeCompany,
+      ID: authz.ID(company),
+    },
+    authz.Permission(CompanyCreateOrder), TypeUser,
+  )
 }

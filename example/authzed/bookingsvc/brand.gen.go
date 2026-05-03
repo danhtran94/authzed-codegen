@@ -126,8 +126,8 @@ func (brand Brand) ReadAdminUserRelations(ctx context.Context) ([]User, error) {
   if err != nil {
     return nil, err
   }
-  
-  return authz.FromIDs[User](ids), nil
+
+  return authz.FromIDsExcludingWildcard[User](ids), nil
 }
 
 func (brand Brand) ReadManagerEmployeeRelations(ctx context.Context) ([]Employee, error) {
@@ -138,8 +138,8 @@ func (brand Brand) ReadManagerEmployeeRelations(ctx context.Context) ([]Employee
   if err != nil {
     return nil, err
   }
-  
-  return authz.FromIDs[Employee](ids), nil
+
+  return authz.FromIDsExcludingWildcard[Employee](ids), nil
 }
 
 func (brand Brand) ReadEmployeeEmployeeRelations(ctx context.Context) ([]Employee, error) {
@@ -150,8 +150,8 @@ func (brand Brand) ReadEmployeeEmployeeRelations(ctx context.Context) ([]Employe
   if err != nil {
     return nil, err
   }
-  
-  return authz.FromIDs[Employee](ids), nil
+
+  return authz.FromIDsExcludingWildcard[Employee](ids), nil
 }
 
 const BrandManage PermissionBrand = "manage"
@@ -280,28 +280,48 @@ func (brand Brand) LookupManageEmployeeSubjects(ctx context.Context) ([]Employee
     authz.Resource{
       Type: TypeBrand,
       ID: authz.ID(brand),
-    }, 
+    },
     authz.Permission(BrandManage), TypeEmployee,
   )
   if err != nil {
     return nil, err
   }
 
-  return authz.FromIDs[Employee](ids), nil
+  return authz.FromIDsExcludingWildcard[Employee](ids), nil
+}
+
+func (brand Brand) LookupManageEmployeeWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeBrand,
+      ID: authz.ID(brand),
+    },
+    authz.Permission(BrandManage), TypeEmployee,
+  )
 }
 func (brand Brand) LookupManageUserSubjects(ctx context.Context) ([]User, error) {
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeBrand,
       ID: authz.ID(brand),
-    }, 
+    },
     authz.Permission(BrandManage), TypeUser,
   )
   if err != nil {
     return nil, err
   }
 
-  return authz.FromIDs[User](ids), nil
+  return authz.FromIDsExcludingWildcard[User](ids), nil
+}
+
+func (brand Brand) LookupManageUserWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeBrand,
+      ID: authz.ID(brand),
+    },
+    authz.Permission(BrandManage), TypeUser,
+  )
 }
 
 func (brand Brand) LookupCreateBookingEmployeeSubjects(ctx context.Context) ([]Employee, error) {
@@ -309,26 +329,46 @@ func (brand Brand) LookupCreateBookingEmployeeSubjects(ctx context.Context) ([]E
     authz.Resource{
       Type: TypeBrand,
       ID: authz.ID(brand),
-    }, 
+    },
     authz.Permission(BrandCreateBooking), TypeEmployee,
   )
   if err != nil {
     return nil, err
   }
 
-  return authz.FromIDs[Employee](ids), nil
+  return authz.FromIDsExcludingWildcard[Employee](ids), nil
+}
+
+func (brand Brand) LookupCreateBookingEmployeeWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeBrand,
+      ID: authz.ID(brand),
+    },
+    authz.Permission(BrandCreateBooking), TypeEmployee,
+  )
 }
 func (brand Brand) LookupCreateBookingUserSubjects(ctx context.Context) ([]User, error) {
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeBrand,
       ID: authz.ID(brand),
-    }, 
+    },
     authz.Permission(BrandCreateBooking), TypeUser,
   )
   if err != nil {
     return nil, err
   }
 
-  return authz.FromIDs[User](ids), nil
+  return authz.FromIDsExcludingWildcard[User](ids), nil
+}
+
+func (brand Brand) LookupCreateBookingUserWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeBrand,
+      ID: authz.ID(brand),
+    },
+    authz.Permission(BrandCreateBooking), TypeUser,
+  )
 }

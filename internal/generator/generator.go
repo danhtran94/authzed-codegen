@@ -48,6 +48,14 @@ func (g *Generator) GenerateObjectSource(name string) error {
 			}
 			return []string{}
 		},
+		"anyWildcard": func(types []AllowedType) bool {
+			for _, t := range types {
+				if t.IsWildcard {
+					return true
+				}
+			}
+			return false
+		},
 	}
 
 	tmpl := template.New(name).Funcs(mapFuncs)
@@ -269,9 +277,9 @@ func relationFromView(r *RelationView) Relations {
 	out := make(Relations, 0, len(r.AllowedTypes))
 	for _, t := range r.AllowedTypes {
 		out = append(out, Relation{
-			Types: []string{t},
+			Types: []string{t.Namespace},
 			Kind:  "single",
-			Value: t,
+			Value: t.Namespace,
 		})
 	}
 	return out

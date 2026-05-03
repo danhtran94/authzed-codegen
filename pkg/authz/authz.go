@@ -8,6 +8,11 @@ import (
 var ErrNoInput = fmt.Errorf("no input")
 var ErrPermissionDenied = fmt.Errorf("permission denied")
 
+// WildcardID is the SpiceDB wire-level marker for a wildcard subject
+// (relation granted to all subjects of a given type). The codegen
+// references this constant rather than hardcoding the literal "*".
+const WildcardID ID = "*"
+
 type Engine interface {
 	CreateRelations(ctx context.Context, to Resource, relation Relation, subject Type, ids []ID) error
 	CheckPermission(ctx context.Context, dest Resource, has Permission, subject Type, audIDs []ID) error
@@ -15,6 +20,8 @@ type Engine interface {
 	LookupSubjects(ctx context.Context, on Resource, permission Permission, subject Type) ([]ID, error)
 	ReadRelations(ctx context.Context, from Resource, relation Relation, subject Type) ([]ID, error)
 	DeleteRelations(ctx context.Context, from Resource, relation Relation, subject Type, ids []ID) error
+	HasPublicRelation(ctx context.Context, on Resource, relation Relation, subject Type) (bool, error)
+	HasPublicSubject(ctx context.Context, on Resource, permission Permission, subject Type) (bool, error)
 }
 
 var DefaultEngine Engine = nil
@@ -59,6 +66,24 @@ func FromIDs[T ~string](ids []ID) []T {
 	result := []T{}
 
 	for _, id := range ids {
+		result = append(result, T(id))
+	}
+
+	return result
+}
+
+// FromIDsExcludingWildcard converts an authz.ID slice to typed []T,
+// dropping the wildcard sentinel WildcardID. Generated code uses this
+// for read paths that surface concrete IDs only — the wildcard state
+// is exposed through the sibling Read<Rel><Type>Wildcard / Lookup<Perm>
+// <Type>WildcardSubjects methods (per ADR-003).
+func FromIDsExcludingWildcard[T ~string](ids []ID) []T {
+	result := []T{}
+
+	for _, id := range ids {
+		if id == WildcardID {
+			continue
+		}
 		result = append(result, T(id))
 	}
 

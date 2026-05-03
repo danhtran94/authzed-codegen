@@ -68,8 +68,8 @@ func (table Table) ReadOwnerCompanyRelations(ctx context.Context) ([]Company, er
   if err != nil {
     return nil, err
   }
-  
-  return authz.FromIDs[Company](ids), nil
+
+  return authz.FromIDsExcludingWildcard[Company](ids), nil
 }
 
 const TableWrite PermissionTable = "write"
@@ -117,12 +117,22 @@ func (table Table) LookupWriteUserSubjects(ctx context.Context) ([]User, error) 
     authz.Resource{
       Type: TypeTable,
       ID: authz.ID(table),
-    }, 
+    },
     authz.Permission(TableWrite), TypeUser,
   )
   if err != nil {
     return nil, err
   }
 
-  return authz.FromIDs[User](ids), nil
+  return authz.FromIDsExcludingWildcard[User](ids), nil
+}
+
+func (table Table) LookupWriteUserWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeTable,
+      ID: authz.ID(table),
+    },
+    authz.Permission(TableWrite), TypeUser,
+  )
 }

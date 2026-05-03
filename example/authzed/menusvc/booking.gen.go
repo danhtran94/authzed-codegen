@@ -116,8 +116,8 @@ func (booking Booking) ReadOwnerCompanyRelations(ctx context.Context) ([]Company
   if err != nil {
     return nil, err
   }
-  
-  return authz.FromIDs[Company](ids), nil
+
+  return authz.FromIDsExcludingWildcard[Company](ids), nil
 }
 
 func (booking Booking) ReadCreatorUserRelations(ctx context.Context) ([]User, error) {
@@ -128,8 +128,8 @@ func (booking Booking) ReadCreatorUserRelations(ctx context.Context) ([]User, er
   if err != nil {
     return nil, err
   }
-  
-  return authz.FromIDs[User](ids), nil
+
+  return authz.FromIDsExcludingWildcard[User](ids), nil
 }
 
 func (booking Booking) ReadCreatorCustomerRelations(ctx context.Context) ([]Customer, error) {
@@ -140,8 +140,8 @@ func (booking Booking) ReadCreatorCustomerRelations(ctx context.Context) ([]Cust
   if err != nil {
     return nil, err
   }
-  
-  return authz.FromIDs[Customer](ids), nil
+
+  return authz.FromIDsExcludingWildcard[Customer](ids), nil
 }
 
 const BookingWrite PermissionBooking = "write"
@@ -210,26 +210,46 @@ func (booking Booking) LookupWriteUserSubjects(ctx context.Context) ([]User, err
     authz.Resource{
       Type: TypeBooking,
       ID: authz.ID(booking),
-    }, 
+    },
     authz.Permission(BookingWrite), TypeUser,
   )
   if err != nil {
     return nil, err
   }
 
-  return authz.FromIDs[User](ids), nil
+  return authz.FromIDsExcludingWildcard[User](ids), nil
+}
+
+func (booking Booking) LookupWriteUserWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeBooking,
+      ID: authz.ID(booking),
+    },
+    authz.Permission(BookingWrite), TypeUser,
+  )
 }
 func (booking Booking) LookupWriteCustomerSubjects(ctx context.Context) ([]Customer, error) {
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeBooking,
       ID: authz.ID(booking),
-    }, 
+    },
     authz.Permission(BookingWrite), TypeCustomer,
   )
   if err != nil {
     return nil, err
   }
 
-  return authz.FromIDs[Customer](ids), nil
+  return authz.FromIDsExcludingWildcard[Customer](ids), nil
+}
+
+func (booking Booking) LookupWriteCustomerWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeBooking,
+      ID: authz.ID(booking),
+    },
+    authz.Permission(BookingWrite), TypeCustomer,
+  )
 }

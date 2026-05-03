@@ -21,6 +21,10 @@ type FolderViewerObjects struct {
 const FolderGuest RelationFolder = "guest"
 type FolderGuestObjects struct {
   User []User
+  Wildcards FolderGuestWildcards
+}
+type FolderGuestWildcards struct {
+  User bool
 }
 
 type Folder authz.ID
@@ -80,6 +84,15 @@ func (folder Folder) CreateGuestRelations(ctx context.Context, objects FolderGue
       return err
     }
   }
+  if objects.Wildcards.User {
+    err := authz.GetEngine(ctx).CreateRelations(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Relation(FolderGuest), TypeUser, []authz.ID{authz.WildcardID})
+    if err != nil {
+      return err
+    }
+  }
   return nil
 }
 
@@ -124,6 +137,15 @@ func (folder Folder) DeleteGuestRelations(ctx context.Context, objects FolderGue
       return err
     }
   }
+  if objects.Wildcards.User {
+    err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Relation(FolderGuest), TypeUser, []authz.ID{authz.WildcardID})
+    if err != nil {
+      return err
+    }
+  }
   return nil
 }
 
@@ -135,8 +157,8 @@ func (folder Folder) ReadViewerUserRelations(ctx context.Context) ([]User, error
   if err != nil {
     return nil, err
   }
-  
-  return authz.FromIDs[User](ids), nil
+
+  return authz.FromIDsExcludingWildcard[User](ids), nil
 }
 
 func (folder Folder) ReadViewerGroupRelations(ctx context.Context) ([]Group, error) {
@@ -147,8 +169,8 @@ func (folder Folder) ReadViewerGroupRelations(ctx context.Context) ([]Group, err
   if err != nil {
     return nil, err
   }
-  
-  return authz.FromIDs[Group](ids), nil
+
+  return authz.FromIDsExcludingWildcard[Group](ids), nil
 }
 
 func (folder Folder) ReadViewerRoleRelations(ctx context.Context) ([]Role, error) {
@@ -159,8 +181,8 @@ func (folder Folder) ReadViewerRoleRelations(ctx context.Context) ([]Role, error
   if err != nil {
     return nil, err
   }
-  
-  return authz.FromIDs[Role](ids), nil
+
+  return authz.FromIDsExcludingWildcard[Role](ids), nil
 }
 
 func (folder Folder) ReadGuestUserRelations(ctx context.Context) ([]User, error) {
@@ -171,8 +193,14 @@ func (folder Folder) ReadGuestUserRelations(ctx context.Context) ([]User, error)
   if err != nil {
     return nil, err
   }
-  
-  return authz.FromIDs[User](ids), nil
+
+  return authz.FromIDsExcludingWildcard[User](ids), nil
+}
+func (folder Folder) ReadGuestUserWildcard(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicRelation(ctx, authz.Resource{
+    Type: TypeFolder,
+    ID: authz.ID(folder),
+  }, authz.Relation(FolderGuest), TypeUser)
 }
 
 const FolderBrowse PermissionFolder = "browse"
@@ -262,40 +290,70 @@ func (folder Folder) LookupBrowseUserSubjects(ctx context.Context) ([]User, erro
     authz.Resource{
       Type: TypeFolder,
       ID: authz.ID(folder),
-    }, 
+    },
     authz.Permission(FolderBrowse), TypeUser,
   )
   if err != nil {
     return nil, err
   }
 
-  return authz.FromIDs[User](ids), nil
+  return authz.FromIDsExcludingWildcard[User](ids), nil
+}
+
+func (folder Folder) LookupBrowseUserWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    },
+    authz.Permission(FolderBrowse), TypeUser,
+  )
 }
 func (folder Folder) LookupBrowseGroupSubjects(ctx context.Context) ([]Group, error) {
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeFolder,
       ID: authz.ID(folder),
-    }, 
+    },
     authz.Permission(FolderBrowse), TypeGroup,
   )
   if err != nil {
     return nil, err
   }
 
-  return authz.FromIDs[Group](ids), nil
+  return authz.FromIDsExcludingWildcard[Group](ids), nil
+}
+
+func (folder Folder) LookupBrowseGroupWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    },
+    authz.Permission(FolderBrowse), TypeGroup,
+  )
 }
 func (folder Folder) LookupBrowseRoleSubjects(ctx context.Context) ([]Role, error) {
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeFolder,
       ID: authz.ID(folder),
-    }, 
+    },
     authz.Permission(FolderBrowse), TypeRole,
   )
   if err != nil {
     return nil, err
   }
 
-  return authz.FromIDs[Role](ids), nil
+  return authz.FromIDsExcludingWildcard[Role](ids), nil
+}
+
+func (folder Folder) LookupBrowseRoleWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    },
+    authz.Permission(FolderBrowse), TypeRole,
+  )
 }

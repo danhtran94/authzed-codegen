@@ -68,8 +68,8 @@ func (pricelist Pricelist) ReadOwnerCompanyRelations(ctx context.Context) ([]Com
   if err != nil {
     return nil, err
   }
-  
-  return authz.FromIDs[Company](ids), nil
+
+  return authz.FromIDsExcludingWildcard[Company](ids), nil
 }
 
 const PricelistWrite PermissionPricelist = "write"
@@ -117,12 +117,22 @@ func (pricelist Pricelist) LookupWriteUserSubjects(ctx context.Context) ([]User,
     authz.Resource{
       Type: TypePricelist,
       ID: authz.ID(pricelist),
-    }, 
+    },
     authz.Permission(PricelistWrite), TypeUser,
   )
   if err != nil {
     return nil, err
   }
 
-  return authz.FromIDs[User](ids), nil
+  return authz.FromIDsExcludingWildcard[User](ids), nil
+}
+
+func (pricelist Pricelist) LookupWriteUserWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypePricelist,
+      ID: authz.ID(pricelist),
+    },
+    authz.Permission(PricelistWrite), TypeUser,
+  )
 }

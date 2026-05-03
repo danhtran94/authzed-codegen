@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"time"
 
 	"github.com/danhtran94/authzed-codegen/pkg/authz"
@@ -263,6 +264,24 @@ func (e *Engine) ReadRelations(ctx context.Context, from authz.Resource, relatio
 	}
 
 	return ids, nil
+}
+
+func (e *Engine) HasPublicRelation(ctx context.Context, on authz.Resource, relation authz.Relation, subject authz.Type) (bool, error) {
+	e.debugLog("Checking public relation: on=%v, relation=%v, subject=%v", on, relation, subject)
+	ids, err := e.ReadRelations(ctx, on, relation, subject)
+	if err != nil {
+		return false, err
+	}
+	return slices.Contains(ids, authz.WildcardID), nil
+}
+
+func (e *Engine) HasPublicSubject(ctx context.Context, on authz.Resource, permission authz.Permission, subject authz.Type) (bool, error) {
+	e.debugLog("Checking public subject: on=%v, permission=%v, subject=%v", on, permission, subject)
+	ids, err := e.LookupSubjects(ctx, on, permission, subject)
+	if err != nil {
+		return false, err
+	}
+	return slices.Contains(ids, authz.WildcardID), nil
 }
 
 func errorIfDenied(res *v1.CheckPermissionResponse, err error) error {

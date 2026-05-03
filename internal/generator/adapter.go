@@ -34,8 +34,12 @@ type DefinitionView struct {
 
 type RelationView struct {
 	Name         string
-	AllowedTypes []string
-	HasWildcard  bool
+	AllowedTypes []AllowedType
+}
+
+type AllowedType struct {
+	Namespace  string
+	IsWildcard bool
 }
 
 type PermissionView struct {
@@ -84,35 +88,34 @@ func AdaptDefinitions(defs []*core.NamespaceDefinition) ([]*DefinitionView, erro
 }
 
 func adaptRelation(r *core.Relation) (*RelationView, error) {
-	types, hasWildcard, err := flattenAllowedTypes(r.GetTypeInformation())
+	types, err := flattenAllowedTypes(r.GetTypeInformation())
 	if err != nil {
 		return nil, fmt.Errorf("relation %q: %w", r.GetName(), err)
 	}
-	return &RelationView{Name: r.GetName(), AllowedTypes: types, HasWildcard: hasWildcard}, nil
+	return &RelationView{Name: r.GetName(), AllowedTypes: types}, nil
 }
 
-func flattenAllowedTypes(ti *core.TypeInformation) ([]string, bool, error) {
-	var types []string
-	var hasWildcard bool
+func flattenAllowedTypes(ti *core.TypeInformation) ([]AllowedType, error) {
+	var types []AllowedType
 
 	for _, ar := range ti.GetAllowedDirectRelations() {
 		if ar.GetRequiredCaveat() != nil {
-			return nil, false, fmt.Errorf("caveats are not supported (allowed type %q)", ar.GetNamespace())
+			return nil, fmt.Errorf("caveats are not supported (allowed type %q)", ar.GetNamespace())
 		}
 		if ar.GetRequiredExpiration() != nil {
-			return nil, false, fmt.Errorf("expiration traits are not supported (allowed type %q)", ar.GetNamespace())
+			return nil, fmt.Errorf("expiration traits are not supported (allowed type %q)", ar.GetNamespace())
 		}
 
 		if rel := ar.GetRelation(); rel != "" && rel != ellipsisRelation {
-			return nil, false, fmt.Errorf("sub-relation references are not supported (%s#%s)", ar.GetNamespace(), rel)
+			return nil, fmt.Errorf("sub-relation references are not supported (%s#%s)", ar.GetNamespace(), rel)
 		}
 
-		types = append(types, ar.GetNamespace())
-		if ar.GetPublicWildcard() != nil {
-			hasWildcard = true
-		}
+		types = append(types, AllowedType{
+			Namespace:  ar.GetNamespace(),
+			IsWildcard: ar.GetPublicWildcard() != nil,
+		})
 	}
-	return types, hasWildcard, nil
+	return types, nil
 }
 
 func adaptPermission(r *core.Relation) (*PermissionView, error) {

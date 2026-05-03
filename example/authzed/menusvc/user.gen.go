@@ -68,8 +68,8 @@ func (user User) ReadBelongsCompanyCompanyRelations(ctx context.Context) ([]Comp
   if err != nil {
     return nil, err
   }
-  
-  return authz.FromIDs[Company](ids), nil
+
+  return authz.FromIDsExcludingWildcard[Company](ids), nil
 }
 
 const UserManage PermissionUser = "manage"
@@ -117,12 +117,22 @@ func (user User) LookupManageUserSubjects(ctx context.Context) ([]User, error) {
     authz.Resource{
       Type: TypeUser,
       ID: authz.ID(user),
-    }, 
+    },
     authz.Permission(UserManage), TypeUser,
   )
   if err != nil {
     return nil, err
   }
 
-  return authz.FromIDs[User](ids), nil
+  return authz.FromIDsExcludingWildcard[User](ids), nil
+}
+
+func (user User) LookupManageUserWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeUser,
+      ID: authz.ID(user),
+    },
+    authz.Permission(UserManage), TypeUser,
+  )
 }

@@ -116,8 +116,8 @@ func (order Order) ReadCreatorUserRelations(ctx context.Context) ([]User, error)
   if err != nil {
     return nil, err
   }
-  
-  return authz.FromIDs[User](ids), nil
+
+  return authz.FromIDsExcludingWildcard[User](ids), nil
 }
 
 func (order Order) ReadCreatorCustomerRelations(ctx context.Context) ([]Customer, error) {
@@ -128,8 +128,8 @@ func (order Order) ReadCreatorCustomerRelations(ctx context.Context) ([]Customer
   if err != nil {
     return nil, err
   }
-  
-  return authz.FromIDs[Customer](ids), nil
+
+  return authz.FromIDsExcludingWildcard[Customer](ids), nil
 }
 
 func (order Order) ReadBelongsCompanyCompanyRelations(ctx context.Context) ([]Company, error) {
@@ -140,8 +140,8 @@ func (order Order) ReadBelongsCompanyCompanyRelations(ctx context.Context) ([]Co
   if err != nil {
     return nil, err
   }
-  
-  return authz.FromIDs[Company](ids), nil
+
+  return authz.FromIDsExcludingWildcard[Company](ids), nil
 }
 
 const OrderWrite PermissionOrder = "write"
@@ -210,26 +210,46 @@ func (order Order) LookupWriteUserSubjects(ctx context.Context) ([]User, error) 
     authz.Resource{
       Type: TypeOrder,
       ID: authz.ID(order),
-    }, 
+    },
     authz.Permission(OrderWrite), TypeUser,
   )
   if err != nil {
     return nil, err
   }
 
-  return authz.FromIDs[User](ids), nil
+  return authz.FromIDsExcludingWildcard[User](ids), nil
+}
+
+func (order Order) LookupWriteUserWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeOrder,
+      ID: authz.ID(order),
+    },
+    authz.Permission(OrderWrite), TypeUser,
+  )
 }
 func (order Order) LookupWriteCustomerSubjects(ctx context.Context) ([]Customer, error) {
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeOrder,
       ID: authz.ID(order),
-    }, 
+    },
     authz.Permission(OrderWrite), TypeCustomer,
   )
   if err != nil {
     return nil, err
   }
 
-  return authz.FromIDs[Customer](ids), nil
+  return authz.FromIDsExcludingWildcard[Customer](ids), nil
+}
+
+func (order Order) LookupWriteCustomerWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeOrder,
+      ID: authz.ID(order),
+    },
+    authz.Permission(OrderWrite), TypeCustomer,
+  )
 }

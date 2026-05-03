@@ -14,9 +14,13 @@ type Permission{{ $typeName }} authz.Permission
 
 {{ range $rel := .Relations }}const {{ $typeName }}{{ snakeToPascal $rel.Name }} Relation{{ $typeName }} = "{{ $rel.Name }}"
 type {{ $typeName }}{{ snakeToPascal $rel.Name }}Objects struct {
-{{ range $idx, $relType := $rel.AllowedTypes }}  {{ typeName $relType }} []{{ typeName $relType }}
+{{ range $idx, $relType := $rel.AllowedTypes }}  {{ typeName $relType.Namespace }} []{{ typeName $relType.Namespace }}
+{{ end }}{{ if anyWildcard $rel.AllowedTypes }}  Wildcards {{ $typeName }}{{ snakeToPascal $rel.Name }}Wildcards
 {{ end }}}
-{{ end }}
+{{ if anyWildcard $rel.AllowedTypes }}type {{ $typeName }}{{ snakeToPascal $rel.Name }}Wildcards struct {
+{{ range $idx, $relType := $rel.AllowedTypes }}{{ if $relType.IsWildcard }}  {{ typeName $relType.Namespace }} bool
+{{ end }}{{ end }}}
+{{ end }}{{ end }}
 type {{ $typeName }} authz.ID
 func {{ $typeName }}Stringer(id authz.StringConvertable) {{ $typeName }} {
   return {{ $typeName }}(id.String())
@@ -35,43 +39,67 @@ func ({{ $var }} {{ $typeName }}) ToList() []{{ $typeName }} {
 }
 
 {{ range $rel := .Relations }}func ({{ $var }} {{ $typeName }}) Create{{ snakeToPascal $rel.Name}}Relations(ctx context.Context, objects {{ $typeName }}{{ snakeToPascal $rel.Name }}Objects) error {
-  {{ range $idx, $relType := $rel.AllowedTypes }}if len(objects.{{ typeName $relType }}) > 0 {
+  {{ range $idx, $relType := $rel.AllowedTypes }}if len(objects.{{ typeName $relType.Namespace }}) > 0 {
     err := authz.GetEngine(ctx).CreateRelations(ctx, authz.Resource{
       Type: Type{{ $typeName }},
       ID: authz.ID({{ $var }}),
-    }, authz.Relation({{ $typeName }}{{ snakeToPascal $rel.Name }}), Type{{ typeName $relType }}, authz.IDs(objects.{{ typeName $relType }}))
+    }, authz.Relation({{ $typeName }}{{ snakeToPascal $rel.Name }}), Type{{ typeName $relType.Namespace }}, authz.IDs(objects.{{ typeName $relType.Namespace }}))
     if err != nil {
       return err
     }
   }
-  {{ end }}return nil
+  {{ if $relType.IsWildcard }}if objects.Wildcards.{{ typeName $relType.Namespace }} {
+    err := authz.GetEngine(ctx).CreateRelations(ctx, authz.Resource{
+      Type: Type{{ $typeName }},
+      ID: authz.ID({{ $var }}),
+    }, authz.Relation({{ $typeName }}{{ snakeToPascal $rel.Name }}), Type{{ typeName $relType.Namespace }}, []authz.ID{authz.WildcardID})
+    if err != nil {
+      return err
+    }
+  }
+  {{ end }}{{ end }}return nil
 }
 {{ end }}{{ $var := .ObjectType.Name }}{{ range $rel := .Relations }}
 func ({{ $var }} {{ $typeName }}) Delete{{ snakeToPascal $rel.Name}}Relations(ctx context.Context, objects {{ $typeName }}{{ snakeToPascal $rel.Name }}Objects) error {
-  {{ range $idx, $relType := $rel.AllowedTypes }}if len(objects.{{ typeName $relType }}) > 0 {
+  {{ range $idx, $relType := $rel.AllowedTypes }}if len(objects.{{ typeName $relType.Namespace }}) > 0 {
     err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
       Type: Type{{ $typeName }},
       ID: authz.ID({{ $var }}),
-    }, authz.Relation({{ $typeName }}{{ snakeToPascal $rel.Name }}), Type{{ typeName $relType }}, authz.IDs(objects.{{ typeName $relType }}))
+    }, authz.Relation({{ $typeName }}{{ snakeToPascal $rel.Name }}), Type{{ typeName $relType.Namespace }}, authz.IDs(objects.{{ typeName $relType.Namespace }}))
     if err != nil {
       return err
     }
   }
-  {{ end }}return nil
+  {{ if $relType.IsWildcard }}if objects.Wildcards.{{ typeName $relType.Namespace }} {
+    err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
+      Type: Type{{ $typeName }},
+      ID: authz.ID({{ $var }}),
+    }, authz.Relation({{ $typeName }}{{ snakeToPascal $rel.Name }}), Type{{ typeName $relType.Namespace }}, []authz.ID{authz.WildcardID})
+    if err != nil {
+      return err
+    }
+  }
+  {{ end }}{{ end }}return nil
 }
 {{ end }}{{ range $rel := .Relations }}{{ range $idx, $relType := $rel.AllowedTypes }}
-func ({{ $var }} {{ $typeName }}) Read{{ snakeToPascal $rel.Name}}{{ typeName $relType }}Relations(ctx context.Context) ([]{{ typeName $relType }}, error) {
+func ({{ $var }} {{ $typeName }}) Read{{ snakeToPascal $rel.Name}}{{ typeName $relType.Namespace }}Relations(ctx context.Context) ([]{{ typeName $relType.Namespace }}, error) {
   ids, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
     Type: Type{{ $typeName }},
     ID: authz.ID({{ $var }}),
-  }, authz.Relation({{ $typeName }}{{ snakeToPascal $rel.Name }}), Type{{ typeName $relType }})
+  }, authz.Relation({{ $typeName }}{{ snakeToPascal $rel.Name }}), Type{{ typeName $relType.Namespace }})
   if err != nil {
     return nil, err
   }
-  
-  return authz.FromIDs[{{ typeName $relType }}](ids), nil
+
+  return authz.FromIDsExcludingWildcard[{{ typeName $relType.Namespace }}](ids), nil
 }
-{{ end }}{{ end }}
+{{ if $relType.IsWildcard }}func ({{ $var }} {{ $typeName }}) Read{{ snakeToPascal $rel.Name }}{{ typeName $relType.Namespace }}Wildcard(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicRelation(ctx, authz.Resource{
+    Type: Type{{ $typeName }},
+    ID: authz.ID({{ $var }}),
+  }, authz.Relation({{ $typeName }}{{ snakeToPascal $rel.Name }}), Type{{ typeName $relType.Namespace }})
+}
+{{ end }}{{ end }}{{ end }}
 {{ range $perm := .Permissions }}const {{ $typeName }}{{ snakeToPascal $perm.Name }} Permission{{ $typeName }} = "{{ $perm.Name }}"
 {{ $inputName := (print "Check" $typeName (snakeToPascal $perm.Name) "Inputs") }}
 type {{ $inputName }} struct {
@@ -117,13 +145,23 @@ func Lookup{{ snakeToPascal $perm.Name }}{{ $typeName }}Resources(ctx context.Co
     authz.Resource{
       Type: Type{{ $typeName }},
       ID: authz.ID({{ $var }}),
-    }, 
+    },
     authz.Permission({{ $typeName }}{{ snakeToPascal $perm.Name }}), Type{{ typeName $inputType }},
   )
   if err != nil {
     return nil, err
   }
 
-  return authz.FromIDs[{{ typeName $inputType }}](ids), nil
+  return authz.FromIDsExcludingWildcard[{{ typeName $inputType }}](ids), nil
+}
+
+func ({{ $var }} {{ $typeName }}) Lookup{{ snakeToPascal $perm.Name }}{{ typeName $inputType }}WildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: Type{{ $typeName }},
+      ID: authz.ID({{ $var }}),
+    },
+    authz.Permission({{ $typeName }}{{ snakeToPascal $perm.Name }}), Type{{ typeName $inputType }},
+  )
 }
 {{ end }}{{ end }}

@@ -103,7 +103,7 @@ time with a schema-relative error:
 | Construct | Status |
 |---|---|
 | Union (`+`), arrow (`->`) | ✓ Generated |
-| Wildcard relations (`type:*`) | ✓ Parsed; preserved as data; no codegen yet |
+| Wildcard relations (`type:*`) | ✓ Generated — `Wildcards` sub-struct on Objects; sibling `<Type>Wildcard` read methods |
 | Intersection (`&`), exclusion (`-`) | ✗ Rejected at adapt time |
 | Caveats (`with <caveat>`) | ✗ Rejected at adapt time |
 | Expiration traits (`with expiration`) | ✗ Rejected at adapt time |
@@ -114,8 +114,9 @@ See `docs/ADR-001-parser-migration.md` for the rationale.
 ## TODOs
 
 - [ ] Codegen for intersection / exclusion rewrites.
-- [ ] Codegen for wildcard relations (data already preserved on the relation view).
 - [ ] Caveat support.
+
+> **Wildcard usage note (post-AUZ-003):** AuthZED guidance is to grant wildcards only on relations referenced in *read* permissions (e.g. `viewer`), not write permissions, to avoid universal write access. The codegen does not enforce this — `Create<Rel>Relations` accepts `Wildcards{User: true}` regardless of which permissions reference the relation. A future "wildcard guardrails" job may add an adapt-time check.
 
 > **Resolver note (post-AUZ-002):** `Check<Permission>Inputs` structs include the **full set of input types reachable through the permission chain**, including types contributed via arrow expressions (`->`) inside referenced permissions. Earlier versions silently dropped arrow contributions when one permission referenced another by name. Self-referential schemas (`permission p = p + q`) now exit non-zero with `cycle detected` instead of infinite-looping.
 

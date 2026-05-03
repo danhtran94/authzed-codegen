@@ -23,6 +23,10 @@ type EmployeeBelongsBrandObjects struct {
 const EmployeeViewer RelationEmployee = "viewer"
 type EmployeeViewerObjects struct {
   User []User
+  Wildcards EmployeeViewerWildcards
+}
+type EmployeeViewerWildcards struct {
+  User bool
 }
 
 type Employee authz.ID
@@ -76,6 +80,15 @@ func (employee Employee) CreateViewerRelations(ctx context.Context, objects Empl
       return err
     }
   }
+  if objects.Wildcards.User {
+    err := authz.GetEngine(ctx).CreateRelations(ctx, authz.Resource{
+      Type: TypeEmployee,
+      ID: authz.ID(employee),
+    }, authz.Relation(EmployeeViewer), TypeUser, []authz.ID{authz.WildcardID})
+    if err != nil {
+      return err
+    }
+  }
   return nil
 }
 
@@ -115,6 +128,15 @@ func (employee Employee) DeleteViewerRelations(ctx context.Context, objects Empl
       return err
     }
   }
+  if objects.Wildcards.User {
+    err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
+      Type: TypeEmployee,
+      ID: authz.ID(employee),
+    }, authz.Relation(EmployeeViewer), TypeUser, []authz.ID{authz.WildcardID})
+    if err != nil {
+      return err
+    }
+  }
   return nil
 }
 
@@ -126,8 +148,8 @@ func (employee Employee) ReadAccountUserRelations(ctx context.Context) ([]User, 
   if err != nil {
     return nil, err
   }
-  
-  return authz.FromIDs[User](ids), nil
+
+  return authz.FromIDsExcludingWildcard[User](ids), nil
 }
 
 func (employee Employee) ReadBelongsBrandBrandRelations(ctx context.Context) ([]Brand, error) {
@@ -138,8 +160,8 @@ func (employee Employee) ReadBelongsBrandBrandRelations(ctx context.Context) ([]
   if err != nil {
     return nil, err
   }
-  
-  return authz.FromIDs[Brand](ids), nil
+
+  return authz.FromIDsExcludingWildcard[Brand](ids), nil
 }
 
 func (employee Employee) ReadViewerUserRelations(ctx context.Context) ([]User, error) {
@@ -150,8 +172,14 @@ func (employee Employee) ReadViewerUserRelations(ctx context.Context) ([]User, e
   if err != nil {
     return nil, err
   }
-  
-  return authz.FromIDs[User](ids), nil
+
+  return authz.FromIDsExcludingWildcard[User](ids), nil
+}
+func (employee Employee) ReadViewerUserWildcard(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicRelation(ctx, authz.Resource{
+    Type: TypeEmployee,
+    ID: authz.ID(employee),
+  }, authz.Relation(EmployeeViewer), TypeUser)
 }
 
 const EmployeeManage PermissionEmployee = "manage"
@@ -280,28 +308,48 @@ func (employee Employee) LookupManageUserSubjects(ctx context.Context) ([]User, 
     authz.Resource{
       Type: TypeEmployee,
       ID: authz.ID(employee),
-    }, 
+    },
     authz.Permission(EmployeeManage), TypeUser,
   )
   if err != nil {
     return nil, err
   }
 
-  return authz.FromIDs[User](ids), nil
+  return authz.FromIDsExcludingWildcard[User](ids), nil
+}
+
+func (employee Employee) LookupManageUserWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeEmployee,
+      ID: authz.ID(employee),
+    },
+    authz.Permission(EmployeeManage), TypeUser,
+  )
 }
 func (employee Employee) LookupManageEmployeeSubjects(ctx context.Context) ([]Employee, error) {
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeEmployee,
       ID: authz.ID(employee),
-    }, 
+    },
     authz.Permission(EmployeeManage), TypeEmployee,
   )
   if err != nil {
     return nil, err
   }
 
-  return authz.FromIDs[Employee](ids), nil
+  return authz.FromIDsExcludingWildcard[Employee](ids), nil
+}
+
+func (employee Employee) LookupManageEmployeeWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeEmployee,
+      ID: authz.ID(employee),
+    },
+    authz.Permission(EmployeeManage), TypeEmployee,
+  )
 }
 
 func (employee Employee) LookupViewUserSubjects(ctx context.Context) ([]User, error) {
@@ -309,26 +357,46 @@ func (employee Employee) LookupViewUserSubjects(ctx context.Context) ([]User, er
     authz.Resource{
       Type: TypeEmployee,
       ID: authz.ID(employee),
-    }, 
+    },
     authz.Permission(EmployeeView), TypeUser,
   )
   if err != nil {
     return nil, err
   }
 
-  return authz.FromIDs[User](ids), nil
+  return authz.FromIDsExcludingWildcard[User](ids), nil
+}
+
+func (employee Employee) LookupViewUserWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeEmployee,
+      ID: authz.ID(employee),
+    },
+    authz.Permission(EmployeeView), TypeUser,
+  )
 }
 func (employee Employee) LookupViewEmployeeSubjects(ctx context.Context) ([]Employee, error) {
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeEmployee,
       ID: authz.ID(employee),
-    }, 
+    },
     authz.Permission(EmployeeView), TypeEmployee,
   )
   if err != nil {
     return nil, err
   }
 
-  return authz.FromIDs[Employee](ids), nil
+  return authz.FromIDsExcludingWildcard[Employee](ids), nil
+}
+
+func (employee Employee) LookupViewEmployeeWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeEmployee,
+      ID: authz.ID(employee),
+    },
+    authz.Permission(EmployeeView), TypeEmployee,
+  )
 }
