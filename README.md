@@ -32,9 +32,9 @@ order.CreateCreatorRelations(ctx, menusvc.OrderCreatorObjects{
 })
 
 order.
-  CheckWrite(ctx, acl.CheckOrderWriteInputs{
+  CheckWrite(ctx, menusvc.CheckOrderWriteInputs{
     User: []menusvc.User{user},
-    // Company: []menusvc.Company{},    
+    // Company: []menusvc.Company{},
   })
 
 // ...
@@ -89,9 +89,34 @@ authzed-codegen --output example/authzed example/schema.zed
 - Generate code for multiple languages (Go, ~~TypeScript, etc.~~).
 - SpiceDB engine client.
 
+## Schema parser
+
+Schema parsing is delegated to the official SpiceDB compiler
+(`github.com/authzed/spicedb/pkg/schemadsl/compiler`). Any schema the
+SpiceDB engine accepts will parse here — including comments, complex
+rewrites, caveats, and expiration traits.
+
+The **codegen** layer is narrower than the parser. The following
+constructs are accepted by the parser but rejected at code-generation
+time with a schema-relative error:
+
+| Construct | Status |
+|---|---|
+| Union (`+`), arrow (`->`) | ✓ Generated |
+| Wildcard relations (`type:*`) | ✓ Parsed; preserved as data; no codegen yet |
+| Intersection (`&`), exclusion (`-`) | ✗ Rejected at adapt time |
+| Caveats (`with <caveat>`) | ✗ Rejected at adapt time |
+| Expiration traits (`with expiration`) | ✗ Rejected at adapt time |
+| Sub-relation references (`foo#bar`) | ✗ Rejected at adapt time |
+
+See `docs/ADR-001-parser-migration.md` for the rationale.
+
 ## TODOs
 
-- [ ] Support all schema features.
+- [ ] Codegen for intersection / exclusion rewrites.
+- [ ] Codegen for wildcard relations (data already preserved on the relation view).
+- [ ] Caveat support.
+- [ ] Resolver: propagate arrow contributions through permission-of-permissions chains (currently only direct relation contributions transit the chain).
 
 
 ## Contributing

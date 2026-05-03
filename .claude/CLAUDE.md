@@ -1,25 +1,72 @@
-# <Service Name> — Agent Context
+# `authzed-codegen` — Agent Context
+
+## What this is
+
+A build-time CLI that reads an AuthZED (SpiceDB) schema file and emits
+type-safe Go stubs (`.gen.go`) for each `definition` block. The
+generated code wraps a thin runtime in `pkg/authz/` so callers can
+`Check<Permission>`, `Lookup<Permission>Resources`, and
+`Create<Relation>Relations` against a SpiceDB engine without
+hand-writing per-resource boilerplate.
 
 ## Stack
-- Go 1.26+, Huma, ent, franz-go, Atlas
-- PostgreSQL 17, Apache Kafka
-- AWS / GCP
+- Go 1.26+
+- `github.com/authzed/spicedb` v1.52+ (parser backend — `pkg/schemadsl/compiler`)
+- `github.com/authzed/authzed-go` v1.9+ (runtime client used by `pkg/authz/spicedb/`)
+- `text/template` (codegen via `internal/templates/object.go.tmpl`)
+- No DB, no message broker, no cloud. Pure build-time CLI.
 
-## Architecture Boundaries (enforced by depguard)
-cmd/server/         → wiring only, zero business logic
-api/<module>.v1/    → HTTP contract, transforms, routes
-internal/domain/    → pure functions, NO external imports
-internal/module/    → use cases, defines interfaces only
-internal/integrate/ → external adapters, implementations
-repo/<module>.rp/   → data access, owns transformers
-pkg/                → zero domain coupling
+## Project structure
 
-## Make Targets
-make gen      → regenerate ent + domain models
-make lint     → golangci-lint run (pinned version)
-make test     → go test -v -timeout 120s ./...
-make openapi  → export OpenAPI spec
-make diff     → generate Atlas migration
+    cmd/authzed-codegen/      → main entry point; calls compiler.Compile + generator
+    internal/generator/       → core codegen
+       adapter.go             → proto → DefinitionView; rejects unsupported constructs
+       generator.go           → resolver + template execution
+    internal/templates/       → embedded text/template + per-object template
+    internal/utilstr/         → string-mangling helpers (PascalCase, package names)
+    pkg/authz/                → runtime types (Type, Relation, Permission, Engine)
+    pkg/authz/spicedb/        → SpiceDB engine implementation
+    example/                  → schema.zed + checked-in generated output (bookingsvc, menusvc, extsvc)
+    docs/                     → ADRs, RFCs, scope notes, SPECs
+    jobs/                     → job docs for `/job` workflow
+
+## Architecture rules
+
+- `pkg/authz/` defines the runtime contract (interfaces, ID types). Generated code imports it. It must not import `internal/`.
+- `internal/generator/` owns the proto-to-template adapter. Proto types from `github.com/authzed/spicedb/pkg/proto/core/v1` only appear in `adapter.go` — the rest of the generator consumes `*DefinitionView`.
+- `internal/templates/` is import-free except `embed`. The template's `gotype` comment names `generator.DefinitionView`.
+- `cmd/authzed-codegen/` is pure wiring: read file → `compiler.Compile` → `generator.AdaptDefinitions` → `Generator.GenerateObjectSource`.
+
+## Build / verify
+
+No Makefile. The full verification loop:
+
+    go build ./...
+    go vet ./...
+    go mod tidy
+    go run ./cmd/authzed-codegen --output example/authzed example/schema.zed
+    git diff --quiet example/authzed/      # round-trip must be zero-diff
+
+There are no `*_test.go` files yet (acknowledged in ADR-001). The
+fixture round-trip serves as the regression bar — `example/schema.zed`
+must regenerate `example/authzed/**.gen.go` byte-identical to the
+committed version.
+
+## Codegen scope (what's accepted vs rejected)
+
+The SpiceDB compiler accepts the full AuthZED grammar; the **codegen**
+layer is narrower. `internal/generator/adapter.go` rejects unsupported
+constructs at adapt time with schema-relative errors:
+
+- ✓ Union (`+`), arrow (`->`), wildcard data on relations
+- ✗ Intersection (`&`), exclusion (`-`)
+- ✗ Caveats (`with <caveat>`), expiration traits (`with expiration`)
+- ✗ Sub-relation references (`foo#bar`)
+- ✗ `_this`, `_nil`, `_self`, functioned tuple-to-userset
+
+Adding support means extending `lowerSetOperationChild` /
+`flattenAllowedTypes` and a corresponding template branch. See
+`docs/ADR-001-parser-migration.md`.
 
 ## Where things live
 
@@ -28,7 +75,7 @@ project) from **work artifacts** (per-repo). These two live in
 different places and never cross.
 
 - **This repo** (walked from `.claude/harness.json`, module-scoped):
-  - `jobs/<PREFIX>-NNN-*.md` — job docs produced by `/job`
+  - `jobs/<PREFIX>-NNN-*.md` — job docs produced by `/job` (PREFIX is `AUZ`)
   - `docs/scope-*.md`, `docs/RFC-*.md`, `docs/ADR-*.md`, `docs/spec-*.md` — planning artifacts produced by `/doc`
   - `docs/.drafts/**` — in-progress `/doc` session checkpoints
   - `.claude/harness.json`, `.claude/settings.json` — harness config
@@ -57,3 +104,4 @@ The harness ships four lifecycle skills covering plan → implement → review �
 Operating rules:
 - One task at a time; verify build after every change
 - `harness validate-docs` is reporting-tier (exit 0); `validate-plan` and `validate-pr-checklist` are blocking-tier (binary)
+- Round-trip the example fixture (`go run ./cmd/authzed-codegen --output example/authzed example/schema.zed && git diff --quiet example/authzed/`) before declaring any generator change done
