@@ -107,11 +107,16 @@ definition extsvc/document {
 	// exercises GetPermissionTree's permission-resolver pass.
 	permission admin = view + edit
 }
-definition extsvc/article {
-		relation author: extsvc/user
-			// Intersection: must be both an author AND have browse access via parent.
-		permission manage = author & parent->browse
 
-			// Exclusion: author who does NOT also have browse via parent.
-		permission author_only = author - parent->browse
-	}
+definition extsvc/article {
+	relation author: extsvc/user
+	relation parent: extsvc/folder
+
+		// Intersection: author who also has browse access via parent.
+		// Both operands are non-trivial.
+	permission editor = author & parent->browse
+
+		// Exclusion: author who does NOT also have browse via parent.
+		// Both operands are non-trivial.
+	permission author_only = author - parent->browse
+}

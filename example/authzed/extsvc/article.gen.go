@@ -16,6 +16,10 @@ const ArticleAuthor RelationArticle = "author"
 type ArticleAuthorObjects struct {
   User []User
 }
+const ArticleParent RelationArticle = "parent"
+type ArticleParentObjects struct {
+  Folder []Folder
+}
 
 type Article authz.ID
 func ArticleStringer(id authz.StringConvertable) Article {
@@ -46,6 +50,18 @@ func (article Article) CreateAuthorRelations(ctx context.Context, objects Articl
   }
   return nil
 }
+func (article Article) CreateParentRelations(ctx context.Context, objects ArticleParentObjects) error {
+  if len(objects.Folder) > 0 {
+    err := authz.GetEngine(ctx).CreateRelations(ctx, authz.Resource{
+      Type: TypeArticle,
+      ID: authz.ID(article),
+    }, authz.Relation(ArticleParent), TypeFolder, authz.IDs(objects.Folder))
+    if err != nil {
+      return err
+    }
+  }
+  return nil
+}
 
 func (article Article) DeleteAuthorRelations(ctx context.Context, objects ArticleAuthorObjects) error {
   if len(objects.User) > 0 {
@@ -53,6 +69,19 @@ func (article Article) DeleteAuthorRelations(ctx context.Context, objects Articl
       Type: TypeArticle,
       ID: authz.ID(article),
     }, authz.Relation(ArticleAuthor), TypeUser, authz.IDs(objects.User))
+    if err != nil {
+      return err
+    }
+  }
+  return nil
+}
+
+func (article Article) DeleteParentRelations(ctx context.Context, objects ArticleParentObjects) error {
+  if len(objects.Folder) > 0 {
+    err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
+      Type: TypeArticle,
+      ID: authz.ID(article),
+    }, authz.Relation(ArticleParent), TypeFolder, authz.IDs(objects.Folder))
     if err != nil {
       return err
     }
@@ -72,14 +101,28 @@ func (article Article) ReadAuthorUserRelations(ctx context.Context) ([]User, err
   return authz.FromIDsExcludingWildcard[User](ids), nil
 }
 
-const ArticleManage PermissionArticle = "manage"
+func (article Article) ReadParentFolderRelations(ctx context.Context) ([]Folder, error) {
+  ids, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+    Type: TypeArticle,
+    ID: authz.ID(article),
+  }, authz.Relation(ArticleParent), TypeFolder)
+  if err != nil {
+    return nil, err
+  }
 
-type CheckArticleManageInputs struct {
-  User []User
+  return authz.FromIDsExcludingWildcard[Folder](ids), nil
 }
 
-func (article Article) CheckManage(ctx context.Context, input CheckArticleManageInputs) (bool, error) {
-  if len(input.User) == 0 && true {
+const ArticleEditor PermissionArticle = "editor"
+
+type CheckArticleEditorInputs struct {
+  User []User
+  Group []Group
+  Role []Role
+}
+
+func (article Article) CheckEditor(ctx context.Context, input CheckArticleEditorInputs) (bool, error) {
+  if len(input.User) == 0 && len(input.Group) == 0 && len(input.Role) == 0 && true {
     return false, authz.ErrNoInput
   }
 
@@ -87,7 +130,25 @@ func (article Article) CheckManage(ctx context.Context, input CheckArticleManage
     err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
       Type: TypeArticle,
       ID: authz.ID(article),
-    }, authz.Permission(ArticleManage), TypeUser, authz.IDs(input.User))
+    }, authz.Permission(ArticleEditor), TypeUser, authz.IDs(input.User))
+    if err != nil {
+      return false, err
+    }
+  }
+  if len(input.Group) > 0 {
+    err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
+      Type: TypeArticle,
+      ID: authz.ID(article),
+    }, authz.Permission(ArticleEditor), TypeGroup, authz.IDs(input.Group))
+    if err != nil {
+      return false, err
+    }
+  }
+  if len(input.Role) > 0 {
+    err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
+      Type: TypeArticle,
+      ID: authz.ID(article),
+    }, authz.Permission(ArticleEditor), TypeRole, authz.IDs(input.Role))
     if err != nil {
       return false, err
     }
@@ -96,11 +157,33 @@ func (article Article) CheckManage(ctx context.Context, input CheckArticleManage
   return true, nil
 }
 
-func LookupManageArticleResources(ctx context.Context, input CheckArticleManageInputs) ([]Article, error) {
+func LookupEditorArticleResources(ctx context.Context, input CheckArticleEditorInputs) ([]Article, error) {
   if len(input.User) > 0 {
     ids, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeArticle, authz.Permission(ArticleManage), 
+      TypeArticle, authz.Permission(ArticleEditor), 
       TypeUser, authz.IDs(input.User),
+    )
+    if err != nil {
+      return nil, err
+    }
+
+    return authz.FromIDs[Article](ids), nil
+  }
+  if len(input.Group) > 0 {
+    ids, err := authz.GetEngine(ctx).LookupResources(ctx,
+      TypeArticle, authz.Permission(ArticleEditor), 
+      TypeGroup, authz.IDs(input.Group),
+    )
+    if err != nil {
+      return nil, err
+    }
+
+    return authz.FromIDs[Article](ids), nil
+  }
+  if len(input.Role) > 0 {
+    ids, err := authz.GetEngine(ctx).LookupResources(ctx,
+      TypeArticle, authz.Permission(ArticleEditor), 
+      TypeRole, authz.IDs(input.Role),
     )
     if err != nil {
       return nil, err
@@ -115,10 +198,12 @@ const ArticleAuthorOnly PermissionArticle = "author_only"
 
 type CheckArticleAuthorOnlyInputs struct {
   User []User
+  Group []Group
+  Role []Role
 }
 
 func (article Article) CheckAuthorOnly(ctx context.Context, input CheckArticleAuthorOnlyInputs) (bool, error) {
-  if len(input.User) == 0 && true {
+  if len(input.User) == 0 && len(input.Group) == 0 && len(input.Role) == 0 && true {
     return false, authz.ErrNoInput
   }
 
@@ -127,6 +212,24 @@ func (article Article) CheckAuthorOnly(ctx context.Context, input CheckArticleAu
       Type: TypeArticle,
       ID: authz.ID(article),
     }, authz.Permission(ArticleAuthorOnly), TypeUser, authz.IDs(input.User))
+    if err != nil {
+      return false, err
+    }
+  }
+  if len(input.Group) > 0 {
+    err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
+      Type: TypeArticle,
+      ID: authz.ID(article),
+    }, authz.Permission(ArticleAuthorOnly), TypeGroup, authz.IDs(input.Group))
+    if err != nil {
+      return false, err
+    }
+  }
+  if len(input.Role) > 0 {
+    err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
+      Type: TypeArticle,
+      ID: authz.ID(article),
+    }, authz.Permission(ArticleAuthorOnly), TypeRole, authz.IDs(input.Role))
     if err != nil {
       return false, err
     }
@@ -147,17 +250,39 @@ func LookupAuthorOnlyArticleResources(ctx context.Context, input CheckArticleAut
 
     return authz.FromIDs[Article](ids), nil
   }
+  if len(input.Group) > 0 {
+    ids, err := authz.GetEngine(ctx).LookupResources(ctx,
+      TypeArticle, authz.Permission(ArticleAuthorOnly), 
+      TypeGroup, authz.IDs(input.Group),
+    )
+    if err != nil {
+      return nil, err
+    }
+
+    return authz.FromIDs[Article](ids), nil
+  }
+  if len(input.Role) > 0 {
+    ids, err := authz.GetEngine(ctx).LookupResources(ctx,
+      TypeArticle, authz.Permission(ArticleAuthorOnly), 
+      TypeRole, authz.IDs(input.Role),
+    )
+    if err != nil {
+      return nil, err
+    }
+
+    return authz.FromIDs[Article](ids), nil
+  }
   
   return []Article{}, nil
 }
 
-func (article Article) LookupManageUserSubjects(ctx context.Context) ([]User, error) {
+func (article Article) LookupEditorUserSubjects(ctx context.Context) ([]User, error) {
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeArticle,
       ID: authz.ID(article),
     },
-    authz.Permission(ArticleManage), TypeUser,
+    authz.Permission(ArticleEditor), TypeUser,
   )
   if err != nil {
     return nil, err
@@ -166,13 +291,61 @@ func (article Article) LookupManageUserSubjects(ctx context.Context) ([]User, er
   return authz.FromIDsExcludingWildcard[User](ids), nil
 }
 
-func (article Article) LookupManageUserWildcardSubjects(ctx context.Context) (bool, error) {
+func (article Article) LookupEditorUserWildcardSubjects(ctx context.Context) (bool, error) {
   return authz.GetEngine(ctx).HasPublicSubject(ctx,
     authz.Resource{
       Type: TypeArticle,
       ID: authz.ID(article),
     },
-    authz.Permission(ArticleManage), TypeUser,
+    authz.Permission(ArticleEditor), TypeUser,
+  )
+}
+func (article Article) LookupEditorGroupSubjects(ctx context.Context) ([]Group, error) {
+  ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+    authz.Resource{
+      Type: TypeArticle,
+      ID: authz.ID(article),
+    },
+    authz.Permission(ArticleEditor), TypeGroup,
+  )
+  if err != nil {
+    return nil, err
+  }
+
+  return authz.FromIDsExcludingWildcard[Group](ids), nil
+}
+
+func (article Article) LookupEditorGroupWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeArticle,
+      ID: authz.ID(article),
+    },
+    authz.Permission(ArticleEditor), TypeGroup,
+  )
+}
+func (article Article) LookupEditorRoleSubjects(ctx context.Context) ([]Role, error) {
+  ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+    authz.Resource{
+      Type: TypeArticle,
+      ID: authz.ID(article),
+    },
+    authz.Permission(ArticleEditor), TypeRole,
+  )
+  if err != nil {
+    return nil, err
+  }
+
+  return authz.FromIDsExcludingWildcard[Role](ids), nil
+}
+
+func (article Article) LookupEditorRoleWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeArticle,
+      ID: authz.ID(article),
+    },
+    authz.Permission(ArticleEditor), TypeRole,
   )
 }
 
@@ -198,5 +371,53 @@ func (article Article) LookupAuthorOnlyUserWildcardSubjects(ctx context.Context)
       ID: authz.ID(article),
     },
     authz.Permission(ArticleAuthorOnly), TypeUser,
+  )
+}
+func (article Article) LookupAuthorOnlyGroupSubjects(ctx context.Context) ([]Group, error) {
+  ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+    authz.Resource{
+      Type: TypeArticle,
+      ID: authz.ID(article),
+    },
+    authz.Permission(ArticleAuthorOnly), TypeGroup,
+  )
+  if err != nil {
+    return nil, err
+  }
+
+  return authz.FromIDsExcludingWildcard[Group](ids), nil
+}
+
+func (article Article) LookupAuthorOnlyGroupWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeArticle,
+      ID: authz.ID(article),
+    },
+    authz.Permission(ArticleAuthorOnly), TypeGroup,
+  )
+}
+func (article Article) LookupAuthorOnlyRoleSubjects(ctx context.Context) ([]Role, error) {
+  ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+    authz.Resource{
+      Type: TypeArticle,
+      ID: authz.ID(article),
+    },
+    authz.Permission(ArticleAuthorOnly), TypeRole,
+  )
+  if err != nil {
+    return nil, err
+  }
+
+  return authz.FromIDsExcludingWildcard[Role](ids), nil
+}
+
+func (article Article) LookupAuthorOnlyRoleWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeArticle,
+      ID: authz.ID(article),
+    },
+    authz.Permission(ArticleAuthorOnly), TypeRole,
   )
 }
