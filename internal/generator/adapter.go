@@ -8,8 +8,10 @@ import (
 )
 
 const (
-	PermExprIdentifier = "identifier"
-	PermExprArrow      = "arrow"
+	PermExprIdentifier   = "identifier" // existing
+	PermExprArrow        = "arrow"      // existing
+	PermExprIntersection = "&"          // NEW
+	PermExprExclusion    = "-"          // NEW
 )
 
 // ellipsisRelation is the SpiceDB compiler's marker for a plain reference
@@ -127,14 +129,15 @@ func adaptPermission(r *core.Relation) (*PermissionView, error) {
 }
 
 func lowerUsersetRewrite(permName string, rw *core.UsersetRewrite) ([]PermissionExpr, error) {
-	if rw.GetIntersection() != nil {
-		return nil, fmt.Errorf("permission %q: intersection (&) is not supported", permName)
-	}
-	if rw.GetExclusion() != nil {
-		return nil, fmt.Errorf("permission %q: exclusion (-) is not supported", permName)
-	}
-
+	// Intersection and exclusion are structurally identical to union for codegen:
+	// all children contribute types to a flat set. Treat them identically.
 	union := rw.GetUnion()
+	if union == nil {
+		union = rw.GetIntersection()
+	}
+	if union == nil {
+		union = rw.GetExclusion()
+	}
 	if union == nil {
 		return nil, fmt.Errorf("permission %q: rewrite has no union/intersection/exclusion operation", permName)
 	}
@@ -171,7 +174,15 @@ func lowerSetOperationChild(permName string, c *core.SetOperation_Child) (Permis
 	case c.GetXSelf() != nil:
 		return PermissionExpr{}, fmt.Errorf("permission %q: self child is not supported", permName)
 	case c.GetUsersetRewrite() != nil:
-		return PermissionExpr{}, fmt.Errorf("permission %q: nested rewrites (intersection/exclusion inside union) are not supported", permName)
+		rw := c.GetUsersetRewrite()
+		exprs, err := lowerUsersetRewrite(permName, rw)
+		if err != nil {
+			return PermissionExpr{}, err
+		}
+		if len(exprs) > 0 {
+			return exprs[0], nil
+		}
+		return PermissionExpr{}, fmt.Errorf("permission %q: userset rewrite child produced no expressions", permName)
 	case c.GetFunctionedTupleToUserset() != nil:
 		return PermissionExpr{}, fmt.Errorf("permission %q: functioned tuple-to-userset (with self/expiration) is not supported", permName)
 	default:
