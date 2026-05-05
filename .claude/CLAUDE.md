@@ -46,11 +46,20 @@ No Makefile. The full verification loop:
     go mod tidy
     go run ./cmd/authzed-codegen --output example/authzed example/schema.zed
     git diff --quiet example/authzed/      # round-trip must be zero-diff
+    go test ./pkg/authz/spicedb/... \
+            ./example/authzed/bookingsvc/... \
+            ./example/authzed/menusvc/... \
+            ./example/authzed/extsvc/...
 
-There are no `*_test.go` files yet (acknowledged in ADR-001). The
-fixture round-trip serves as the regression bar — `example/schema.zed`
-must regenerate `example/authzed/**.gen.go` byte-identical to the
-committed version.
+The fixture round-trip remains the codegen regression bar —
+`example/schema.zed` must regenerate `example/authzed/**.gen.go`
+byte-identical to the committed version.
+
+E2E coverage for the generated stubs lives in the four test packages
+above (added per AUZ-005). Each `TestMain` calls
+`spicedbtest.Start(ctx, schema)` to launch a SpiceDB Docker container
+via `testcontainers-go`; tests that can't reach Docker are skipped
+cleanly via the `spicedbtest.ErrDockerUnavailable` sentinel.
 
 ## Codegen scope (what's accepted vs rejected)
 
@@ -59,7 +68,7 @@ layer is narrower. `internal/generator/adapter.go` rejects unsupported
 constructs at adapt time with schema-relative errors:
 
 - ✓ Union (`+`), arrow (`->`), wildcard relations (`type:*`) — Wildcards sub-struct on Objects + sibling Read/Lookup wildcard methods
-- ✗ Intersection (`&`), exclusion (`-`)
+- ✓ Intersection (`&`), exclusion (`-`) — structurally identical to union at codegen time (see `internal/generator/adapter.go:132`)
 - ✗ Caveats (`with <caveat>`), expiration traits (`with expiration`)
 - ✗ Sub-relation references (`foo#bar`)
 - ✗ `_this`, `_nil`, `_self`, functioned tuple-to-userset

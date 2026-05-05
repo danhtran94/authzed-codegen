@@ -1,3 +1,7 @@
 .DS_Store
 docs/.drafts/
 .claude/settings.local.json
+
+# `go test -c` artifacts
+*.test
+
