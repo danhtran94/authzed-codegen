@@ -63,7 +63,7 @@ Foundation. Adds the new Engine interface method.
 
 | # | Task | File | Status |
 |---|------|------|--------|
-| 1.1 | Add `CreateRelationsWithCaveat(ctx, to, relation, subject, ids, caveatName string, caveatParams map[string]any) error` to `authz.Engine` interface | `pkg/authz/authz.go` | [ ] |
+| 1.1 | Add `CreateRelationsWithCaveat(ctx, to, relation, subject, ids, caveatName string, caveatParams map[string]any) error` to `authz.Engine` interface | `pkg/authz/authz.go` | [x] |
 
 **Key details:** Build fails between 1.1 and 2.x because `var _ authz.Engine = &spicedb.Engine{}` assertion needs the impl. Land WS1+WS2 in one batch — see Implementation Order. No new sentinel error — codegen wrapper is permissive on nil per SPEC-003 C7.
 
@@ -73,7 +73,7 @@ Implement `CreateRelationsWithCaveat` on `*spicedb.Engine`.
 
 | # | Task | File | Status |
 |---|------|------|--------|
-| 2.1 | Add `(*Engine).CreateRelationsWithCaveat` — mirrors `CreateRelations` body plus `OptionalCaveat: &v1.ContextualizedCaveat{CaveatName, Context}` from `serializeCaveatMap`; calls `e.setToken(res.WrittenAt.Token)` on success | `pkg/authz/spicedb/crud.go` | [ ] |
+| 2.1 | Add `(*Engine).CreateRelationsWithCaveat` — mirrors `CreateRelations` body plus `OptionalCaveat: &v1.ContextualizedCaveat{CaveatName, Context}` from `serializeCaveatMap`; calls `e.setToken(res.WrittenAt.Token)` on success | `pkg/authz/spicedb/crud.go` | [x] |
 
 **Key details:** No new imports beyond AUZ-006 (`structpb` already direct). Engine layer is permissive on `caveatParams = nil` — strictness lives only in the codegen wrapper.
 
@@ -83,9 +83,9 @@ Extend the codegen template with per-allowed-type Caveat fields and per-type rou
 
 | # | Task | File | Status |
 |---|------|------|--------|
-| 3.1 | Add second range pass over `$rel.AllowedTypes` in `<Rel>Objects` struct body, guarded on `$relType.CaveatName != ""`, emitting `<TypeName>Caveat *<CaveatPascal>Args` fields after the ID-slice fields and Wildcards sub-struct | `internal/templates/object.go.tmpl` | [ ] |
-| 3.2 | In `Create<Rel>Relations` regular branch, switch on `{{ if $relType.CaveatName }}` per allowed type — caveated path emits `var <type>CaveatCtx map[string]any` + conditional ctx-map build (`if objects.<Type>Caveat != nil { ... }`) + `CreateRelationsWithCaveat(...)` call with embedded caveat-name literal. Nil Args struct → nil ctx → name-only attach on wire | same | [ ] |
-| 3.3 | Mirror the per-type branching in the wildcard sub-block (`if objects.Wildcards.<Type>` path) so wildcard + caveat allowed types route through `CreateRelationsWithCaveat` with `[]authz.ID{authz.WildcardID}` and the same `<Type>Caveat` field | same | [ ] |
+| 3.1 | Add second range pass over `$rel.AllowedTypes` in `<Rel>Objects` struct body, guarded on `$relType.CaveatName != ""`, emitting `<TypeName>Caveat *<CaveatPascal>Args` fields after the ID-slice fields and Wildcards sub-struct | `internal/templates/object.go.tmpl` | [x] |
+| 3.2 | In `Create<Rel>Relations` regular branch, switch on `{{ if $relType.CaveatName }}` per allowed type — caveated path emits `var <type>CaveatCtx map[string]any` + conditional ctx-map build (`if objects.<Type>Caveat != nil { ... }`) + `CreateRelationsWithCaveat(...)` call with embedded caveat-name literal. Nil Args struct → nil ctx → name-only attach on wire | same | [x] |
+| 3.3 | Mirror the per-type branching in the wildcard sub-block (`if objects.Wildcards.<Type>` path) so wildcard + caveat allowed types route through `CreateRelationsWithCaveat` with `[]authz.ID{authz.WildcardID}` and the same `<Type>Caveat` field | same | [x] |
 
 **Key details:** All new branches guarded by `{{ if $relType.CaveatName }}` — caveat-free schemas regenerate byte-identically (SPEC-003 C6).
 
@@ -95,9 +95,9 @@ Run codegen against existing `example/schema.zed`. Round-trip baseline shifts �
 
 | # | Task | File | Status |
 |---|------|------|--------|
-| 4.1 | Run codegen; inspect `folder.gen.go` diff to confirm `UserCaveat *TenantMatchArgs` field on `FolderTenantedViewerObjects` and `CreateTenantedViewerRelations` body emits `CreateRelationsWithCaveat(..., "extsvc/tenant_match", userCaveatCtx)` | `example/authzed/extsvc/folder.gen.go` | [ ] |
-| 4.2 | `go build ./...` + `go vet ./...` clean against regenerated output | (verification only) | [ ] |
-| 4.3 | Run codegen a second time; confirm `git diff --quiet example/authzed/` exits 0 (idempotent at new baseline) | (verification only) | [ ] |
+| 4.1 | Run codegen; inspect `folder.gen.go` diff to confirm `UserCaveat *TenantMatchArgs` field on `FolderTenantedViewerObjects` and `CreateTenantedViewerRelations` body emits `CreateRelationsWithCaveat(..., "extsvc/tenant_match", userCaveatCtx)` | `example/authzed/extsvc/folder.gen.go` | [x] |
+| 4.2 | `go build ./...` + `go vet ./...` clean against regenerated output | (verification only) | [x] |
+| 4.3 | Run codegen a second time; confirm `git diff --quiet example/authzed/` exits 0 (idempotent at new baseline) | (verification only) | [x] |
 
 ### 5. Testing
 
@@ -105,10 +105,10 @@ Port AUZ-006 tests off the bypass directly (deferred-binding via `UserCaveat: ni
 
 | # | Task | File | Status |
 |---|------|------|--------|
-| 5.1 | Replace each `writeTenantedViewer(ctx, t, folderID, userID)` call in the 3 existing tests with `extsvc.Folder(folderID).CreateTenantedViewerRelations(ctx, FolderTenantedViewerObjects{User: []User{userID}, UserCaveat: nil})` — preserves the deferred-binding pattern by passing nil at write, supplying `Tenant` at check time. Delete the `writeTenantedViewer` helper | `example/authzed/extsvc/extsvc_test.go` | [ ] |
-| 5.2 | Add `TestFolder_CreateTenantedViewer_PreBound_WriteWins` — write with `UserCaveat: &TenantMatchArgs{Tenant: "acme"}`; check with mismatched check-time `Tenant: "other"`; assert grant (write-time wins per SPEC-003 A6 [A3]). Locks in the pre-binding semantics so future regressions surface | same | [ ] |
-| 5.3 | Append `relation guarded_viewer: extsvc/user:* with extsvc/tenant_match` + `permission guarded_browse = guarded_viewer` to `example/schema.zed` (Authzed docs confirm wildcard + caveat is schema-legal — see SPEC-003 A5). Regenerate; add `TestFolder_CreateGuardedViewer_Wildcard` exercising `objects.Wildcards.User = true` with both `UserCaveat: nil` (defer) and `UserCaveat: &TenantMatchArgs{Tenant: "acme"}` (pre-bind) variants | `example/schema.zed` + `example/authzed/extsvc/folder.gen.go` + test file | [ ] |
-| 5.4 | Run `go test ./pkg/authz/spicedb/... ./example/authzed/...` — all pass (Docker required) | (verification only) | [ ] |
+| 5.1 | Replace each `writeTenantedViewer(ctx, t, folderID, userID)` call in the 3 existing tests with `extsvc.Folder(folderID).CreateTenantedViewerRelations(ctx, FolderTenantedViewerObjects{User: []User{userID}, UserCaveat: nil})` — preserves the deferred-binding pattern by passing nil at write, supplying `Tenant` at check time. Delete the `writeTenantedViewer` helper | `example/authzed/extsvc/extsvc_test.go` | [x] |
+| 5.2 | Add `TestFolder_CreateTenantedViewer_PreBound_WriteWins` — write with `UserCaveat: &TenantMatchArgs{Tenant: "acme"}`; check with mismatched check-time `Tenant: "other"`; assert grant (write-time wins per SPEC-003 A6 [A3]). Locks in the pre-binding semantics so future regressions surface | same | [x] |
+| 5.3 | Append `relation guarded_viewer: extsvc/user:* with extsvc/tenant_match` + `permission guarded_browse = guarded_viewer` to `example/schema.zed` (Authzed docs confirm wildcard + caveat is schema-legal — see SPEC-003 A5). Regenerate; add `TestFolder_CreateGuardedViewer_Wildcard` exercising `objects.Wildcards.User = true` with both `UserCaveat: nil` (defer) and `UserCaveat: &TenantMatchArgs{Tenant: "acme"}` (pre-bind) variants | `example/schema.zed` + `example/authzed/extsvc/folder.gen.go` + test file | [x] |
+| 5.4 | Run `go test ./pkg/authz/spicedb/... ./example/authzed/...` — all pass (Docker required) | (verification only) | [x] |
 
 ## Design Decisions
 
