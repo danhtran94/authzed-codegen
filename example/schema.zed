@@ -312,6 +312,19 @@ definition extsvc/folder {
 	// params alongside the timestamp.
 	relation gated_token: extsvc/user with extsvc/tenant_match and expiration
 	permission gated_token_check = gated_token
+
+	// AUZ-009.1 — wildcard + expiration ("public for users but only
+	// for a window"). Exercises the wildcard branch on Create<Rel>
+	// Relations going through CreateRelationsWithExpiration with
+	// caveatName="" / caveatParams=nil sentinels.
+	relation public_until: extsvc/user:* with expiration
+	permission public_browse = public_until
+
+	// AUZ-009.1 — triple: wildcard + caveat + expiration. The
+	// wildcard subject still routes through CreateRelationsWithExpiration
+	// with the caveat name and params attached.
+	relation public_gated: extsvc/user:* with extsvc/tenant_match and expiration
+	permission public_gated_check = public_gated
 }
 
 definition extsvc/document {

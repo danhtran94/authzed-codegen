@@ -1463,6 +1463,109 @@ func TestFolder_ExpiringBrowse_TouchAllowsRewriteAfterExpiry(t *testing.T) {
 	assert.True(t, ok, "TOUCH-after-expiry refresh should grant — verifies SPEC-004 A2")
 }
 
+// AUZ-009.1 — wildcard + expiration ("public for users but in time").
+//
+// Schema:
+//   relation public_until: extsvc/user:* with expiration
+//   permission public_browse = public_until
+//
+// Wildcard branch routes through CreateRelationsWithExpiration with
+// authz.WildcardID as the ID sentinel; SpiceDB filters expired wildcard
+// tuples server-side identically to concrete-subject tuples.
+
+func TestFolder_PublicBrowse_WildcardGrantsBeforeExpiry(t *testing.T) {
+	ctx := context.Background()
+
+	expiresAt := time.Now().Add(1 * time.Hour)
+	require.NoError(t, extsvc.Folder("pub-ok").CreatePublicUntilRelations(ctx, extsvc.FolderPublicUntilObjects{
+		Wildcards: extsvc.FolderPublicUntilWildcards{User: true},
+		Expirations: extsvc.FolderPublicUntilExpirations{
+			User: &expiresAt,
+		},
+	}))
+
+	// Any concrete user resolves through the wildcard within TTL.
+	ok, err := extsvc.Folder("pub-ok").CheckPublicBrowse(ctx, extsvc.CheckFolderPublicBrowseInputs{
+		User: []extsvc.User{"u-anyone"},
+	})
+	require.NoError(t, err)
+	assert.True(t, ok, "wildcard tuple within TTL must grant any user")
+}
+
+func TestFolder_PublicBrowse_WildcardDeniesAfterExpiry(t *testing.T) {
+	ctx := context.Background()
+
+	// Short TTL — sleep past it.
+	expiresAt := time.Now().Add(100 * time.Millisecond)
+	require.NoError(t, extsvc.Folder("pub-no").CreatePublicUntilRelations(ctx, extsvc.FolderPublicUntilObjects{
+		Wildcards: extsvc.FolderPublicUntilWildcards{User: true},
+		Expirations: extsvc.FolderPublicUntilExpirations{
+			User: &expiresAt,
+		},
+	}))
+
+	time.Sleep(200 * time.Millisecond)
+
+	_, err := extsvc.Folder("pub-no").CheckPublicBrowse(ctx, extsvc.CheckFolderPublicBrowseInputs{
+		User: []extsvc.User{"u-anyone"},
+	})
+	assert.ErrorIs(t, err, authz.ErrPermissionDenied, "expired wildcard tuple must be filtered like concrete tuples")
+}
+
+// AUZ-009.1 — triple: wildcard + caveat + expiration.
+//
+// Schema:
+//   relation public_gated: extsvc/user:* with extsvc/tenant_match and expiration
+//   permission public_gated_check = public_gated
+//
+// All three flags compose: wildcard subject, request-time caveat eval,
+// per-tuple TTL. Verifies the codegen wires Caveats AND Expirations
+// sub-structs together on the wildcard branch.
+
+func TestFolder_PublicGated_WildcardAndCaveatAndExpiration(t *testing.T) {
+	ctx := context.Background()
+
+	expiresAt := time.Now().Add(1 * time.Hour)
+	require.NoError(t, extsvc.Folder("pgt-ok").CreatePublicGatedRelations(ctx, extsvc.FolderPublicGatedObjects{
+		Wildcards: extsvc.FolderPublicGatedWildcards{User: true},
+		Caveats: extsvc.FolderPublicGatedCaveats{
+			User: &extsvc.TenantMatchArgs{Tenant: new("acme")},
+		},
+		Expirations: extsvc.FolderPublicGatedExpirations{
+			User: &expiresAt,
+		},
+	}))
+
+	// Caveat passes (write-time tenant=acme), within TTL — grant.
+	ok, err := extsvc.Folder("pgt-ok").CheckPublicGatedCheck(ctx, extsvc.CheckFolderPublicGatedCheckInputs{
+		User: []extsvc.User{"u-any"},
+	})
+	require.NoError(t, err)
+	assert.True(t, ok, "wildcard + matching caveat + within TTL must grant")
+}
+
+func TestFolder_PublicGated_WildcardCaveatFailsEvenIfNotExpired(t *testing.T) {
+	ctx := context.Background()
+
+	// Defer the caveat at write — check-time tenant value reaches eval.
+	expiresAt := time.Now().Add(1 * time.Hour)
+	require.NoError(t, extsvc.Folder("pgt-no").CreatePublicGatedRelations(ctx, extsvc.FolderPublicGatedObjects{
+		Wildcards: extsvc.FolderPublicGatedWildcards{User: true},
+		Expirations: extsvc.FolderPublicGatedExpirations{
+			User: &expiresAt,
+		},
+	}))
+
+	// Wrong tenant at check — caveat eval false → deny, despite valid TTL.
+	_, err := extsvc.Folder("pgt-no").CheckPublicGatedCheck(ctx, extsvc.CheckFolderPublicGatedCheckInputs{
+		User: []extsvc.User{"u-any"},
+		Caveats: extsvc.CheckFolderPublicGatedCheckCaveats{
+			TenantMatch: &extsvc.TenantMatchArgs{Tenant: new("not-acme")},
+		},
+	})
+	assert.ErrorIs(t, err, authz.ErrPermissionDenied, "caveat fail on wildcard branch denies regardless of TTL")
+}
+
 func TestArticle_LookupAuthorOnlyUserSubjects(t *testing.T) {
 	ctx := context.Background()
 
