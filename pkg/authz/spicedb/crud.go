@@ -12,6 +12,7 @@ import (
 
 	v1 "github.com/authzed/authzed-go/proto/authzed/api/v1"
 	"github.com/authzed/authzed-go/v1"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 type Engine struct {
@@ -51,6 +52,17 @@ func (e *Engine) setToken(token string) {
 	e.debugLog("Setting token: %s", token)
 	e.token = token
 	e.setTokenTime = time.Now().UnixNano()
+}
+
+// SetSnapshotToken advances the engine's stored ZedToken so subsequent
+// reads pin to that snapshot. Use this when a write happens outside
+// the engine's own write methods (e.g. tests that write a caveated
+// relationship via the underlying authzed-go client because the
+// codegen does not yet emit write-time caveat attachment, AUZ-006).
+// Without this, snapshot reads would see a pre-write view and mask
+// the new tuple.
+func (e *Engine) SetSnapshotToken(token string) {
+	e.setToken(token)
 }
 
 func (e *Engine) getConsistencySnapshot() *v1.Consistency {
@@ -138,6 +150,50 @@ func (e *Engine) DeleteRelations(ctx context.Context, from authz.Resource, relat
 	e.setToken(res.WrittenAt.Token)
 
 	return nil
+}
+
+func (e *Engine) CheckPermissionWithCaveat(ctx context.Context, dest authz.Resource, has authz.Permission, subject authz.Type, audIDs []authz.ID, caveatParams map[string]any) error {
+	e.debugLog("Checking permission with caveat: dest=%v, has=%v, subject=%v, audIDs=%v, params=%v", dest, has, subject, audIDs, caveatParams)
+	consistency := e.getConsistencySnapshot()
+
+	caveatCtx, err := serializeCaveatMap(caveatParams)
+	if err != nil {
+		return fmt.Errorf("serialize caveat params: %w", err)
+	}
+
+	for _, id := range audIDs {
+		err := errorIfDenied(e.client.CheckPermission(ctx, &v1.CheckPermissionRequest{
+			Consistency: consistency,
+			Resource: &v1.ObjectReference{
+				ObjectType: string(dest.Type),
+				ObjectId:   string(dest.ID),
+			},
+			Permission: string(has),
+			Subject: &v1.SubjectReference{
+				Object: &v1.ObjectReference{
+					ObjectType: string(subject),
+					ObjectId:   string(id),
+				},
+			},
+			Context: caveatCtx,
+		}))
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// serializeCaveatMap converts the codegen wire-boundary map into a
+// structpb.Struct for SpiceDB's CheckPermissionRequest.Context. Empty /
+// nil input returns (nil, nil) so the wire field stays unset, matching
+// non-caveat checks.
+func serializeCaveatMap(m map[string]any) (*structpb.Struct, error) {
+	if len(m) == 0 {
+		return nil, nil
+	}
+	return structpb.NewStruct(m)
 }
 
 func (e *Engine) CheckPermission(ctx context.Context, dest authz.Resource, has authz.Permission, subject authz.Type, audIDs []authz.ID) error {

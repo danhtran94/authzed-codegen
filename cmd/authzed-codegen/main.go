@@ -43,12 +43,12 @@ func main() {
 		panic(err)
 	}
 
-	defs, err := generator.AdaptDefinitions(compiled.ObjectDefinitions)
+	defs, caveatMap, err := generator.AdaptDefinitions(compiled.CaveatDefinitions, compiled.ObjectDefinitions)
 	if err != nil {
 		panic(err)
 	}
 
-	g := generator.NewGenerator(defs)
+	g := generator.NewGenerator(caveatMap, defs)
 	g.OutputPath = outputPath
 	g.AddObjectTemplate("[object]", string(templates.ObjectTemplate))
 

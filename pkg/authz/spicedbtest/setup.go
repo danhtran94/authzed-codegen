@@ -33,8 +33,15 @@ const presharedKey = "test-secret-key"
 
 // Sandbox owns a running SpiceDB container, an authzed-go client,
 // and the spicedb.Engine wrapper. Close terminates the container.
+//
+// Client is the same *authzed.Client that backs Engine. Tests that
+// need to write a caveated relationship (codegen does not yet emit
+// write-time caveat attachment per AUZ-006 scope) can call
+// Client.WriteRelationships directly and then exercise the generated
+// Check<Perm> via Engine.
 type Sandbox struct {
 	Engine    *spicedb.Engine
+	Client    *authzed.Client
 	Addr      string
 	terminate func(context.Context) error
 }
@@ -113,6 +120,7 @@ func Start(ctx context.Context, schemaSDL string) (*Sandbox, error) {
 
 	return &Sandbox{
 		Engine:    spicedb.NewEngine(authzedClient, 3*time.Second),
+		Client:    authzedClient,
 		Addr:      addr,
 		terminate: cleanup,
 	}, nil

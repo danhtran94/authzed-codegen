@@ -7,6 +7,7 @@ import (
 	"os"
 	"testing"
 
+	v1 "github.com/authzed/authzed-go/proto/authzed/api/v1"
 	extsvc "github.com/danhtran94/authzed-codegen/example/authzed/extsvc"
 	"github.com/danhtran94/authzed-codegen/pkg/authz"
 	"github.com/danhtran94/authzed-codegen/pkg/authz/spicedbtest"
@@ -20,6 +21,11 @@ type strID string
 
 func (s strID) String() string { return string(s) }
 
+// sb is the package-scoped Sandbox so tests can reach the underlying
+// authzed.Client for write paths the codegen doesn't yet cover (e.g.
+// attaching a caveat at write time — deferred per AUZ-006 scope).
+var sb *spicedbtest.Sandbox
+
 func TestMain(m *testing.M) {
 	ctx := context.Background()
 
@@ -29,7 +35,7 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	sb, err := spicedbtest.Start(ctx, string(schema))
+	sandbox, err := spicedbtest.Start(ctx, string(schema))
 	if err != nil {
 		if errors.Is(err, spicedbtest.ErrDockerUnavailable) {
 			fmt.Println("SKIP: Docker not available — skipping extsvc tests")
@@ -38,11 +44,39 @@ func TestMain(m *testing.M) {
 		_, _ = fmt.Fprintf(os.Stderr, "start spicedb sandbox: %v\n", err)
 		os.Exit(1)
 	}
+	sb = sandbox
 	authz.SetDefaultEngine(sb.Engine)
 
 	code := m.Run()
 	_ = sb.Close(ctx)
 	os.Exit(code)
+}
+
+// writeTenantedViewer attaches a tenant_match caveat (no pre-context)
+// to a tenanted_viewer relationship via authzed-go directly. The
+// codegen's CreateTenantedViewerRelations issues the write without a
+// caveat — SpiceDB rejects that for `with caveat` relations, so
+// caveat-aware tests bypass the codegen for the write half.
+func writeTenantedViewer(ctx context.Context, t *testing.T, folderID, userID string) {
+	t.Helper()
+	res, err := sb.Client.WriteRelationships(ctx, &v1.WriteRelationshipsRequest{
+		Updates: []*v1.RelationshipUpdate{{
+			Operation: v1.RelationshipUpdate_OPERATION_CREATE,
+			Relationship: &v1.Relationship{
+				Resource: &v1.ObjectReference{ObjectType: "extsvc/folder", ObjectId: folderID},
+				Relation: "tenanted_viewer",
+				Subject: &v1.SubjectReference{
+					Object: &v1.ObjectReference{ObjectType: "extsvc/user", ObjectId: userID},
+				},
+				OptionalCaveat: &v1.ContextualizedCaveat{CaveatName: "extsvc/tenant_match"},
+			},
+		}},
+	})
+	require.NoError(t, err)
+	// Engine reads use snapshot consistency at the last token it wrote
+	// itself; this direct write bypassed Engine.CreateRelations, so the
+	// engine's snapshot would predate the new tuple. Advance it.
+	sb.Engine.SetSnapshotToken(res.WrittenAt.Token)
 }
 
 // --- Boilerplate identity tests (User / Group / Role) ---
@@ -395,6 +429,53 @@ func TestArticle_LookupEditorUserSubjects(t *testing.T) {
 	ids, err := art.LookupEditorUserSubjects(ctx)
 	require.NoError(t, err)
 	assert.Contains(t, ids, extsvc.User("au7"))
+}
+
+// --- Folder.tenanted_browse: caveat codegen path ---
+//
+// Schema: relation tenanted_viewer: extsvc/user with extsvc/tenant_match,
+// caveat tenant_match(tenant string) { tenant == "acme" }.
+// The write path attaches the caveat with no pre-context (writeTenantedViewer);
+// the check provides the binding at request time via input.Caveat.
+
+func TestFolder_CheckTenantedBrowse_MatchTenant(t *testing.T) {
+	ctx := context.Background()
+
+	writeTenantedViewer(ctx, t, "tcb-match", "u-match")
+
+	ok, err := extsvc.Folder("tcb-match").CheckTenantedBrowse(ctx, extsvc.CheckFolderTenantedBrowseInputs{
+		User:   []extsvc.User{"u-match"},
+		Caveat: &extsvc.TenantMatchArgs{Tenant: "acme"},
+	})
+	require.NoError(t, err)
+	assert.True(t, ok)
+}
+
+func TestFolder_CheckTenantedBrowse_WrongTenant(t *testing.T) {
+	ctx := context.Background()
+
+	writeTenantedViewer(ctx, t, "tcb-wrong", "u-wrong")
+
+	_, err := extsvc.Folder("tcb-wrong").CheckTenantedBrowse(ctx, extsvc.CheckFolderTenantedBrowseInputs{
+		User:   []extsvc.User{"u-wrong"},
+		Caveat: &extsvc.TenantMatchArgs{Tenant: "not-acme"},
+	})
+	assert.ErrorIs(t, err, authz.ErrPermissionDenied)
+}
+
+// Nil Caveat → SpiceDB returns CONDITIONAL_PERMISSION (caveat couldn't
+// bind the `tenant` param). errorIfDenied maps anything other than
+// HAS_PERMISSION to ErrPermissionDenied, so the conservative default is
+// deny. A future job may surface CONDITIONAL as a distinct signal.
+func TestFolder_CheckTenantedBrowse_NilCaveat(t *testing.T) {
+	ctx := context.Background()
+
+	writeTenantedViewer(ctx, t, "tcb-nil", "u-nil")
+
+	_, err := extsvc.Folder("tcb-nil").CheckTenantedBrowse(ctx, extsvc.CheckFolderTenantedBrowseInputs{
+		User: []extsvc.User{"u-nil"},
+	})
+	assert.ErrorIs(t, err, authz.ErrPermissionDenied)
 }
 
 func TestArticle_LookupAuthorOnlyUserSubjects(t *testing.T) {

@@ -20,7 +20,11 @@ type {{ $typeName }}{{ snakeToPascal $rel.Name }}Objects struct {
 {{ if anyWildcard $rel.AllowedTypes }}type {{ $typeName }}{{ snakeToPascal $rel.Name }}Wildcards struct {
 {{ range $idx, $relType := $rel.AllowedTypes }}{{ if $relType.IsWildcard }}  {{ typeName $relType.Namespace }} bool
 {{ end }}{{ end }}}
-{{ end }}{{ end }}
+{{ end }}{{ end }}{{ range $caveatName := definitionCaveats .Relations }}type {{ pascalCaveat $caveatName }}Args struct {
+{{ range $param := caveatParams $caveatName }}  {{ snakeToPascal $param.Name }} {{ $param.GoType }}
+{{ end }}}
+
+{{ end }}
 type {{ $typeName }} authz.ID
 func {{ $typeName }}Stringer(id authz.StringConvertable) {{ $typeName }} {
   return {{ $typeName }}(id.String())
@@ -104,18 +108,26 @@ func ({{ $var }} {{ $typeName }}) Read{{ snakeToPascal $rel.Name}}{{ typeName $r
 {{ $inputName := (print "Check" $typeName (snakeToPascal $perm.Name) "Inputs") }}
 type {{ $inputName }} struct {
 {{ range $inputType := permissionInputTypes $objectType $perm.Name }}  {{ typeName $inputType }} []{{ typeName $inputType }}
+{{ end }}{{ if permCaveat $objectType $perm.Name }}  Caveat *{{ pascalCaveat (permCaveat $objectType $perm.Name) }}Args
 {{ end }}}
 
 func ({{ $var }} {{ $typeName }}) Check{{ snakeToPascal $perm.Name }}(ctx context.Context, input {{ $inputName }}) (bool, error) {
   if {{ range $idx, $inputType := permissionInputTypes $objectType $perm.Name }}len(input.{{ typeName $inputType }}) == 0 && {{ end }}true {
     return false, authz.ErrNoInput
   }
-
+{{ if permCaveat $objectType $perm.Name }}{{ $caveatName := permCaveat $objectType $perm.Name }}
+  var caveatCtx map[string]any
+  if input.Caveat != nil {
+    caveatCtx = map[string]any{
+{{ range $param := caveatParams $caveatName }}      "{{ $param.Name }}": input.Caveat.{{ snakeToPascal $param.Name }},
+{{ end }}    }
+  }
+{{ end }}
   {{ range $inputType := permissionInputTypes $objectType $perm.Name }}if len(input.{{ typeName $inputType }}) > 0 {
-    err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
+    err := authz.GetEngine(ctx).{{ if permCaveat $objectType $perm.Name }}CheckPermissionWithCaveat{{ else }}CheckPermission{{ end }}(ctx, authz.Resource{
       Type: Type{{ $typeName }},
       ID: authz.ID({{ $var }}),
-    }, authz.Permission({{ $typeName }}{{ snakeToPascal $perm.Name }}), Type{{ typeName $inputType }}, authz.IDs(input.{{ typeName $inputType }}))
+    }, authz.Permission({{ $typeName }}{{ snakeToPascal $perm.Name }}), Type{{ typeName $inputType }}, authz.IDs(input.{{ typeName $inputType }}){{ if permCaveat $objectType $perm.Name }}, caveatCtx{{ end }})
     if err != nil {
       return false, err
     }

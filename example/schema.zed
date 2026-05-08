@@ -78,6 +78,13 @@ definition extsvc/user {}
 definition extsvc/group {}
 definition extsvc/role {}
 
+// AUZ-006 caveat fixture — single-string-param caveat exercising the
+// caveat codegen path: typed param struct generation, Caveat field on
+// Check<Perm>Inputs, and the CheckPermissionWithCaveat call.
+caveat extsvc/tenant_match(tenant string) {
+	tenant == "acme"
+}
+
 definition extsvc/folder {
 	// 3-way type union — exercises adapter walking 3 entries in
 	// AllowedDirectRelations and template emitting 3-arm Objects struct.
@@ -87,8 +94,18 @@ definition extsvc/folder {
 	// Generated code is identical to the non-wildcard form (data-only bit).
 	relation guest: extsvc/user:*
 
+	// AUZ-006 caveat fixture — relation gated on extsvc/tenant_match. Writes
+	// MUST attach the caveat (SpiceDB enforces this for `with` relations).
+	relation tenanted_viewer: extsvc/user with extsvc/tenant_match
+
 	// Permission == single relation alias.
 	permission browse = viewer
+
+	// AUZ-006 caveat fixture — permission whose only path goes through
+	// a caveated relation. The generated CheckTenantedBrowseInputs
+	// gains `Caveat *TenantMatchArgs` and the method calls
+	// CheckPermissionWithCaveat.
+	permission tenanted_browse = tenanted_viewer
 }
 
 definition extsvc/document {

@@ -2,6 +2,7 @@ package generator
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	core "github.com/authzed/spicedb/pkg/proto/core/v1"
@@ -42,6 +43,17 @@ type RelationView struct {
 type AllowedType struct {
 	Namespace  string
 	IsWildcard bool
+	CaveatName string
+}
+
+// ParamSpec is a single caveat parameter as the generator sees it: the
+// declared name and the inferred Go type. The Go type is best-effort —
+// SpiceDB caveat types that don't have a clean Go analogue (any,
+// duration, timestamp, map, ipaddress, unknown) fall back to `any` and
+// the caller is responsible for passing a structpb-compatible value.
+type ParamSpec struct {
+	Name   string
+	GoType string
 }
 
 type PermissionView struct {
@@ -56,12 +68,13 @@ type PermissionExpr struct {
 	RightPerm string
 }
 
-func AdaptDefinitions(defs []*core.NamespaceDefinition) ([]*DefinitionView, error) {
+func AdaptDefinitions(caveatDefs []*core.CaveatDefinition, defs []*core.NamespaceDefinition) ([]*DefinitionView, map[string][]ParamSpec, error) {
+	caveatMap := buildCaveatMap(caveatDefs)
 	out := make([]*DefinitionView, 0, len(defs))
 	for _, ns := range defs {
 		prefix, name, ok := strings.Cut(ns.GetName(), "/")
 		if !ok {
-			return nil, fmt.Errorf("definition %q: missing prefix/name separator", ns.GetName())
+			return nil, nil, fmt.Errorf("definition %q: missing prefix/name separator", ns.GetName())
 		}
 		d := &DefinitionView{ObjectType: ObjectType{Prefix: prefix, Name: name}}
 
@@ -70,23 +83,177 @@ func AdaptDefinitions(defs []*core.NamespaceDefinition) ([]*DefinitionView, erro
 			case r.GetTypeInformation() != nil:
 				rv, err := adaptRelation(r)
 				if err != nil {
-					return nil, fmt.Errorf("definition %q: %w", ns.GetName(), err)
+					return nil, nil, fmt.Errorf("definition %q: %w", ns.GetName(), err)
+				}
+				for _, at := range rv.AllowedTypes {
+					if at.CaveatName == "" {
+						continue
+					}
+					if _, ok := caveatMap[at.CaveatName]; !ok {
+						return nil, nil, fmt.Errorf("definition %q: relation %q references unknown caveat %q", ns.GetName(), rv.Name, at.CaveatName)
+					}
 				}
 				d.Relations = append(d.Relations, rv)
 			case r.GetUsersetRewrite() != nil:
 				pv, err := adaptPermission(r)
 				if err != nil {
-					return nil, fmt.Errorf("definition %q: %w", ns.GetName(), err)
+					return nil, nil, fmt.Errorf("definition %q: %w", ns.GetName(), err)
 				}
 				d.Permissions = append(d.Permissions, pv)
 			default:
-				return nil, fmt.Errorf("definition %q: relation %q has neither TypeInformation nor UsersetRewrite", ns.GetName(), r.GetName())
+				return nil, nil, fmt.Errorf("definition %q: relation %q has neither TypeInformation nor UsersetRewrite", ns.GetName(), r.GetName())
 			}
 		}
 
 		out = append(out, d)
 	}
+	return out, caveatMap, nil
+}
+
+// buildCaveatMap turns SpiceDB's []*CaveatDefinition into a name-keyed
+// map of typed parameter specs. Map iteration on ParameterTypes is
+// non-deterministic, so the per-caveat slice is sorted by parameter name
+// to keep generated output stable across runs.
+func buildCaveatMap(caveatDefs []*core.CaveatDefinition) map[string][]ParamSpec {
+	out := make(map[string][]ParamSpec, len(caveatDefs))
+	for _, cd := range caveatDefs {
+		params := make([]ParamSpec, 0, len(cd.GetParameterTypes()))
+		for pname, ptype := range cd.GetParameterTypes() {
+			params = append(params, ParamSpec{Name: pname, GoType: caveatTypeToGo(ptype)})
+		}
+		sort.Slice(params, func(i, j int) bool { return params[i].Name < params[j].Name })
+		out[cd.GetName()] = params
+	}
+	return out
+}
+
+// collectPermCaveats indexes def/relation structures and walks each
+// permission's expressions to find caveats reachable via the relations
+// it directly references (or via sibling permission references). Arrows
+// (e.g. `parent->browse`) collect the LeftRel's caveats only — caveats
+// on the right side resolve through a different object's permission and
+// are not part of this Check call's wire Context.
+//
+// Returns a map keyed by "<defType>/<perm>" → unique caveat name. An
+// empty value means the permission has no caveat path. Multi-caveat
+// reach errors out — multi-caveat per permission is deferred (AUZ-006
+// out-of-scope).
+func collectPermCaveats(defs []*DefinitionView) (map[string]string, error) {
+	relIdx := make(map[string]map[string][]AllowedType, len(defs))
+	permIdx := make(map[string]map[string][]PermissionExpr, len(defs))
+	for _, d := range defs {
+		ot := d.ObjectType.String()
+		relIdx[ot] = make(map[string][]AllowedType, len(d.Relations))
+		for _, r := range d.Relations {
+			relIdx[ot][r.Name] = r.AllowedTypes
+		}
+		permIdx[ot] = make(map[string][]PermissionExpr, len(d.Permissions))
+		for _, p := range d.Permissions {
+			permIdx[ot][p.Name] = p.Expressions
+		}
+	}
+
+	out := make(map[string]string)
+	for _, d := range defs {
+		ot := d.ObjectType.String()
+		for _, p := range d.Permissions {
+			seen := make(map[string]bool)
+			walkPermCaveats(ot, p.Name, relIdx, permIdx, seen, map[string]bool{})
+			distinct := make([]string, 0, len(seen))
+			for c := range seen {
+				distinct = append(distinct, c)
+			}
+			sort.Strings(distinct)
+			switch len(distinct) {
+			case 0:
+			case 1:
+				out[fmt.Sprintf("%s/%s", ot, p.Name)] = distinct[0]
+			default:
+				return nil, fmt.Errorf(
+					"permission %s/%s reaches multiple caveats %v — multi-caveat per permission is out of scope (AUZ-006)",
+					ot, p.Name, distinct,
+				)
+			}
+		}
+	}
 	return out, nil
+}
+
+func walkPermCaveats(
+	ot, permName string,
+	relIdx map[string]map[string][]AllowedType,
+	permIdx map[string]map[string][]PermissionExpr,
+	out map[string]bool,
+	visited map[string]bool,
+) {
+	key := fmt.Sprintf("%s/%s", ot, permName)
+	if visited[key] {
+		return
+	}
+	visited[key] = true
+	defer delete(visited, key)
+
+	exprs, ok := permIdx[ot][permName]
+	if !ok {
+		return
+	}
+	rels := relIdx[ot]
+	for _, e := range exprs {
+		switch e.Kind {
+		case PermExprIdentifier:
+			if at, ok := rels[e.Ident]; ok {
+				for _, t := range at {
+					if t.CaveatName != "" {
+						out[t.CaveatName] = true
+					}
+				}
+			} else if _, ok := permIdx[ot][e.Ident]; ok {
+				walkPermCaveats(ot, e.Ident, relIdx, permIdx, out, visited)
+			}
+		case PermExprArrow:
+			if at, ok := rels[e.LeftRel]; ok {
+				for _, t := range at {
+					if t.CaveatName != "" {
+						out[t.CaveatName] = true
+					}
+				}
+			}
+		}
+	}
+}
+
+// caveatTypeToGo maps a SpiceDB caveat type to a Go type literal. The
+// SpiceDB type set is registered in
+// github.com/authzed/spicedb/pkg/caveats/types/basic.go: any, bool,
+// string, int, uint, double, bytes, duration, timestamp, list<T>,
+// map<T>, ipaddress. Types without a clean Go analogue surface as `any`
+// — caller passes a structpb-compatible value at the call site.
+func caveatTypeToGo(t *core.CaveatTypeReference) string {
+	if t == nil {
+		return "any"
+	}
+	switch t.GetTypeName() {
+	case "bool":
+		return "bool"
+	case "string":
+		return "string"
+	case "int":
+		return "int64"
+	case "uint":
+		return "uint64"
+	case "double":
+		return "float64"
+	case "bytes":
+		return "[]byte"
+	case "list":
+		children := t.GetChildTypes()
+		if len(children) != 1 {
+			return "any"
+		}
+		return "[]" + caveatTypeToGo(children[0])
+	default:
+		return "any"
+	}
 }
 
 func adaptRelation(r *core.Relation) (*RelationView, error) {
@@ -101,8 +268,9 @@ func flattenAllowedTypes(ti *core.TypeInformation) ([]AllowedType, error) {
 	var types []AllowedType
 
 	for _, ar := range ti.GetAllowedDirectRelations() {
-		if ar.GetRequiredCaveat() != nil {
-			return nil, fmt.Errorf("caveats are not supported (allowed type %q)", ar.GetNamespace())
+		caveatName := ""
+		if rc := ar.GetRequiredCaveat(); rc != nil {
+			caveatName = rc.GetCaveatName()
 		}
 		if ar.GetRequiredExpiration() != nil {
 			return nil, fmt.Errorf("expiration traits are not supported (allowed type %q)", ar.GetNamespace())
@@ -115,6 +283,7 @@ func flattenAllowedTypes(ti *core.TypeInformation) ([]AllowedType, error) {
 		types = append(types, AllowedType{
 			Namespace:  ar.GetNamespace(),
 			IsWildcard: ar.GetPublicWildcard() != nil,
+			CaveatName: caveatName,
 		})
 	}
 	return types, nil

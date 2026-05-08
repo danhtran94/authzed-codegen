@@ -26,6 +26,14 @@ type FolderGuestObjects struct {
 type FolderGuestWildcards struct {
   User bool
 }
+const FolderTenantedViewer RelationFolder = "tenanted_viewer"
+type FolderTenantedViewerObjects struct {
+  User []User
+}
+type TenantMatchArgs struct {
+  Tenant string
+}
+
 
 type Folder authz.ID
 func FolderStringer(id authz.StringConvertable) Folder {
@@ -95,6 +103,18 @@ func (folder Folder) CreateGuestRelations(ctx context.Context, objects FolderGue
   }
   return nil
 }
+func (folder Folder) CreateTenantedViewerRelations(ctx context.Context, objects FolderTenantedViewerObjects) error {
+  if len(objects.User) > 0 {
+    err := authz.GetEngine(ctx).CreateRelations(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Relation(FolderTenantedViewer), TypeUser, authz.IDs(objects.User))
+    if err != nil {
+      return err
+    }
+  }
+  return nil
+}
 
 func (folder Folder) DeleteViewerRelations(ctx context.Context, objects FolderViewerObjects) error {
   if len(objects.User) > 0 {
@@ -142,6 +162,19 @@ func (folder Folder) DeleteGuestRelations(ctx context.Context, objects FolderGue
       Type: TypeFolder,
       ID: authz.ID(folder),
     }, authz.Relation(FolderGuest), TypeUser, []authz.ID{authz.WildcardID})
+    if err != nil {
+      return err
+    }
+  }
+  return nil
+}
+
+func (folder Folder) DeleteTenantedViewerRelations(ctx context.Context, objects FolderTenantedViewerObjects) error {
+  if len(objects.User) > 0 {
+    err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Relation(FolderTenantedViewer), TypeUser, authz.IDs(objects.User))
     if err != nil {
       return err
     }
@@ -201,6 +234,18 @@ func (folder Folder) ReadGuestUserWildcard(ctx context.Context) (bool, error) {
     Type: TypeFolder,
     ID: authz.ID(folder),
   }, authz.Relation(FolderGuest), TypeUser)
+}
+
+func (folder Folder) ReadTenantedViewerUserRelations(ctx context.Context) ([]User, error) {
+  ids, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+    Type: TypeFolder,
+    ID: authz.ID(folder),
+  }, authz.Relation(FolderTenantedViewer), TypeUser)
+  if err != nil {
+    return nil, err
+  }
+
+  return authz.FromIDsExcludingWildcard[User](ids), nil
 }
 
 const FolderBrowse PermissionFolder = "browse"
@@ -284,6 +329,53 @@ func LookupBrowseFolderResources(ctx context.Context, input CheckFolderBrowseInp
   
   return []Folder{}, nil
 }
+const FolderTenantedBrowse PermissionFolder = "tenanted_browse"
+
+type CheckFolderTenantedBrowseInputs struct {
+  User []User
+  Caveat *TenantMatchArgs
+}
+
+func (folder Folder) CheckTenantedBrowse(ctx context.Context, input CheckFolderTenantedBrowseInputs) (bool, error) {
+  if len(input.User) == 0 && true {
+    return false, authz.ErrNoInput
+  }
+
+  var caveatCtx map[string]any
+  if input.Caveat != nil {
+    caveatCtx = map[string]any{
+      "tenant": input.Caveat.Tenant,
+    }
+  }
+
+  if len(input.User) > 0 {
+    err := authz.GetEngine(ctx).CheckPermissionWithCaveat(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Permission(FolderTenantedBrowse), TypeUser, authz.IDs(input.User), caveatCtx)
+    if err != nil {
+      return false, err
+    }
+  }
+  
+  return true, nil
+}
+
+func LookupTenantedBrowseFolderResources(ctx context.Context, input CheckFolderTenantedBrowseInputs) ([]Folder, error) {
+  if len(input.User) > 0 {
+    ids, err := authz.GetEngine(ctx).LookupResources(ctx,
+      TypeFolder, authz.Permission(FolderTenantedBrowse), 
+      TypeUser, authz.IDs(input.User),
+    )
+    if err != nil {
+      return nil, err
+    }
+
+    return authz.FromIDs[Folder](ids), nil
+  }
+  
+  return []Folder{}, nil
+}
 
 func (folder Folder) LookupBrowseUserSubjects(ctx context.Context) ([]User, error) {
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
@@ -355,5 +447,30 @@ func (folder Folder) LookupBrowseRoleWildcardSubjects(ctx context.Context) (bool
       ID: authz.ID(folder),
     },
     authz.Permission(FolderBrowse), TypeRole,
+  )
+}
+
+func (folder Folder) LookupTenantedBrowseUserSubjects(ctx context.Context) ([]User, error) {
+  ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+    authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    },
+    authz.Permission(FolderTenantedBrowse), TypeUser,
+  )
+  if err != nil {
+    return nil, err
+  }
+
+  return authz.FromIDsExcludingWildcard[User](ids), nil
+}
+
+func (folder Folder) LookupTenantedBrowseUserWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    },
+    authz.Permission(FolderTenantedBrowse), TypeUser,
   )
 }
