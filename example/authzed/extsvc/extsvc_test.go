@@ -1243,6 +1243,86 @@ func TestFolder_Act_PartialBind_DeniesWhenActionNotPolicyAllowed(t *testing.T) {
 	assert.ErrorIs(t, err, authz.ErrPermissionDenied, "delete not in [read] → eval false → deny")
 }
 
+// AUZ-008 — Lookup with caveat context + CONDITIONAL filter.
+//
+// Schema: tenanted_viewer: extsvc/user with extsvc/tenant_match,
+// permission tenanted_browse = tenanted_viewer.
+// Generated:
+//   - LookupTenantedBrowseFolderResources(ctx, CheckFolderTenantedBrowseInputs)
+//   - (folder).LookupTenantedBrowseUserSubjects(ctx, CheckFolderTenantedBrowseCaveats)
+// Engine routes through LookupResourcesWithCaveat / LookupSubjectsWithCaveat;
+// streamed responses with Permissionship != HAS_PERMISSION are filtered out.
+
+func TestFolder_LookupTenantedBrowseUserSubjects_GrantedWithCaveat(t *testing.T) {
+	ctx := context.Background()
+
+	require.NoError(t, extsvc.Folder("lk-s-ok").CreateTenantedViewerRelations(ctx, extsvc.FolderTenantedViewerObjects{
+		User: []extsvc.User{"u-lk-s-ok"},
+	}))
+
+	users, err := extsvc.Folder("lk-s-ok").LookupTenantedBrowseUserSubjects(ctx, extsvc.CheckFolderTenantedBrowseCaveats{
+		TenantMatch: &extsvc.TenantMatchArgs{Tenant: new("acme")},
+	})
+	require.NoError(t, err)
+	assert.Contains(t, users, extsvc.User("u-lk-s-ok"), "matching tenant must surface as definite grant")
+}
+
+func TestFolder_LookupTenantedBrowseFolderResources_GrantedWithCaveat(t *testing.T) {
+	ctx := context.Background()
+
+	require.NoError(t, extsvc.Folder("lk-r-ok").CreateTenantedViewerRelations(ctx, extsvc.FolderTenantedViewerObjects{
+		User: []extsvc.User{"u-lk-r-ok"},
+	}))
+
+	folders, err := extsvc.LookupTenantedBrowseFolderResources(ctx, extsvc.CheckFolderTenantedBrowseInputs{
+		User: []extsvc.User{"u-lk-r-ok"},
+		Caveats: extsvc.CheckFolderTenantedBrowseCaveats{
+			TenantMatch: &extsvc.TenantMatchArgs{Tenant: new("acme")},
+		},
+	})
+	require.NoError(t, err)
+	assert.Contains(t, folders, extsvc.Folder("lk-r-ok"), "resource lookup with matching caveat returns the folder")
+}
+
+// Pre-AUZ-008, an empty Caveats input would cause SpiceDB to return
+// CONDITIONAL_PERMISSION; the engine appended every response ID
+// regardless, so the user appeared in the result even though access
+// wasn't actually granted. Post-AUZ-008, the filter drops CONDITIONAL
+// from the returned slice.
+func TestFolder_LookupTenantedBrowseUserSubjects_ConditionalFiltered(t *testing.T) {
+	ctx := context.Background()
+
+	require.NoError(t, extsvc.Folder("lk-s-cond").CreateTenantedViewerRelations(ctx, extsvc.FolderTenantedViewerObjects{
+		User: []extsvc.User{"u-lk-s-cond"},
+	}))
+
+	// No Caveats supplied — SpiceDB returns CONDITIONAL because `tenant`
+	// has nothing to bind. Filter drops it from the returned slice.
+	users, err := extsvc.Folder("lk-s-cond").LookupTenantedBrowseUserSubjects(ctx, extsvc.CheckFolderTenantedBrowseCaveats{})
+	require.NoError(t, err)
+	assert.NotContains(t, users, extsvc.User("u-lk-s-cond"), "CONDITIONAL_PERMISSION must be filtered out — pre-AUZ-008 silent bug")
+}
+
+// Lookup with a non-matching caveat: SpiceDB evaluates the expression
+// to false → NO_PERMISSION → never streamed in the first place. Equivalent
+// observable behavior as CONDITIONAL filtering for the caller.
+func TestFolder_LookupTenantedBrowseFolderResources_WrongCaveatFiltered(t *testing.T) {
+	ctx := context.Background()
+
+	require.NoError(t, extsvc.Folder("lk-r-wrong").CreateTenantedViewerRelations(ctx, extsvc.FolderTenantedViewerObjects{
+		User: []extsvc.User{"u-lk-r-wrong"},
+	}))
+
+	folders, err := extsvc.LookupTenantedBrowseFolderResources(ctx, extsvc.CheckFolderTenantedBrowseInputs{
+		User: []extsvc.User{"u-lk-r-wrong"},
+		Caveats: extsvc.CheckFolderTenantedBrowseCaveats{
+			TenantMatch: &extsvc.TenantMatchArgs{Tenant: new("not-acme")},
+		},
+	})
+	require.NoError(t, err)
+	assert.NotContains(t, folders, extsvc.Folder("lk-r-wrong"), "mismatched caveat must not surface the folder")
+}
+
 func TestArticle_LookupAuthorOnlyUserSubjects(t *testing.T) {
 	ctx := context.Background()
 

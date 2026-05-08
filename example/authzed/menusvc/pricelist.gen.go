@@ -97,9 +97,10 @@ func (pricelist Pricelist) CheckWrite(ctx context.Context, input CheckPricelistW
 }
 
 func LookupWritePricelistResources(ctx context.Context, input CheckPricelistWriteInputs) ([]Pricelist, error) {
+
   if len(input.User) > 0 {
     ids, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypePricelist, authz.Permission(PricelistWrite), 
+      TypePricelist, authz.Permission(PricelistWrite),
       TypeUser, authz.IDs(input.User),
     )
     if err != nil {
@@ -113,6 +114,7 @@ func LookupWritePricelistResources(ctx context.Context, input CheckPricelistWrit
 }
 
 func (pricelist Pricelist) LookupWriteUserSubjects(ctx context.Context) ([]User, error) {
+
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypePricelist,

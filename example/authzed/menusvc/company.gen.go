@@ -179,9 +179,10 @@ func (company Company) CheckManage(ctx context.Context, input CheckCompanyManage
 }
 
 func LookupManageCompanyResources(ctx context.Context, input CheckCompanyManageInputs) ([]Company, error) {
+
   if len(input.User) > 0 {
     ids, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeCompany, authz.Permission(CompanyManage), 
+      TypeCompany, authz.Permission(CompanyManage),
       TypeUser, authz.IDs(input.User),
     )
     if err != nil {
@@ -218,9 +219,10 @@ func (company Company) CheckCreateBooking(ctx context.Context, input CheckCompan
 }
 
 func LookupCreateBookingCompanyResources(ctx context.Context, input CheckCompanyCreateBookingInputs) ([]Company, error) {
+
   if len(input.User) > 0 {
     ids, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeCompany, authz.Permission(CompanyCreateBooking), 
+      TypeCompany, authz.Permission(CompanyCreateBooking),
       TypeUser, authz.IDs(input.User),
     )
     if err != nil {
@@ -257,9 +259,10 @@ func (company Company) CheckCreateOrder(ctx context.Context, input CheckCompanyC
 }
 
 func LookupCreateOrderCompanyResources(ctx context.Context, input CheckCompanyCreateOrderInputs) ([]Company, error) {
+
   if len(input.User) > 0 {
     ids, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeCompany, authz.Permission(CompanyCreateOrder), 
+      TypeCompany, authz.Permission(CompanyCreateOrder),
       TypeUser, authz.IDs(input.User),
     )
     if err != nil {
@@ -273,6 +276,7 @@ func LookupCreateOrderCompanyResources(ctx context.Context, input CheckCompanyCr
 }
 
 func (company Company) LookupManageUserSubjects(ctx context.Context) ([]User, error) {
+
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeCompany,
@@ -298,6 +302,7 @@ func (company Company) LookupManageUserWildcardSubjects(ctx context.Context) (bo
 }
 
 func (company Company) LookupCreateBookingUserSubjects(ctx context.Context) ([]User, error) {
+
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeCompany,
@@ -323,6 +328,7 @@ func (company Company) LookupCreateBookingUserWildcardSubjects(ctx context.Conte
 }
 
 func (company Company) LookupCreateOrderUserSubjects(ctx context.Context) ([]User, error) {
+
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeCompany,

@@ -97,9 +97,10 @@ func (table Table) CheckWrite(ctx context.Context, input CheckTableWriteInputs) 
 }
 
 func LookupWriteTableResources(ctx context.Context, input CheckTableWriteInputs) ([]Table, error) {
+
   if len(input.User) > 0 {
     ids, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeTable, authz.Permission(TableWrite), 
+      TypeTable, authz.Permission(TableWrite),
       TypeUser, authz.IDs(input.User),
     )
     if err != nil {
@@ -113,6 +114,7 @@ func LookupWriteTableResources(ctx context.Context, input CheckTableWriteInputs)
 }
 
 func (table Table) LookupWriteUserSubjects(ctx context.Context) ([]User, error) {
+
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeTable,

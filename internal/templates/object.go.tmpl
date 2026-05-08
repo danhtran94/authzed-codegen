@@ -161,10 +161,22 @@ func ({{ $var }} {{ $typeName }}) Check{{ snakeToPascal $perm.Name }}(ctx contex
 }
 
 func Lookup{{ snakeToPascal $perm.Name }}{{ $typeName }}Resources(ctx context.Context, input {{ $inputName }}) ([]{{ $typeName }}, error) {
+{{ if hasPermCaveats $objectType $perm.Name }}
+  var caveatCtx map[string]any
+{{ range $caveatName := permCaveats $objectType $perm.Name }}  if c := input.Caveats.{{ pascalCaveat $caveatName }}; c != nil {
+    if caveatCtx == nil {
+      caveatCtx = map[string]any{}
+    }
+{{ range $param := caveatParams $caveatName }}    if c.{{ snakeToPascal $param.Name }} != nil {
+      caveatCtx["{{ $param.Name }}"] = {{ deref $param.GoType }}c.{{ snakeToPascal $param.Name }}
+    }
+{{ end }}  }
+{{ end }}{{ end }}
   {{ range $inputType := permissionInputTypes $objectType $perm.Name }}if len(input.{{ typeName $inputType }}) > 0 {
-    ids, err := authz.GetEngine(ctx).LookupResources(ctx,
-      Type{{ $typeName }}, authz.Permission({{ $typeName }}{{ snakeToPascal $perm.Name }}), 
-      Type{{ typeName $inputType }}, authz.IDs(input.{{ typeName $inputType }}),
+    ids, err := authz.GetEngine(ctx).{{ if hasPermCaveats $objectType $perm.Name }}LookupResourcesWithCaveat{{ else }}LookupResources{{ end }}(ctx,
+      Type{{ $typeName }}, authz.Permission({{ $typeName }}{{ snakeToPascal $perm.Name }}),
+      Type{{ typeName $inputType }}, authz.IDs(input.{{ typeName $inputType }}),{{ if hasPermCaveats $objectType $perm.Name }}
+      caveatCtx,{{ end }}
     )
     if err != nil {
       return nil, err
@@ -175,14 +187,26 @@ func Lookup{{ snakeToPascal $perm.Name }}{{ $typeName }}Resources(ctx context.Co
   {{ end }}
   return []{{ $typeName }}{}, nil
 }
-{{ end }}{{ range $perm := .Permissions }}
-{{ range $inputType := permissionInputTypes $objectType $perm.Name }}func ({{ $var }} {{ $typeName }}) Lookup{{ snakeToPascal $perm.Name }}{{ typeName $inputType }}Subjects(ctx context.Context) ([]{{ typeName $inputType }}, error) {
-  ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+{{ end }}{{ range $perm := .Permissions }}{{ $caveatsTypeName := (print "Check" $typeName (snakeToPascal $perm.Name) "Caveats") }}
+{{ range $inputType := permissionInputTypes $objectType $perm.Name }}func ({{ $var }} {{ $typeName }}) Lookup{{ snakeToPascal $perm.Name }}{{ typeName $inputType }}Subjects(ctx context.Context{{ if hasPermCaveats $objectType $perm.Name }}, caveats {{ $caveatsTypeName }}{{ end }}) ([]{{ typeName $inputType }}, error) {
+{{ if hasPermCaveats $objectType $perm.Name }}
+  var caveatCtx map[string]any
+{{ range $caveatName := permCaveats $objectType $perm.Name }}  if c := caveats.{{ pascalCaveat $caveatName }}; c != nil {
+    if caveatCtx == nil {
+      caveatCtx = map[string]any{}
+    }
+{{ range $param := caveatParams $caveatName }}    if c.{{ snakeToPascal $param.Name }} != nil {
+      caveatCtx["{{ $param.Name }}"] = {{ deref $param.GoType }}c.{{ snakeToPascal $param.Name }}
+    }
+{{ end }}  }
+{{ end }}{{ end }}
+  ids, err := authz.GetEngine(ctx).{{ if hasPermCaveats $objectType $perm.Name }}LookupSubjectsWithCaveat{{ else }}LookupSubjects{{ end }}(ctx,
     authz.Resource{
       Type: Type{{ $typeName }},
       ID: authz.ID({{ $var }}),
     },
-    authz.Permission({{ $typeName }}{{ snakeToPascal $perm.Name }}), Type{{ typeName $inputType }},
+    authz.Permission({{ $typeName }}{{ snakeToPascal $perm.Name }}), Type{{ typeName $inputType }},{{ if hasPermCaveats $objectType $perm.Name }}
+    caveatCtx,{{ end }}
   )
   if err != nil {
     return nil, err

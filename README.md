@@ -124,6 +124,15 @@ collision, unbound keys fall through to check-time. Permissions reaching
 per unique caveat, the generated method merges all non-nil entries into
 one wire `Context`. Cross-caveat parameter-name collisions (two caveats
 declaring the same key) are detected at codegen and emit a clear error.
+
+`Lookup<Perm><Type>Resources` and `Lookup<Perm><Type>Subjects` thread
+caveat context through too — for caveat-reaching permissions, both
+methods accept a `Caveats` argument (positional for Subjects, on the
+existing input struct for Resources) and route through
+`LookupResourcesWithCaveat` / `LookupSubjectsWithCaveat`.
+`CONDITIONAL_PERMISSION` results are filtered out of the returned slice,
+matching `Check<Perm>`'s collapse-to-deny semantics.
+
 See `docs/spec-002-caveat-codegen.md` and `docs/spec-003-write-time-caveat-codegen.md`.
 
 ## Behavior Notes

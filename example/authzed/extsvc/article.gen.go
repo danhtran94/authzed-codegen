@@ -158,9 +158,10 @@ func (article Article) CheckEditor(ctx context.Context, input CheckArticleEditor
 }
 
 func LookupEditorArticleResources(ctx context.Context, input CheckArticleEditorInputs) ([]Article, error) {
+
   if len(input.User) > 0 {
     ids, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeArticle, authz.Permission(ArticleEditor), 
+      TypeArticle, authz.Permission(ArticleEditor),
       TypeUser, authz.IDs(input.User),
     )
     if err != nil {
@@ -171,7 +172,7 @@ func LookupEditorArticleResources(ctx context.Context, input CheckArticleEditorI
   }
   if len(input.Group) > 0 {
     ids, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeArticle, authz.Permission(ArticleEditor), 
+      TypeArticle, authz.Permission(ArticleEditor),
       TypeGroup, authz.IDs(input.Group),
     )
     if err != nil {
@@ -182,7 +183,7 @@ func LookupEditorArticleResources(ctx context.Context, input CheckArticleEditorI
   }
   if len(input.Role) > 0 {
     ids, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeArticle, authz.Permission(ArticleEditor), 
+      TypeArticle, authz.Permission(ArticleEditor),
       TypeRole, authz.IDs(input.Role),
     )
     if err != nil {
@@ -239,9 +240,10 @@ func (article Article) CheckAuthorOnly(ctx context.Context, input CheckArticleAu
 }
 
 func LookupAuthorOnlyArticleResources(ctx context.Context, input CheckArticleAuthorOnlyInputs) ([]Article, error) {
+
   if len(input.User) > 0 {
     ids, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeArticle, authz.Permission(ArticleAuthorOnly), 
+      TypeArticle, authz.Permission(ArticleAuthorOnly),
       TypeUser, authz.IDs(input.User),
     )
     if err != nil {
@@ -252,7 +254,7 @@ func LookupAuthorOnlyArticleResources(ctx context.Context, input CheckArticleAut
   }
   if len(input.Group) > 0 {
     ids, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeArticle, authz.Permission(ArticleAuthorOnly), 
+      TypeArticle, authz.Permission(ArticleAuthorOnly),
       TypeGroup, authz.IDs(input.Group),
     )
     if err != nil {
@@ -263,7 +265,7 @@ func LookupAuthorOnlyArticleResources(ctx context.Context, input CheckArticleAut
   }
   if len(input.Role) > 0 {
     ids, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeArticle, authz.Permission(ArticleAuthorOnly), 
+      TypeArticle, authz.Permission(ArticleAuthorOnly),
       TypeRole, authz.IDs(input.Role),
     )
     if err != nil {
@@ -277,6 +279,7 @@ func LookupAuthorOnlyArticleResources(ctx context.Context, input CheckArticleAut
 }
 
 func (article Article) LookupEditorUserSubjects(ctx context.Context) ([]User, error) {
+
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeArticle,
@@ -301,6 +304,7 @@ func (article Article) LookupEditorUserWildcardSubjects(ctx context.Context) (bo
   )
 }
 func (article Article) LookupEditorGroupSubjects(ctx context.Context) ([]Group, error) {
+
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeArticle,
@@ -325,6 +329,7 @@ func (article Article) LookupEditorGroupWildcardSubjects(ctx context.Context) (b
   )
 }
 func (article Article) LookupEditorRoleSubjects(ctx context.Context) ([]Role, error) {
+
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeArticle,
@@ -350,6 +355,7 @@ func (article Article) LookupEditorRoleWildcardSubjects(ctx context.Context) (bo
 }
 
 func (article Article) LookupAuthorOnlyUserSubjects(ctx context.Context) ([]User, error) {
+
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeArticle,
@@ -374,6 +380,7 @@ func (article Article) LookupAuthorOnlyUserWildcardSubjects(ctx context.Context)
   )
 }
 func (article Article) LookupAuthorOnlyGroupSubjects(ctx context.Context) ([]Group, error) {
+
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeArticle,
@@ -398,6 +405,7 @@ func (article Article) LookupAuthorOnlyGroupWildcardSubjects(ctx context.Context
   )
 }
 func (article Article) LookupAuthorOnlyRoleSubjects(ctx context.Context) ([]Role, error) {
+
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeArticle,

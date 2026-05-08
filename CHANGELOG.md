@@ -4,6 +4,33 @@ All notable changes to this project are documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-05-08
+
+Closes the Lookup correctness gap from v1.1.0 — `Lookup<Perm><Type>Resources` and `Lookup<Perm><Type>Subjects` for caveat-reaching permissions thread request-time `Context` through to SpiceDB, and `Permissionship == CONDITIONAL_PERMISSION` results are now filtered out of the returned ID slice (matching `Check<Perm>`'s `errorIfDenied` collapse-to-deny behavior).
+
+### Added
+
+- **`Engine.LookupResourcesWithCaveat`** — interface method threading `caveatParams` through `LookupResourcesRequest.Context`. Definite grants only.
+- **`Engine.LookupSubjectsWithCaveat`** — same shape for `LookupSubjectsRequest`.
+- Generated `Lookup<Perm><Type>Resources` for caveat-reaching permissions reads `input.Caveats` (already on the existing `Check<Perm>Inputs` shape) and routes through the new engine method.
+- 4 new e2e tests covering granted-with-caveat (Subjects + Resources), CONDITIONAL filtered (no caveat supplied), and wrong-caveat filtered.
+
+### Changed
+
+- **BREAKING**: caveated `Lookup<Perm><Type>Subjects` signature changes from `(ctx)` to `(ctx, caveats Check<Perm>Caveats)`. Non-caveated permissions (e.g. `LookupBrowseUserSubjects` on the default `viewer` permission) keep their existing `(ctx)` signature.
+- **Permissionship filter applied to all 4 Lookup paths.** The pre-existing `LookupResources` / `LookupSubjects` methods now also filter `Permissionship != HAS_PERMISSION`. For non-caveat permissions this is a no-op (no caveat → no CONDITIONAL); for caveated paths it closes the silent false-positive class where v1.1.0 returned conditional grants as if they were definite.
+
+### Verified
+
+- All 4 e2e packages pass.
+- Codegen idempotent at new baseline.
+- `go build ./...` + `go vet ./...` clean.
+
+### Deferred
+
+- `Read<Rel><Type>Relations` still strips caveat metadata. A future job will surface attached caveat info per tuple via `Read<Rel><Type>RelationsWithCaveat` returning `[]ReadResult[T]{ID, Caveat, CaveatName}`.
+- `CONDITIONAL_PERMISSION` in the Check path still collapses to `ErrPermissionDenied`; `PartialCaveatInfo.MissingRequiredContext` is dropped. Surfacing missing keys distinctly from hard deny is a future "rich signal" change.
+
 ## [1.1.0] - 2026-05-08
 
 End-to-end caveat support — read side (`Check<Perm>`) and write side

@@ -97,9 +97,10 @@ func (user User) CheckManage(ctx context.Context, input CheckUserManageInputs) (
 }
 
 func LookupManageUserResources(ctx context.Context, input CheckUserManageInputs) ([]User, error) {
+
   if len(input.User) > 0 {
     ids, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeUser, authz.Permission(UserManage), 
+      TypeUser, authz.Permission(UserManage),
       TypeUser, authz.IDs(input.User),
     )
     if err != nil {
@@ -113,6 +114,7 @@ func LookupManageUserResources(ctx context.Context, input CheckUserManageInputs)
 }
 
 func (user User) LookupManageUserSubjects(ctx context.Context) ([]User, error) {
+
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeUser,

@@ -217,9 +217,10 @@ func (employee Employee) CheckManage(ctx context.Context, input CheckEmployeeMan
 }
 
 func LookupManageEmployeeResources(ctx context.Context, input CheckEmployeeManageInputs) ([]Employee, error) {
+
   if len(input.User) > 0 {
     ids, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeEmployee, authz.Permission(EmployeeManage), 
+      TypeEmployee, authz.Permission(EmployeeManage),
       TypeUser, authz.IDs(input.User),
     )
     if err != nil {
@@ -230,7 +231,7 @@ func LookupManageEmployeeResources(ctx context.Context, input CheckEmployeeManag
   }
   if len(input.Employee) > 0 {
     ids, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeEmployee, authz.Permission(EmployeeManage), 
+      TypeEmployee, authz.Permission(EmployeeManage),
       TypeEmployee, authz.IDs(input.Employee),
     )
     if err != nil {
@@ -277,9 +278,10 @@ func (employee Employee) CheckView(ctx context.Context, input CheckEmployeeViewI
 }
 
 func LookupViewEmployeeResources(ctx context.Context, input CheckEmployeeViewInputs) ([]Employee, error) {
+
   if len(input.User) > 0 {
     ids, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeEmployee, authz.Permission(EmployeeView), 
+      TypeEmployee, authz.Permission(EmployeeView),
       TypeUser, authz.IDs(input.User),
     )
     if err != nil {
@@ -290,7 +292,7 @@ func LookupViewEmployeeResources(ctx context.Context, input CheckEmployeeViewInp
   }
   if len(input.Employee) > 0 {
     ids, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeEmployee, authz.Permission(EmployeeView), 
+      TypeEmployee, authz.Permission(EmployeeView),
       TypeEmployee, authz.IDs(input.Employee),
     )
     if err != nil {
@@ -304,6 +306,7 @@ func LookupViewEmployeeResources(ctx context.Context, input CheckEmployeeViewInp
 }
 
 func (employee Employee) LookupManageUserSubjects(ctx context.Context) ([]User, error) {
+
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeEmployee,
@@ -328,6 +331,7 @@ func (employee Employee) LookupManageUserWildcardSubjects(ctx context.Context) (
   )
 }
 func (employee Employee) LookupManageEmployeeSubjects(ctx context.Context) ([]Employee, error) {
+
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeEmployee,
@@ -353,6 +357,7 @@ func (employee Employee) LookupManageEmployeeWildcardSubjects(ctx context.Contex
 }
 
 func (employee Employee) LookupViewUserSubjects(ctx context.Context) ([]User, error) {
+
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeEmployee,
@@ -377,6 +382,7 @@ func (employee Employee) LookupViewUserWildcardSubjects(ctx context.Context) (bo
   )
 }
 func (employee Employee) LookupViewEmployeeSubjects(ctx context.Context) ([]Employee, error) {
+
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeEmployee,

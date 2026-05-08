@@ -19,7 +19,9 @@ type Engine interface {
 	CheckPermission(ctx context.Context, dest Resource, has Permission, subject Type, audIDs []ID) error
 	CheckPermissionWithCaveat(ctx context.Context, dest Resource, has Permission, subject Type, audIDs []ID, caveatParams map[string]any) error
 	LookupResources(ctx context.Context, from Type, match Permission, subject Type, byIDs []ID) ([]ID, error)
+	LookupResourcesWithCaveat(ctx context.Context, from Type, match Permission, subject Type, byIDs []ID, caveatParams map[string]any) ([]ID, error)
 	LookupSubjects(ctx context.Context, on Resource, permission Permission, subject Type) ([]ID, error)
+	LookupSubjectsWithCaveat(ctx context.Context, on Resource, permission Permission, subject Type, caveatParams map[string]any) ([]ID, error)
 	ReadRelations(ctx context.Context, from Resource, relation Relation, subject Type) ([]ID, error)
 	DeleteRelations(ctx context.Context, from Resource, relation Relation, subject Type, ids []ID) error
 	HasPublicRelation(ctx context.Context, on Resource, relation Relation, subject Type) (bool, error)

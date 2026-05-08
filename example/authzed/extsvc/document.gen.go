@@ -189,9 +189,10 @@ func (document Document) CheckView(ctx context.Context, input CheckDocumentViewI
 }
 
 func LookupViewDocumentResources(ctx context.Context, input CheckDocumentViewInputs) ([]Document, error) {
+
   if len(input.User) > 0 {
     ids, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeDocument, authz.Permission(DocumentView), 
+      TypeDocument, authz.Permission(DocumentView),
       TypeUser, authz.IDs(input.User),
     )
     if err != nil {
@@ -202,7 +203,7 @@ func LookupViewDocumentResources(ctx context.Context, input CheckDocumentViewInp
   }
   if len(input.Group) > 0 {
     ids, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeDocument, authz.Permission(DocumentView), 
+      TypeDocument, authz.Permission(DocumentView),
       TypeGroup, authz.IDs(input.Group),
     )
     if err != nil {
@@ -213,7 +214,7 @@ func LookupViewDocumentResources(ctx context.Context, input CheckDocumentViewInp
   }
   if len(input.Role) > 0 {
     ids, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeDocument, authz.Permission(DocumentView), 
+      TypeDocument, authz.Permission(DocumentView),
       TypeRole, authz.IDs(input.Role),
     )
     if err != nil {
@@ -270,9 +271,10 @@ func (document Document) CheckEdit(ctx context.Context, input CheckDocumentEditI
 }
 
 func LookupEditDocumentResources(ctx context.Context, input CheckDocumentEditInputs) ([]Document, error) {
+
   if len(input.User) > 0 {
     ids, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeDocument, authz.Permission(DocumentEdit), 
+      TypeDocument, authz.Permission(DocumentEdit),
       TypeUser, authz.IDs(input.User),
     )
     if err != nil {
@@ -283,7 +285,7 @@ func LookupEditDocumentResources(ctx context.Context, input CheckDocumentEditInp
   }
   if len(input.Group) > 0 {
     ids, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeDocument, authz.Permission(DocumentEdit), 
+      TypeDocument, authz.Permission(DocumentEdit),
       TypeGroup, authz.IDs(input.Group),
     )
     if err != nil {
@@ -294,7 +296,7 @@ func LookupEditDocumentResources(ctx context.Context, input CheckDocumentEditInp
   }
   if len(input.Role) > 0 {
     ids, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeDocument, authz.Permission(DocumentEdit), 
+      TypeDocument, authz.Permission(DocumentEdit),
       TypeRole, authz.IDs(input.Role),
     )
     if err != nil {
@@ -351,9 +353,10 @@ func (document Document) CheckAdmin(ctx context.Context, input CheckDocumentAdmi
 }
 
 func LookupAdminDocumentResources(ctx context.Context, input CheckDocumentAdminInputs) ([]Document, error) {
+
   if len(input.User) > 0 {
     ids, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeDocument, authz.Permission(DocumentAdmin), 
+      TypeDocument, authz.Permission(DocumentAdmin),
       TypeUser, authz.IDs(input.User),
     )
     if err != nil {
@@ -364,7 +367,7 @@ func LookupAdminDocumentResources(ctx context.Context, input CheckDocumentAdminI
   }
   if len(input.Group) > 0 {
     ids, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeDocument, authz.Permission(DocumentAdmin), 
+      TypeDocument, authz.Permission(DocumentAdmin),
       TypeGroup, authz.IDs(input.Group),
     )
     if err != nil {
@@ -375,7 +378,7 @@ func LookupAdminDocumentResources(ctx context.Context, input CheckDocumentAdminI
   }
   if len(input.Role) > 0 {
     ids, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeDocument, authz.Permission(DocumentAdmin), 
+      TypeDocument, authz.Permission(DocumentAdmin),
       TypeRole, authz.IDs(input.Role),
     )
     if err != nil {
@@ -389,6 +392,7 @@ func LookupAdminDocumentResources(ctx context.Context, input CheckDocumentAdminI
 }
 
 func (document Document) LookupViewUserSubjects(ctx context.Context) ([]User, error) {
+
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeDocument,
@@ -413,6 +417,7 @@ func (document Document) LookupViewUserWildcardSubjects(ctx context.Context) (bo
   )
 }
 func (document Document) LookupViewGroupSubjects(ctx context.Context) ([]Group, error) {
+
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeDocument,
@@ -437,6 +442,7 @@ func (document Document) LookupViewGroupWildcardSubjects(ctx context.Context) (b
   )
 }
 func (document Document) LookupViewRoleSubjects(ctx context.Context) ([]Role, error) {
+
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeDocument,
@@ -462,6 +468,7 @@ func (document Document) LookupViewRoleWildcardSubjects(ctx context.Context) (bo
 }
 
 func (document Document) LookupEditUserSubjects(ctx context.Context) ([]User, error) {
+
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeDocument,
@@ -486,6 +493,7 @@ func (document Document) LookupEditUserWildcardSubjects(ctx context.Context) (bo
   )
 }
 func (document Document) LookupEditGroupSubjects(ctx context.Context) ([]Group, error) {
+
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeDocument,
@@ -510,6 +518,7 @@ func (document Document) LookupEditGroupWildcardSubjects(ctx context.Context) (b
   )
 }
 func (document Document) LookupEditRoleSubjects(ctx context.Context) ([]Role, error) {
+
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeDocument,
@@ -535,6 +544,7 @@ func (document Document) LookupEditRoleWildcardSubjects(ctx context.Context) (bo
 }
 
 func (document Document) LookupAdminUserSubjects(ctx context.Context) ([]User, error) {
+
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeDocument,
@@ -559,6 +569,7 @@ func (document Document) LookupAdminUserWildcardSubjects(ctx context.Context) (b
   )
 }
 func (document Document) LookupAdminGroupSubjects(ctx context.Context) ([]Group, error) {
+
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeDocument,
@@ -583,6 +594,7 @@ func (document Document) LookupAdminGroupWildcardSubjects(ctx context.Context) (
   )
 }
 func (document Document) LookupAdminRoleSubjects(ctx context.Context) ([]Role, error) {
+
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeDocument,

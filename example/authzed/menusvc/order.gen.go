@@ -179,9 +179,10 @@ func (order Order) CheckWrite(ctx context.Context, input CheckOrderWriteInputs) 
 }
 
 func LookupWriteOrderResources(ctx context.Context, input CheckOrderWriteInputs) ([]Order, error) {
+
   if len(input.User) > 0 {
     ids, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeOrder, authz.Permission(OrderWrite), 
+      TypeOrder, authz.Permission(OrderWrite),
       TypeUser, authz.IDs(input.User),
     )
     if err != nil {
@@ -192,7 +193,7 @@ func LookupWriteOrderResources(ctx context.Context, input CheckOrderWriteInputs)
   }
   if len(input.Customer) > 0 {
     ids, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeOrder, authz.Permission(OrderWrite), 
+      TypeOrder, authz.Permission(OrderWrite),
       TypeCustomer, authz.IDs(input.Customer),
     )
     if err != nil {
@@ -206,6 +207,7 @@ func LookupWriteOrderResources(ctx context.Context, input CheckOrderWriteInputs)
 }
 
 func (order Order) LookupWriteUserSubjects(ctx context.Context) ([]User, error) {
+
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeOrder,
@@ -230,6 +232,7 @@ func (order Order) LookupWriteUserWildcardSubjects(ctx context.Context) (bool, e
   )
 }
 func (order Order) LookupWriteCustomerSubjects(ctx context.Context) ([]Customer, error) {
+
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeOrder,

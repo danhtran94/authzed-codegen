@@ -97,9 +97,10 @@ func (setting Setting) CheckWrite(ctx context.Context, input CheckSettingWriteIn
 }
 
 func LookupWriteSettingResources(ctx context.Context, input CheckSettingWriteInputs) ([]Setting, error) {
+
   if len(input.User) > 0 {
     ids, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeSetting, authz.Permission(SettingWrite), 
+      TypeSetting, authz.Permission(SettingWrite),
       TypeUser, authz.IDs(input.User),
     )
     if err != nil {
@@ -113,6 +114,7 @@ func LookupWriteSettingResources(ctx context.Context, input CheckSettingWriteInp
 }
 
 func (setting Setting) LookupWriteUserSubjects(ctx context.Context) ([]User, error) {
+
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeSetting,

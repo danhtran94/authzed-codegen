@@ -189,9 +189,10 @@ func (brand Brand) CheckManage(ctx context.Context, input CheckBrandManageInputs
 }
 
 func LookupManageBrandResources(ctx context.Context, input CheckBrandManageInputs) ([]Brand, error) {
+
   if len(input.Employee) > 0 {
     ids, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeBrand, authz.Permission(BrandManage), 
+      TypeBrand, authz.Permission(BrandManage),
       TypeEmployee, authz.IDs(input.Employee),
     )
     if err != nil {
@@ -202,7 +203,7 @@ func LookupManageBrandResources(ctx context.Context, input CheckBrandManageInput
   }
   if len(input.User) > 0 {
     ids, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeBrand, authz.Permission(BrandManage), 
+      TypeBrand, authz.Permission(BrandManage),
       TypeUser, authz.IDs(input.User),
     )
     if err != nil {
@@ -249,9 +250,10 @@ func (brand Brand) CheckCreateBooking(ctx context.Context, input CheckBrandCreat
 }
 
 func LookupCreateBookingBrandResources(ctx context.Context, input CheckBrandCreateBookingInputs) ([]Brand, error) {
+
   if len(input.Employee) > 0 {
     ids, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeBrand, authz.Permission(BrandCreateBooking), 
+      TypeBrand, authz.Permission(BrandCreateBooking),
       TypeEmployee, authz.IDs(input.Employee),
     )
     if err != nil {
@@ -262,7 +264,7 @@ func LookupCreateBookingBrandResources(ctx context.Context, input CheckBrandCrea
   }
   if len(input.User) > 0 {
     ids, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeBrand, authz.Permission(BrandCreateBooking), 
+      TypeBrand, authz.Permission(BrandCreateBooking),
       TypeUser, authz.IDs(input.User),
     )
     if err != nil {
@@ -276,6 +278,7 @@ func LookupCreateBookingBrandResources(ctx context.Context, input CheckBrandCrea
 }
 
 func (brand Brand) LookupManageEmployeeSubjects(ctx context.Context) ([]Employee, error) {
+
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeBrand,
@@ -300,6 +303,7 @@ func (brand Brand) LookupManageEmployeeWildcardSubjects(ctx context.Context) (bo
   )
 }
 func (brand Brand) LookupManageUserSubjects(ctx context.Context) ([]User, error) {
+
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeBrand,
@@ -325,6 +329,7 @@ func (brand Brand) LookupManageUserWildcardSubjects(ctx context.Context) (bool, 
 }
 
 func (brand Brand) LookupCreateBookingEmployeeSubjects(ctx context.Context) ([]Employee, error) {
+
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeBrand,
@@ -349,6 +354,7 @@ func (brand Brand) LookupCreateBookingEmployeeWildcardSubjects(ctx context.Conte
   )
 }
 func (brand Brand) LookupCreateBookingUserSubjects(ctx context.Context) ([]User, error) {
+
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeBrand,

@@ -245,9 +245,10 @@ func (booking Booking) CheckWrite(ctx context.Context, input CheckBookingWriteIn
 }
 
 func LookupWriteBookingResources(ctx context.Context, input CheckBookingWriteInputs) ([]Booking, error) {
+
   if len(input.Employee) > 0 {
     ids, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeBooking, authz.Permission(BookingWrite), 
+      TypeBooking, authz.Permission(BookingWrite),
       TypeEmployee, authz.IDs(input.Employee),
     )
     if err != nil {
@@ -258,7 +259,7 @@ func LookupWriteBookingResources(ctx context.Context, input CheckBookingWriteInp
   }
   if len(input.Customer) > 0 {
     ids, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeBooking, authz.Permission(BookingWrite), 
+      TypeBooking, authz.Permission(BookingWrite),
       TypeCustomer, authz.IDs(input.Customer),
     )
     if err != nil {
@@ -269,7 +270,7 @@ func LookupWriteBookingResources(ctx context.Context, input CheckBookingWriteInp
   }
   if len(input.User) > 0 {
     ids, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeBooking, authz.Permission(BookingWrite), 
+      TypeBooking, authz.Permission(BookingWrite),
       TypeUser, authz.IDs(input.User),
     )
     if err != nil {
@@ -326,9 +327,10 @@ func (booking Booking) CheckChangeOwner(ctx context.Context, input CheckBookingC
 }
 
 func LookupChangeOwnerBookingResources(ctx context.Context, input CheckBookingChangeOwnerInputs) ([]Booking, error) {
+
   if len(input.Employee) > 0 {
     ids, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeBooking, authz.Permission(BookingChangeOwner), 
+      TypeBooking, authz.Permission(BookingChangeOwner),
       TypeEmployee, authz.IDs(input.Employee),
     )
     if err != nil {
@@ -339,7 +341,7 @@ func LookupChangeOwnerBookingResources(ctx context.Context, input CheckBookingCh
   }
   if len(input.Customer) > 0 {
     ids, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeBooking, authz.Permission(BookingChangeOwner), 
+      TypeBooking, authz.Permission(BookingChangeOwner),
       TypeCustomer, authz.IDs(input.Customer),
     )
     if err != nil {
@@ -350,7 +352,7 @@ func LookupChangeOwnerBookingResources(ctx context.Context, input CheckBookingCh
   }
   if len(input.User) > 0 {
     ids, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeBooking, authz.Permission(BookingChangeOwner), 
+      TypeBooking, authz.Permission(BookingChangeOwner),
       TypeUser, authz.IDs(input.User),
     )
     if err != nil {
@@ -401,10 +403,22 @@ func (booking Booking) CheckRegionalWrite(ctx context.Context, input CheckBookin
 }
 
 func LookupRegionalWriteBookingResources(ctx context.Context, input CheckBookingRegionalWriteInputs) ([]Booking, error) {
+
+  var caveatCtx map[string]any
+  if c := input.Caveats.RegionMatch; c != nil {
+    if caveatCtx == nil {
+      caveatCtx = map[string]any{}
+    }
+    if c.Region != nil {
+      caveatCtx["region"] = *c.Region
+    }
+  }
+
   if len(input.Employee) > 0 {
-    ids, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeBooking, authz.Permission(BookingRegionalWrite), 
+    ids, err := authz.GetEngine(ctx).LookupResourcesWithCaveat(ctx,
+      TypeBooking, authz.Permission(BookingRegionalWrite),
       TypeEmployee, authz.IDs(input.Employee),
+      caveatCtx,
     )
     if err != nil {
       return nil, err
@@ -417,6 +431,7 @@ func LookupRegionalWriteBookingResources(ctx context.Context, input CheckBooking
 }
 
 func (booking Booking) LookupWriteEmployeeSubjects(ctx context.Context) ([]Employee, error) {
+
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeBooking,
@@ -441,6 +456,7 @@ func (booking Booking) LookupWriteEmployeeWildcardSubjects(ctx context.Context) 
   )
 }
 func (booking Booking) LookupWriteCustomerSubjects(ctx context.Context) ([]Customer, error) {
+
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeBooking,
@@ -465,6 +481,7 @@ func (booking Booking) LookupWriteCustomerWildcardSubjects(ctx context.Context) 
   )
 }
 func (booking Booking) LookupWriteUserSubjects(ctx context.Context) ([]User, error) {
+
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeBooking,
@@ -490,6 +507,7 @@ func (booking Booking) LookupWriteUserWildcardSubjects(ctx context.Context) (boo
 }
 
 func (booking Booking) LookupChangeOwnerEmployeeSubjects(ctx context.Context) ([]Employee, error) {
+
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeBooking,
@@ -514,6 +532,7 @@ func (booking Booking) LookupChangeOwnerEmployeeWildcardSubjects(ctx context.Con
   )
 }
 func (booking Booking) LookupChangeOwnerCustomerSubjects(ctx context.Context) ([]Customer, error) {
+
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeBooking,
@@ -538,6 +557,7 @@ func (booking Booking) LookupChangeOwnerCustomerWildcardSubjects(ctx context.Con
   )
 }
 func (booking Booking) LookupChangeOwnerUserSubjects(ctx context.Context) ([]User, error) {
+
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeBooking,
@@ -562,13 +582,25 @@ func (booking Booking) LookupChangeOwnerUserWildcardSubjects(ctx context.Context
   )
 }
 
-func (booking Booking) LookupRegionalWriteEmployeeSubjects(ctx context.Context) ([]Employee, error) {
-  ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+func (booking Booking) LookupRegionalWriteEmployeeSubjects(ctx context.Context, caveats CheckBookingRegionalWriteCaveats) ([]Employee, error) {
+
+  var caveatCtx map[string]any
+  if c := caveats.RegionMatch; c != nil {
+    if caveatCtx == nil {
+      caveatCtx = map[string]any{}
+    }
+    if c.Region != nil {
+      caveatCtx["region"] = *c.Region
+    }
+  }
+
+  ids, err := authz.GetEngine(ctx).LookupSubjectsWithCaveat(ctx,
     authz.Resource{
       Type: TypeBooking,
       ID: authz.ID(booking),
     },
     authz.Permission(BookingRegionalWrite), TypeEmployee,
+    caveatCtx,
   )
   if err != nil {
     return nil, err
