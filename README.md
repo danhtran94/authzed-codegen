@@ -60,7 +60,7 @@ a complete schema and its generated output.
 | Union (`+`), arrow (`->`)              | ✓                                                                                               |
 | Wildcard relations (`type:*`)          | ✓ — `Wildcards` sub-struct on `<Rel>Objects`; sibling `Read<Rel><Type>Wildcard` read methods    |
 | Intersection (`&`), exclusion (`-`)    | ✓                                                                                               |
-| Caveats (`with <caveat>`)              | ✗ rejected at adapt time                                                                        |
+| Caveats (`with <caveat>`)              | ✓ — typed `<Pascal>Args` per caveat; nested `Caveats` sub-struct on `<Rel>Objects` and `Check<Perm>Inputs`; multi-caveat-per-permission supported |
 | Expiration (`with expiration`)         | ✗ rejected at adapt time                                                                        |
 | Sub-relation references (`foo#bar`)    | ✗ rejected at adapt time                                                                        |
 
@@ -68,6 +68,63 @@ Parsing delegates to `github.com/authzed/spicedb/pkg/schemadsl/compiler` —
 any schema SpiceDB accepts will parse. The codegen layer is narrower;
 rejected constructs surface schema-relative errors before any output is
 written. Rationale: `docs/ADR-001-parser-migration.md`.
+
+## Caveats
+
+Relations and allowed types declared `with <caveat>` generate a typed
+`<CaveatPascal>Args` struct per caveat (one per namespace) plus a
+`Caveats` sub-struct on the relation's `<Rel>Objects` and the
+permission's `Check<Perm>Inputs`. Scalar fields (`*string`, `*int`,
+`*bool`, `*float64`) are pointer-typed so callers can defer individual
+parameters to check time; container fields (`[]string`, `[]byte`, `map`)
+stay direct (nil = unset).
+
+```hcl
+caveat extsvc/tenant_match(tenant string) {
+    tenant == "acme"
+}
+
+definition extsvc/folder {
+    relation tenanted_viewer: extsvc/user with extsvc/tenant_match
+    permission tenanted_browse = tenanted_viewer
+}
+```
+
+Pre-bind the policy at write time (caveat travels with the tuple):
+
+```go
+folder.CreateTenantedViewerRelations(ctx, extsvc.FolderTenantedViewerObjects{
+    User: []extsvc.User{user},
+    Caveats: extsvc.FolderTenantedViewerCaveats{
+        User: &extsvc.TenantMatchArgs{Tenant: new("acme")},
+    },
+})
+```
+
+Or defer all binding to check time (write attaches the caveat name with
+no pre-context; check supplies the value):
+
+```go
+folder.CreateTenantedViewerRelations(ctx, extsvc.FolderTenantedViewerObjects{
+    User: []extsvc.User{user},
+    // Caveats omitted — write-time pre-context is nil
+})
+
+ok, err := folder.CheckTenantedBrowse(ctx, extsvc.CheckFolderTenantedBrowseInputs{
+    User: []extsvc.User{user},
+    Caveats: extsvc.CheckFolderTenantedBrowseCaveats{
+        TenantMatch: &extsvc.TenantMatchArgs{Tenant: new("acme")},
+    },
+})
+```
+
+Per-key precedence is per SpiceDB's wire model: write-time values win on
+collision, unbound keys fall through to check-time. Permissions reaching
+2+ distinct caveats are supported — `Check<Perm>Caveats` gets one field
+per unique caveat, the generated method merges all non-nil entries into
+one wire `Context`. Cross-caveat parameter-name collisions (two caveats
+declaring the same key) are detected at codegen and emit a clear error.
+See `docs/spec-002-caveat-codegen.md` and `docs/spec-003-write-time-caveat-codegen.md`.
 
 ## Behavior Notes
 
