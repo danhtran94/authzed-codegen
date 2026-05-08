@@ -47,6 +47,14 @@ type AllowedType struct {
 	IsWildcard bool
 	CaveatName string
 
+	// IsExpiring is true when the allowed type declared `with expiration`
+	// in the schema. SpiceDB stores per-tuple OptionalExpiresAt timestamps
+	// on these tuples and filters expired entries server-side from
+	// Check / Lookup / Read. Drives the codegen's per-allowed-type
+	// routing in Create<Rel>Relations to emit OPERATION_TOUCH writes via
+	// Engine.CreateRelationsWithExpiration. See SPEC-004.
+	IsExpiring bool
+
 	// IDFieldName is the Go field name used in the generated <Rel>Objects
 	// struct for the ID slice of this allowed type, and in the Wildcards
 	// sub-struct for the wildcard bool. For non-colliding allowed types
@@ -353,9 +361,7 @@ func flattenAllowedTypes(ti *core.TypeInformation) ([]AllowedType, error) {
 		if rc := ar.GetRequiredCaveat(); rc != nil {
 			caveatName = rc.GetCaveatName()
 		}
-		if ar.GetRequiredExpiration() != nil {
-			return nil, fmt.Errorf("expiration traits are not supported (allowed type %q)", ar.GetNamespace())
-		}
+		isExpiring := ar.GetRequiredExpiration() != nil
 
 		if rel := ar.GetRelation(); rel != "" && rel != ellipsisRelation {
 			return nil, fmt.Errorf("sub-relation references are not supported (%s#%s)", ar.GetNamespace(), rel)
@@ -365,6 +371,7 @@ func flattenAllowedTypes(ti *core.TypeInformation) ([]AllowedType, error) {
 			Namespace:  ar.GetNamespace(),
 			IsWildcard: ar.GetPublicWildcard() != nil,
 			CaveatName: caveatName,
+			IsExpiring: isExpiring,
 		})
 	}
 

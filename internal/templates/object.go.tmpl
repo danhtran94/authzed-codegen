@@ -5,7 +5,8 @@ package {{ packageName .ObjectType.Prefix }}
 import (
   "github.com/danhtran94/authzed-codegen/pkg/authz"
 
-  {{ $countRels := len .Relations }}{{ if gt $countRels 0 }}"context"{{ end }}
+  {{ $countRels := len .Relations }}{{ if gt $countRels 0 }}"context"{{ end }}{{ if anyExpiringInRels .Relations }}
+  "time"{{ end }}
 )
 {{ $objectType := (print .ObjectType.Prefix "/" .ObjectType.Name) }}{{ $typeName := upperFirst .ObjectType.Name }}
 const Type{{ $typeName }} authz.Type = "{{ $objectType }}"
@@ -17,12 +18,16 @@ type {{ $typeName }}{{ snakeToPascal $rel.Name }}Objects struct {
 {{ range $idx, $relType := $rel.AllowedTypes }}  {{ $relType.IDFieldName }} []{{ typeName $relType.Namespace }}
 {{ end }}{{ if anyWildcard $rel.AllowedTypes }}  Wildcards {{ $typeName }}{{ snakeToPascal $rel.Name }}Wildcards
 {{ end }}{{ if anyCaveat $rel.AllowedTypes }}  Caveats {{ $typeName }}{{ snakeToPascal $rel.Name }}Caveats
+{{ end }}{{ if anyExpiring $rel.AllowedTypes }}  Expirations {{ $typeName }}{{ snakeToPascal $rel.Name }}Expirations
 {{ end }}}
 {{ if anyWildcard $rel.AllowedTypes }}type {{ $typeName }}{{ snakeToPascal $rel.Name }}Wildcards struct {
 {{ range $idx, $relType := $rel.AllowedTypes }}{{ if $relType.IsWildcard }}  {{ $relType.IDFieldName }} bool
 {{ end }}{{ end }}}
 {{ end }}{{ if anyCaveat $rel.AllowedTypes }}type {{ $typeName }}{{ snakeToPascal $rel.Name }}Caveats struct {
 {{ range $idx, $relType := $rel.AllowedTypes }}{{ if $relType.CaveatName }}  {{ $relType.CaveatFieldName }} *{{ pascalCaveat $relType.CaveatName }}Args
+{{ end }}{{ end }}}
+{{ end }}{{ if anyExpiring $rel.AllowedTypes }}type {{ $typeName }}{{ snakeToPascal $rel.Name }}Expirations struct {
+{{ range $idx, $relType := $rel.AllowedTypes }}{{ if $relType.IsExpiring }}  {{ $relType.IDFieldName }} *time.Time
 {{ end }}{{ end }}}
 {{ end }}{{ end }}{{ range $caveatName := definitionCaveats .Relations }}type {{ pascalCaveat $caveatName }}Args struct {
 {{ range $param := caveatParams $caveatName }}  {{ snakeToPascal $param.Name }} {{ $param.GoType }}
@@ -55,10 +60,14 @@ func ({{ $var }} {{ $typeName }}) ToList() []{{ $typeName }} {
         caveatCtx["{{ $param.Name }}"] = {{ deref $param.GoType }}c.{{ snakeToPascal $param.Name }}
       }
 {{ end }}    }
-{{ end }}    err := authz.GetEngine(ctx).{{ if $relType.CaveatName }}CreateRelationsWithCaveat{{ else }}CreateRelations{{ end }}(ctx, authz.Resource{
+{{ end }}{{ if $relType.IsExpiring }}    var expiresAt time.Time
+    if e := objects.Expirations.{{ $relType.IDFieldName }}; e != nil {
+      expiresAt = *e
+    }
+{{ end }}    err := authz.GetEngine(ctx).{{ if $relType.IsExpiring }}CreateRelationsWithExpiration{{ else if $relType.CaveatName }}CreateRelationsWithCaveat{{ else }}CreateRelations{{ end }}(ctx, authz.Resource{
       Type: Type{{ $typeName }},
       ID: authz.ID({{ $var }}),
-    }, authz.Relation({{ $typeName }}{{ snakeToPascal $rel.Name }}), Type{{ typeName $relType.Namespace }}, authz.IDs(objects.{{ $relType.IDFieldName }}){{ if $relType.CaveatName }}, "{{ $relType.CaveatName }}", caveatCtx{{ end }})
+    }, authz.Relation({{ $typeName }}{{ snakeToPascal $rel.Name }}), Type{{ typeName $relType.Namespace }}, authz.IDs(objects.{{ $relType.IDFieldName }}){{ if $relType.IsExpiring }}, {{ if $relType.CaveatName }}"{{ $relType.CaveatName }}", caveatCtx{{ else }}"", nil{{ end }}, expiresAt{{ else if $relType.CaveatName }}, "{{ $relType.CaveatName }}", caveatCtx{{ end }})
     if err != nil {
       return err
     }
@@ -71,10 +80,14 @@ func ({{ $var }} {{ $typeName }}) ToList() []{{ $typeName }} {
         caveatCtx["{{ $param.Name }}"] = {{ deref $param.GoType }}c.{{ snakeToPascal $param.Name }}
       }
 {{ end }}    }
-{{ end }}    err := authz.GetEngine(ctx).{{ if $relType.CaveatName }}CreateRelationsWithCaveat{{ else }}CreateRelations{{ end }}(ctx, authz.Resource{
+{{ end }}{{ if $relType.IsExpiring }}    var expiresAt time.Time
+    if e := objects.Expirations.{{ $relType.IDFieldName }}; e != nil {
+      expiresAt = *e
+    }
+{{ end }}    err := authz.GetEngine(ctx).{{ if $relType.IsExpiring }}CreateRelationsWithExpiration{{ else if $relType.CaveatName }}CreateRelationsWithCaveat{{ else }}CreateRelations{{ end }}(ctx, authz.Resource{
       Type: Type{{ $typeName }},
       ID: authz.ID({{ $var }}),
-    }, authz.Relation({{ $typeName }}{{ snakeToPascal $rel.Name }}), Type{{ typeName $relType.Namespace }}, []authz.ID{authz.WildcardID}{{ if $relType.CaveatName }}, "{{ $relType.CaveatName }}", caveatCtx{{ end }})
+    }, authz.Relation({{ $typeName }}{{ snakeToPascal $rel.Name }}), Type{{ typeName $relType.Namespace }}, []authz.ID{authz.WildcardID}{{ if $relType.IsExpiring }}, {{ if $relType.CaveatName }}"{{ $relType.CaveatName }}", caveatCtx{{ else }}"", nil{{ end }}, expiresAt{{ else if $relType.CaveatName }}, "{{ $relType.CaveatName }}", caveatCtx{{ end }})
     if err != nil {
       return err
     }

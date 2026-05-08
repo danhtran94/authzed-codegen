@@ -3,6 +3,7 @@ package authz
 import (
 	"context"
 	"fmt"
+	"time"
 )
 
 var ErrNoInput = fmt.Errorf("no input")
@@ -16,6 +17,7 @@ const WildcardID ID = "*"
 type Engine interface {
 	CreateRelations(ctx context.Context, to Resource, relation Relation, subject Type, ids []ID) error
 	CreateRelationsWithCaveat(ctx context.Context, to Resource, relation Relation, subject Type, ids []ID, caveatName string, caveatParams map[string]any) error
+	CreateRelationsWithExpiration(ctx context.Context, to Resource, relation Relation, subject Type, ids []ID, caveatName string, caveatParams map[string]any, expiresAt time.Time) error
 	CheckPermission(ctx context.Context, dest Resource, has Permission, subject Type, audIDs []ID) error
 	CheckPermissionWithCaveat(ctx context.Context, dest Resource, has Permission, subject Type, audIDs []ID, caveatParams map[string]any) error
 	LookupResources(ctx context.Context, from Type, match Permission, subject Type, byIDs []ID) ([]ID, error)

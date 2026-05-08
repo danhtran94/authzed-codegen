@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	extsvc "github.com/danhtran94/authzed-codegen/example/authzed/extsvc"
 	"github.com/danhtran94/authzed-codegen/pkg/authz"
@@ -1321,6 +1322,145 @@ func TestFolder_LookupTenantedBrowseFolderResources_WrongCaveatFiltered(t *testi
 	})
 	require.NoError(t, err)
 	assert.NotContains(t, folders, extsvc.Folder("lk-r-wrong"), "mismatched caveat must not surface the folder")
+}
+
+// AUZ-009 — `with expiration` per-tuple TTL.
+//
+// Schema:
+//   relation expiring_viewer: extsvc/user with expiration
+//   permission expiring_browse = expiring_viewer
+//   relation gated_token: extsvc/user with extsvc/tenant_match and expiration
+//   permission gated_token_check = gated_token
+//
+// Generated `Create*Relations` route through Engine.CreateRelationsWithExpiration
+// (OPERATION_TOUCH, OptionalExpiresAt set, optional OptionalCaveat).
+// SpiceDB filters expired tuples server-side from Check / Lookup / Read.
+
+func TestFolder_ExpiringBrowse_GrantsBeforeExpiry(t *testing.T) {
+	ctx := context.Background()
+
+	expiresAt := time.Now().Add(1 * time.Hour)
+	require.NoError(t, extsvc.Folder("exp-ok").CreateExpiringViewerRelations(ctx, extsvc.FolderExpiringViewerObjects{
+		User: []extsvc.User{"u-exp-ok"},
+		Expirations: extsvc.FolderExpiringViewerExpirations{
+			User: &expiresAt,
+		},
+	}))
+
+	ok, err := extsvc.Folder("exp-ok").CheckExpiringBrowse(ctx, extsvc.CheckFolderExpiringBrowseInputs{
+		User: []extsvc.User{"u-exp-ok"},
+	})
+	require.NoError(t, err)
+	assert.True(t, ok, "tuple within TTL window must grant")
+}
+
+func TestFolder_ExpiringBrowse_DeniesAfterExpiry(t *testing.T) {
+	ctx := context.Background()
+
+	// Short TTL — 100ms in the future.
+	expiresAt := time.Now().Add(100 * time.Millisecond)
+	require.NoError(t, extsvc.Folder("exp-no").CreateExpiringViewerRelations(ctx, extsvc.FolderExpiringViewerObjects{
+		User: []extsvc.User{"u-exp-no"},
+		Expirations: extsvc.FolderExpiringViewerExpirations{
+			User: &expiresAt,
+		},
+	}))
+
+	// Sleep past the expiration; SpiceDB filters at evaluation time
+	// (no GC wait needed for filtering).
+	time.Sleep(200 * time.Millisecond)
+
+	_, err := extsvc.Folder("exp-no").CheckExpiringBrowse(ctx, extsvc.CheckFolderExpiringBrowseInputs{
+		User: []extsvc.User{"u-exp-no"},
+	})
+	assert.ErrorIs(t, err, authz.ErrPermissionDenied, "expired tuple must be filtered server-side")
+}
+
+func TestFolder_GatedToken_GrantsWhenCaveatAndExpiryHold(t *testing.T) {
+	ctx := context.Background()
+
+	expiresAt := time.Now().Add(1 * time.Hour)
+	require.NoError(t, extsvc.Folder("gt-ok").CreateGatedTokenRelations(ctx, extsvc.FolderGatedTokenObjects{
+		User: []extsvc.User{"u-gt-ok"},
+		Caveats: extsvc.FolderGatedTokenCaveats{
+			User: &extsvc.TenantMatchArgs{Tenant: new("acme")},
+		},
+		Expirations: extsvc.FolderGatedTokenExpirations{
+			User: &expiresAt,
+		},
+	}))
+
+	ok, err := extsvc.Folder("gt-ok").CheckGatedTokenCheck(ctx, extsvc.CheckFolderGatedTokenCheckInputs{
+		User: []extsvc.User{"u-gt-ok"},
+		Caveats: extsvc.CheckFolderGatedTokenCheckCaveats{
+			TenantMatch: &extsvc.TenantMatchArgs{Tenant: new("acme")},
+		},
+	})
+	require.NoError(t, err)
+	assert.True(t, ok, "both gates passed: caveat eval true AND not yet expired")
+}
+
+func TestFolder_GatedToken_DeniesWhenCaveatFailsEvenIfNotExpired(t *testing.T) {
+	ctx := context.Background()
+
+	// Defer the caveat at write time (Caveats sub-struct empty) so the
+	// check-time tenant value reaches eval. Per SPEC-003 A6 — write-time
+	// values would otherwise win on key collision; defer gives the
+	// caller's check-time value priority for unbound keys.
+	expiresAt := time.Now().Add(1 * time.Hour)
+	require.NoError(t, extsvc.Folder("gt-cv-no").CreateGatedTokenRelations(ctx, extsvc.FolderGatedTokenObjects{
+		User: []extsvc.User{"u-gt-cv-no"},
+		Expirations: extsvc.FolderGatedTokenExpirations{
+			User: &expiresAt,
+		},
+	}))
+
+	// Check supplies wrong tenant — eval `"not-acme" == "acme"` → false.
+	// Tuple is not yet expired, so the deny here is purely caveat-driven.
+	_, err := extsvc.Folder("gt-cv-no").CheckGatedTokenCheck(ctx, extsvc.CheckFolderGatedTokenCheckInputs{
+		User: []extsvc.User{"u-gt-cv-no"},
+		Caveats: extsvc.CheckFolderGatedTokenCheckCaveats{
+			TenantMatch: &extsvc.TenantMatchArgs{Tenant: new("not-acme")},
+		},
+	})
+	assert.ErrorIs(t, err, authz.ErrPermissionDenied, "caveat eval false → deny, expiration irrelevant")
+}
+
+// SPEC-004 A2: TOUCH allows over-write of an expired-but-not-yet-GC'd
+// tuple at the same identity. CREATE would error in that window. The
+// codegen routes expiring writes through CreateRelationsWithExpiration
+// which hard-codes OPERATION_TOUCH, so a re-write succeeds and the
+// expiration is refreshed.
+func TestFolder_ExpiringBrowse_TouchAllowsRewriteAfterExpiry(t *testing.T) {
+	ctx := context.Background()
+
+	// First write: short TTL.
+	shortExpiry := time.Now().Add(100 * time.Millisecond)
+	require.NoError(t, extsvc.Folder("exp-touch").CreateExpiringViewerRelations(ctx, extsvc.FolderExpiringViewerObjects{
+		User: []extsvc.User{"u-exp-touch"},
+		Expirations: extsvc.FolderExpiringViewerExpirations{
+			User: &shortExpiry,
+		},
+	}))
+
+	// Sleep past expiration. Tuple is filtered but storage still holds
+	// the row (un-GC'd). CREATE would fail at this point; TOUCH succeeds.
+	time.Sleep(200 * time.Millisecond)
+
+	// Second write: longer TTL. Same tuple identity, refreshes expiration.
+	longExpiry := time.Now().Add(1 * time.Hour)
+	require.NoError(t, extsvc.Folder("exp-touch").CreateExpiringViewerRelations(ctx, extsvc.FolderExpiringViewerObjects{
+		User: []extsvc.User{"u-exp-touch"},
+		Expirations: extsvc.FolderExpiringViewerExpirations{
+			User: &longExpiry,
+		},
+	}))
+
+	ok, err := extsvc.Folder("exp-touch").CheckExpiringBrowse(ctx, extsvc.CheckFolderExpiringBrowseInputs{
+		User: []extsvc.User{"u-exp-touch"},
+	})
+	require.NoError(t, err)
+	assert.True(t, ok, "TOUCH-after-expiry refresh should grant — verifies SPEC-004 A2")
 }
 
 func TestArticle_LookupAuthorOnlyUserSubjects(t *testing.T) {

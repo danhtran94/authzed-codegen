@@ -77,6 +77,24 @@ func (g *Generator) GenerateObjectSource(name string) error {
 			}
 			return false
 		},
+		"anyExpiring": func(types []AllowedType) bool {
+			for _, t := range types {
+				if t.IsExpiring {
+					return true
+				}
+			}
+			return false
+		},
+		"anyExpiringInRels": func(rels []*RelationView) bool {
+			for _, r := range rels {
+				for _, t := range r.AllowedTypes {
+					if t.IsExpiring {
+						return true
+					}
+				}
+			}
+			return false
+		},
 		"definitionCaveats": func(rels []*RelationView) []string {
 			seen := map[string]bool{}
 			out := []string{}

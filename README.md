@@ -61,7 +61,7 @@ a complete schema and its generated output.
 | Wildcard relations (`type:*`)          | ✓ — `Wildcards` sub-struct on `<Rel>Objects`; sibling `Read<Rel><Type>Wildcard` read methods    |
 | Intersection (`&`), exclusion (`-`)    | ✓                                                                                               |
 | Caveats (`with <caveat>`)              | ✓ — typed `<Pascal>Args` per caveat; nested `Caveats` sub-struct on `<Rel>Objects` and `Check<Perm>Inputs`; multi-caveat-per-permission supported |
-| Expiration (`with expiration`)         | ✗ rejected at adapt time                                                                        |
+| Expiration (`with expiration`)         | ✓ — per-tuple TTL via `Expirations` sub-struct on `<Rel>Objects`; auto-switches to `OPERATION_TOUCH`; combines with caveats |
 | Sub-relation references (`foo#bar`)    | ✗ rejected at adapt time                                                                        |
 
 Parsing delegates to `github.com/authzed/spicedb/pkg/schemadsl/compiler` —
@@ -134,6 +134,31 @@ existing input struct for Resources) and route through
 matching `Check<Perm>`'s collapse-to-deny semantics.
 
 See `docs/spec-002-caveat-codegen.md` and `docs/spec-003-write-time-caveat-codegen.md`.
+
+## Expiration
+
+Schemas declaring `use expiration` at the top can mark relations with `with expiration`. Tuples carry per-tuple TTL via `OptionalExpiresAt`; SpiceDB filters expired entries server-side from Check / Lookup / Read. The codegen surfaces a `*time.Time` field per expiring allowed type on a new `Expirations` sub-struct (parallel to `Wildcards` and `Caveats`):
+
+```hcl
+use expiration
+
+definition extsvc/folder {
+    relation expiring_viewer: extsvc/user with expiration
+    permission expiring_browse = expiring_viewer
+}
+```
+
+```go
+expiresAt := time.Now().Add(1 * time.Hour)
+folder.CreateExpiringViewerRelations(ctx, extsvc.FolderExpiringViewerObjects{
+    User: []extsvc.User{user},
+    Expirations: extsvc.FolderExpiringViewerExpirations{
+        User: &expiresAt,
+    },
+})
+```
+
+Combined with caveats — `relation gated: extsvc/user with extsvc/tenant_match and expiration` — both `Caveats` and `Expirations` sub-structs are populated independently. The codegen routes through `CreateRelationsWithExpiration` (auto-switching to `OPERATION_TOUCH` because un-garbage-collected expired tuples may collide on tuple identity). See `docs/spec-004-expiration-codegen.md`.
 
 ## Behavior Notes
 

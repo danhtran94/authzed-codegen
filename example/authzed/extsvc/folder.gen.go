@@ -6,6 +6,7 @@ import (
   "github.com/danhtran94/authzed-codegen/pkg/authz"
 
   "context"
+  "time"
 )
 
 const TypeFolder authz.Type = "extsvc/folder"
@@ -126,6 +127,26 @@ type FolderGatedRootObjects struct {
 }
 type FolderGatedRootCaveats struct {
   Folder *TenantMatchArgs
+}
+const FolderExpiringViewer RelationFolder = "expiring_viewer"
+type FolderExpiringViewerObjects struct {
+  User []User
+  Expirations FolderExpiringViewerExpirations
+}
+type FolderExpiringViewerExpirations struct {
+  User *time.Time
+}
+const FolderGatedToken RelationFolder = "gated_token"
+type FolderGatedTokenObjects struct {
+  User []User
+  Caveats FolderGatedTokenCaveats
+  Expirations FolderGatedTokenExpirations
+}
+type FolderGatedTokenCaveats struct {
+  User *TenantMatchArgs
+}
+type FolderGatedTokenExpirations struct {
+  User *time.Time
 }
 type HasTokenArgs struct {
   Token []byte
@@ -495,6 +516,45 @@ func (folder Folder) CreateGatedRootRelations(ctx context.Context, objects Folde
   }
   return nil
 }
+func (folder Folder) CreateExpiringViewerRelations(ctx context.Context, objects FolderExpiringViewerObjects) error {
+  if len(objects.User) > 0 {
+    var expiresAt time.Time
+    if e := objects.Expirations.User; e != nil {
+      expiresAt = *e
+    }
+    err := authz.GetEngine(ctx).CreateRelationsWithExpiration(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Relation(FolderExpiringViewer), TypeUser, authz.IDs(objects.User), "", nil, expiresAt)
+    if err != nil {
+      return err
+    }
+  }
+  return nil
+}
+func (folder Folder) CreateGatedTokenRelations(ctx context.Context, objects FolderGatedTokenObjects) error {
+  if len(objects.User) > 0 {
+    var caveatCtx map[string]any
+    if c := objects.Caveats.User; c != nil {
+      caveatCtx = map[string]any{}
+      if c.Tenant != nil {
+        caveatCtx["tenant"] = *c.Tenant
+      }
+    }
+    var expiresAt time.Time
+    if e := objects.Expirations.User; e != nil {
+      expiresAt = *e
+    }
+    err := authz.GetEngine(ctx).CreateRelationsWithExpiration(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Relation(FolderGatedToken), TypeUser, authz.IDs(objects.User), "extsvc/tenant_match", caveatCtx, expiresAt)
+    if err != nil {
+      return err
+    }
+  }
+  return nil
+}
 
 func (folder Folder) DeleteViewerRelations(ctx context.Context, objects FolderViewerObjects) error {
   if len(objects.User) > 0 {
@@ -723,6 +783,32 @@ func (folder Folder) DeleteGatedRootRelations(ctx context.Context, objects Folde
   return nil
 }
 
+func (folder Folder) DeleteExpiringViewerRelations(ctx context.Context, objects FolderExpiringViewerObjects) error {
+  if len(objects.User) > 0 {
+    err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Relation(FolderExpiringViewer), TypeUser, authz.IDs(objects.User))
+    if err != nil {
+      return err
+    }
+  }
+  return nil
+}
+
+func (folder Folder) DeleteGatedTokenRelations(ctx context.Context, objects FolderGatedTokenObjects) error {
+  if len(objects.User) > 0 {
+    err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Relation(FolderGatedToken), TypeUser, authz.IDs(objects.User))
+    if err != nil {
+      return err
+    }
+  }
+  return nil
+}
+
 func (folder Folder) ReadViewerUserRelations(ctx context.Context) ([]User, error) {
   ids, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
     Type: TypeFolder,
@@ -937,6 +1023,30 @@ func (folder Folder) ReadGatedRootFolderRelations(ctx context.Context) ([]Folder
   }
 
   return authz.FromIDsExcludingWildcard[Folder](ids), nil
+}
+
+func (folder Folder) ReadExpiringViewerUserRelations(ctx context.Context) ([]User, error) {
+  ids, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+    Type: TypeFolder,
+    ID: authz.ID(folder),
+  }, authz.Relation(FolderExpiringViewer), TypeUser)
+  if err != nil {
+    return nil, err
+  }
+
+  return authz.FromIDsExcludingWildcard[User](ids), nil
+}
+
+func (folder Folder) ReadGatedTokenUserRelations(ctx context.Context) ([]User, error) {
+  ids, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+    Type: TypeFolder,
+    ID: authz.ID(folder),
+  }, authz.Relation(FolderGatedToken), TypeUser)
+  if err != nil {
+    return nil, err
+  }
+
+  return authz.FromIDsExcludingWildcard[User](ids), nil
 }
 
 const FolderBrowse PermissionFolder = "browse"
@@ -2025,6 +2135,111 @@ func LookupScoredMinusTokenFolderResources(ctx context.Context, input CheckFolde
   
   return []Folder{}, nil
 }
+const FolderExpiringBrowse PermissionFolder = "expiring_browse"
+
+type CheckFolderExpiringBrowseInputs struct {
+  User []User
+}
+
+func (folder Folder) CheckExpiringBrowse(ctx context.Context, input CheckFolderExpiringBrowseInputs) (bool, error) {
+  if len(input.User) == 0 && true {
+    return false, authz.ErrNoInput
+  }
+
+  if len(input.User) > 0 {
+    err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Permission(FolderExpiringBrowse), TypeUser, authz.IDs(input.User))
+    if err != nil {
+      return false, err
+    }
+  }
+  
+  return true, nil
+}
+
+func LookupExpiringBrowseFolderResources(ctx context.Context, input CheckFolderExpiringBrowseInputs) ([]Folder, error) {
+
+  if len(input.User) > 0 {
+    ids, err := authz.GetEngine(ctx).LookupResources(ctx,
+      TypeFolder, authz.Permission(FolderExpiringBrowse),
+      TypeUser, authz.IDs(input.User),
+    )
+    if err != nil {
+      return nil, err
+    }
+
+    return authz.FromIDs[Folder](ids), nil
+  }
+  
+  return []Folder{}, nil
+}
+const FolderGatedTokenCheck PermissionFolder = "gated_token_check"
+
+type CheckFolderGatedTokenCheckInputs struct {
+  User []User
+  Caveats CheckFolderGatedTokenCheckCaveats
+}
+type CheckFolderGatedTokenCheckCaveats struct {
+  TenantMatch *TenantMatchArgs
+}
+
+func (folder Folder) CheckGatedTokenCheck(ctx context.Context, input CheckFolderGatedTokenCheckInputs) (bool, error) {
+  if len(input.User) == 0 && true {
+    return false, authz.ErrNoInput
+  }
+
+  var caveatCtx map[string]any
+  if c := input.Caveats.TenantMatch; c != nil {
+    if caveatCtx == nil {
+      caveatCtx = map[string]any{}
+    }
+    if c.Tenant != nil {
+      caveatCtx["tenant"] = *c.Tenant
+    }
+  }
+
+  if len(input.User) > 0 {
+    err := authz.GetEngine(ctx).CheckPermissionWithCaveat(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Permission(FolderGatedTokenCheck), TypeUser, authz.IDs(input.User), caveatCtx)
+    if err != nil {
+      return false, err
+    }
+  }
+  
+  return true, nil
+}
+
+func LookupGatedTokenCheckFolderResources(ctx context.Context, input CheckFolderGatedTokenCheckInputs) ([]Folder, error) {
+
+  var caveatCtx map[string]any
+  if c := input.Caveats.TenantMatch; c != nil {
+    if caveatCtx == nil {
+      caveatCtx = map[string]any{}
+    }
+    if c.Tenant != nil {
+      caveatCtx["tenant"] = *c.Tenant
+    }
+  }
+
+  if len(input.User) > 0 {
+    ids, err := authz.GetEngine(ctx).LookupResourcesWithCaveat(ctx,
+      TypeFolder, authz.Permission(FolderGatedTokenCheck),
+      TypeUser, authz.IDs(input.User),
+      caveatCtx,
+    )
+    if err != nil {
+      return nil, err
+    }
+
+    return authz.FromIDs[Folder](ids), nil
+  }
+  
+  return []Folder{}, nil
+}
 
 func (folder Folder) LookupBrowseUserSubjects(ctx context.Context) ([]User, error) {
 
@@ -2736,5 +2951,68 @@ func (folder Folder) LookupScoredMinusTokenUserWildcardSubjects(ctx context.Cont
       ID: authz.ID(folder),
     },
     authz.Permission(FolderScoredMinusToken), TypeUser,
+  )
+}
+
+func (folder Folder) LookupExpiringBrowseUserSubjects(ctx context.Context) ([]User, error) {
+
+  ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+    authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    },
+    authz.Permission(FolderExpiringBrowse), TypeUser,
+  )
+  if err != nil {
+    return nil, err
+  }
+
+  return authz.FromIDsExcludingWildcard[User](ids), nil
+}
+
+func (folder Folder) LookupExpiringBrowseUserWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    },
+    authz.Permission(FolderExpiringBrowse), TypeUser,
+  )
+}
+
+func (folder Folder) LookupGatedTokenCheckUserSubjects(ctx context.Context, caveats CheckFolderGatedTokenCheckCaveats) ([]User, error) {
+
+  var caveatCtx map[string]any
+  if c := caveats.TenantMatch; c != nil {
+    if caveatCtx == nil {
+      caveatCtx = map[string]any{}
+    }
+    if c.Tenant != nil {
+      caveatCtx["tenant"] = *c.Tenant
+    }
+  }
+
+  ids, err := authz.GetEngine(ctx).LookupSubjectsWithCaveat(ctx,
+    authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    },
+    authz.Permission(FolderGatedTokenCheck), TypeUser,
+    caveatCtx,
+  )
+  if err != nil {
+    return nil, err
+  }
+
+  return authz.FromIDsExcludingWildcard[User](ids), nil
+}
+
+func (folder Folder) LookupGatedTokenCheckUserWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    },
+    authz.Permission(FolderGatedTokenCheck), TypeUser,
   )
 }

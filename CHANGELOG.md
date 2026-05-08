@@ -4,6 +4,36 @@ All notable changes to this project are documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-05-09
+
+Adds `with expiration` support — schemas can now declare per-tuple TTL via SpiceDB's expiration trait, and combined `with <caveat> and expiration` works end-to-end. SpiceDB filters expired tuples server-side from Check / Lookup / Read so the client side requires no awareness of expiry beyond the write call.
+
+### Added
+
+- **`Engine.CreateRelationsWithExpiration`** — single new interface method covering both expiration-only and caveat-plus-expiration writes. `caveatName == ""` and `caveatParams == nil` mean "expiration only"; non-empty values opt into the combined path. Hard-codes `OPERATION_TOUCH` because un-garbage-collected expired tuples may collide on tuple identity (per SpiceDB docs).
+- Generated `<Rel>Objects` gains an `Expirations <RelName>Expirations` sub-struct mirroring `Wildcards` and `Caveats`, with one `<IDFieldName> *time.Time` field per expiring allowed type.
+- Generated `Create<Rel>Relations` per-allowed-type 4-way routing: `(no-trait)` → `CreateRelations`; `(caveat)` → `CreateRelationsWithCaveat`; `(expiration)` → `CreateRelationsWithExpiration("", nil, expiresAt)`; `(caveat+expiration)` → `CreateRelationsWithExpiration(name, params, expiresAt)`. Auto-switch to TOUCH happens transparently for expiring branches.
+- `AllowedType.IsExpiring bool` — adapter accepts `with expiration` (previously rejected at adapt time per ADR-001 list).
+- `anyExpiring` and `anyExpiringInRels` template helpers — gate `Expirations` sub-struct emission and conditional `time` import.
+- Schema fixtures: `relation expiring_viewer: extsvc/user with expiration` (pure expiration) and `relation gated_token: extsvc/user with extsvc/tenant_match and expiration` (combined). Plus the `use expiration` directive at the top of `example/schema.zed`.
+- 5 new e2e tests against live SpiceDB: grants-before-expiry, denies-after-expiry (with `time.Sleep` past TTL), gated-token grants when both gates pass, gated-token denies on caveat fail (deferred at write so check-time tenant value reaches eval), TOUCH-allows-rewrite-after-expiry.
+
+### Changed
+
+- The Engine interface gained one new method (`CreateRelationsWithExpiration`). External implementers must add it. The only impl in this repo is `*spicedb.Engine`.
+- Template adds a conditional `"time"` import to generated files when any relation in the definition has an expiring allowed type. Non-expiring schemas regenerate byte-identically.
+
+### Verified
+
+- All 4 e2e packages pass.
+- Codegen idempotent at new baseline.
+- `go build ./...` + `go vet ./...` clean.
+
+### Deferred (carried forward from earlier jobs)
+
+- `Read<Rel><Type>Relations` still strips `OptionalCaveat` AND `OptionalExpiresAt` from response tuples. A future `Read<Rel><Type>RelationsWithMetadata` would surface both. Tracked in AUZ-007 Discoveries Gap C and SPEC-004 C10.
+- `CONDITIONAL_PERMISSION` in the Check path still collapses to `ErrPermissionDenied`; `PartialCaveatInfo.MissingRequiredContext` is dropped.
+
 ## [1.2.0] - 2026-05-08
 
 Closes the Lookup correctness gap from v1.1.0 — `Lookup<Perm><Type>Resources` and `Lookup<Perm><Type>Subjects` for caveat-reaching permissions thread request-time `Context` through to SpiceDB, and `Permissionship == CONDITIONAL_PERMISSION` results are now filtered out of the returned ID slice (matching `Check<Perm>`'s `errorIfDenied` collapse-to-deny behavior).

@@ -1,3 +1,6 @@
+// AUZ-009 — opt-in directive required by SpiceDB for any `with expiration` usage in this schema.
+use expiration
+
 // AUZ-007 ext — caveat in bookingsvc namespace. String param.
 caveat bookingsvc/region_match(region string) {
 	region == "asia"
@@ -96,6 +99,10 @@ definition menusvc/booking {
 	relation dup_typed: menusvc/user with menusvc/within_hours | menusvc/user with menusvc/within_months
 	permission dup_typed_check = dup_typed
 }
+
+// AUZ-009 — `with expiration` fixtures live on extsvc/folder so they
+// share namespace with the existing tenant_match caveat (used by the
+// combined fixture).
 
 definition menusvc/user {
 	relation belongs_company: menusvc/company
@@ -292,6 +299,19 @@ definition extsvc/folder {
 	// legs are still collected (intersection/exclusion/union all walk
 	// children identically per SPEC-001).
 	permission scored_minus_token = scored_viewer - token_viewer
+
+	// AUZ-009 — pure expiration (no caveat). Exercises the codegen
+	// path emitting Expirations sub-struct + CreateRelationsWithExpiration
+	// route with caveatName="" / caveatParams=nil sentinels.
+	relation expiring_viewer: extsvc/user with expiration
+	permission expiring_browse = expiring_viewer
+
+	// AUZ-009 — combined caveat + expiration. Exercises both the
+	// Caveats AND Expirations sub-structs simultaneously, with
+	// CreateRelationsWithExpiration carrying the caveat name and
+	// params alongside the timestamp.
+	relation gated_token: extsvc/user with extsvc/tenant_match and expiration
+	permission gated_token_check = gated_token
 }
 
 definition extsvc/document {

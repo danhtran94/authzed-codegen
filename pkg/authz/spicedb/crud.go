@@ -14,6 +14,7 @@ import (
 	v1 "github.com/authzed/authzed-go/proto/authzed/api/v1"
 	"github.com/authzed/authzed-go/v1"
 	"google.golang.org/protobuf/types/known/structpb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type Engine struct {
@@ -81,6 +82,62 @@ func (e *Engine) getConsistencySnapshot() *v1.Consistency {
 			},
 		},
 	}
+}
+
+// CreateRelationsWithExpiration writes per-tuple OptionalExpiresAt
+// timestamps via OPERATION_TOUCH. Optionally also attaches a caveat
+// when caveatName != "" (covers `with cav and expiration` schemas).
+// TOUCH is required because un-garbage-collected expired tuples may
+// collide on tuple identity, and OPERATION_CREATE errors on existing
+// tuples (per SPEC-004 A2 — Authzed docs).
+func (e *Engine) CreateRelationsWithExpiration(ctx context.Context, to authz.Resource, relation authz.Relation, subject authz.Type, ids []authz.ID, caveatName string, caveatParams map[string]any, expiresAt time.Time) error {
+	e.debugLog("Creating expiring relations: to=%v, relation=%v, subject=%v, ids=%v, caveat=%s, params=%v, expiresAt=%v", to, relation, subject, ids, caveatName, caveatParams, expiresAt)
+
+	var caveatCtx *structpb.Struct
+	if caveatName != "" {
+		var err error
+		caveatCtx, err = serializeCaveatMap(caveatParams)
+		if err != nil {
+			return fmt.Errorf("serialize caveat params: %w", err)
+		}
+	}
+
+	expiresPb := timestamppb.New(expiresAt)
+
+	updates := make([]*v1.RelationshipUpdate, 0, len(ids))
+	for _, id := range ids {
+		rel := &v1.Relationship{
+			Resource: &v1.ObjectReference{
+				ObjectType: string(to.Type),
+				ObjectId:   string(to.ID),
+			},
+			Relation: string(relation),
+			Subject: &v1.SubjectReference{
+				Object: &v1.ObjectReference{
+					ObjectType: string(subject),
+					ObjectId:   string(id),
+				},
+			},
+			OptionalExpiresAt: expiresPb,
+		}
+		if caveatName != "" {
+			rel.OptionalCaveat = &v1.ContextualizedCaveat{
+				CaveatName: caveatName,
+				Context:    caveatCtx,
+			}
+		}
+		updates = append(updates, &v1.RelationshipUpdate{
+			Operation:    v1.RelationshipUpdate_OPERATION_TOUCH,
+			Relationship: rel,
+		})
+	}
+
+	res, err := e.client.WriteRelationships(ctx, &v1.WriteRelationshipsRequest{Updates: updates})
+	if err != nil {
+		return err
+	}
+	e.setToken(res.WrittenAt.Token)
+	return nil
 }
 
 func (e *Engine) CreateRelationsWithCaveat(ctx context.Context, to authz.Resource, relation authz.Relation, subject authz.Type, ids []authz.ID, caveatName string, caveatParams map[string]any) error {
