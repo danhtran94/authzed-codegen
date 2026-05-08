@@ -1,8 +1,19 @@
+// AUZ-007 ext — caveat in bookingsvc namespace. String param.
+caveat bookingsvc/region_match(region string) {
+	region == "asia"
+}
+
 definition bookingsvc/booking {
 	relation owner: bookingsvc/employee
 	relation creator: bookingsvc/employee | bookingsvc/customer
 	permission write = creator + owner + owner->manage + creator->manage
 	permission change_owner = creator + creator->manage
+
+	// AUZ-007 ext — exercises caveat codegen in a non-extsvc
+	// namespace. Generator should emit RegionMatchArgs + nested
+	// Caveats sub-structs in example/authzed/bookingsvc/booking.gen.go.
+	relation regional_owner: bookingsvc/employee with bookingsvc/region_match
+	permission regional_write = regional_owner
 }
 
 definition bookingsvc/brand {
@@ -25,10 +36,65 @@ definition bookingsvc/employee {
 
 definition bookingsvc/user {}
 
+// AUZ-007 ext — caveat in menusvc namespace. Multi-param int caveat.
+caveat menusvc/within_hours(open_hour int, close_hour int, current_hour int) {
+	current_hour >= open_hour && current_hour <= close_hour
+}
+
+// AUZ-007 ext — companion caveat for the multi-allowed-type-with-
+// different-caveats fixture. Distinct parameter names so the
+// detectPermCaveatCollisions check doesn't fire.
+caveat menusvc/within_months(open_month int, close_month int, current_month int) {
+	current_month >= open_month && current_month <= close_month
+}
+
 definition menusvc/booking {
 	relation owner: menusvc/company
 	relation creator: menusvc/user | menusvc/customer
 	permission write = creator + creator->manage + owner->manage
+
+	// AUZ-007 ext — caveat codegen in menusvc namespace. Multi-param
+	// int caveat exercises the int → int64 mapping AND multi-key
+	// context-map building in a different namespace than extsvc.
+	relation hours_keeper: menusvc/user with menusvc/within_hours
+	permission hours_check = hours_keeper
+
+	// AUZ-007 ext — multi-allowed-type relation where EACH allowed
+	// type has its own DIFFERENT caveat. User branch is gated by
+	// within_hours; Customer branch by within_months. Generated
+	// Caveats sub-struct holds one typed pointer per allowed type;
+	// each Create<Rel> branch routes through CreateRelationsWithCaveat
+	// with that type's specific caveat name literal.
+	relation multi_temporal: menusvc/user with menusvc/within_hours | menusvc/customer with menusvc/within_months
+	permission multi_temporal_check = multi_temporal
+
+	// AUZ-007 ext — Edge case 2 (LEGAL): different allowed types
+	// gated by the SAME caveat name. The Caveats sub-struct gets
+	// distinct fields per allowed type that share one *CaveatArgs
+	// struct type. Each tuple (User-via-hours OR Customer-via-hours)
+	// gets its own per-tuple write-time pre-context.
+	relation shared_cav: menusvc/user with menusvc/within_hours | menusvc/customer with menusvc/within_hours
+	permission shared_cav_check = shared_cav
+
+	// AUZ-007 ext — Edge case 1 (LEGAL with disambiguation): SAME
+	// allowed type with DIFFERENT caveats. SpiceDB accepts the
+	// schema; the codegen disambiguates field names by appending the
+	// caveat's PascalCase name. Caller picks per-batch which caveat
+	// applies — the User IDs go into objects.UserWithinHours or
+	// objects.UserWithinMonths, with the matching Caveats field set.
+	//
+	// Generated:
+	//   type BookingDupTypedObjects struct {
+	//     UserWithinHours  []User
+	//     UserWithinMonths []User
+	//     Caveats BookingDupTypedCaveats
+	//   }
+	//   type BookingDupTypedCaveats struct {
+	//     UserWithinHours  *WithinHoursArgs
+	//     UserWithinMonths *WithinMonthsArgs
+	//   }
+	relation dup_typed: menusvc/user with menusvc/within_hours | menusvc/user with menusvc/within_months
+	permission dup_typed_check = dup_typed
 }
 
 definition menusvc/user {
@@ -85,6 +151,46 @@ caveat extsvc/tenant_match(tenant string) {
 	tenant == "acme"
 }
 
+// AUZ-007 multi-param caveat — list<string> + string. Exercises the
+// codegen's multi-key map building in Create*WithCaveat / Check*Caveat
+// paths plus the list-element Go type emission ([]string).
+caveat extsvc/within_window(allowed_actions list<string>, requested_action string) {
+	requested_action in allowed_actions
+}
+
+// AUZ-007 non-string param types — bool + int. Exercises caveatTypeToGo
+// branches for `bool` and `int` (which map to bool and int64 in Go),
+// proving the typed-struct generation handles non-string parameter
+// types end-to-end.
+caveat extsvc/quota_check(within_quota bool, max_uses int) {
+	within_quota && max_uses > 0
+}
+
+// AUZ-007 ext — `double` param type → Go `float64`. Two-param caveat
+// where check supplies both keys (defer-all binding).
+caveat extsvc/min_score(min_required double, current double) {
+	current >= min_required
+}
+
+// AUZ-007 ext — `bytes` param type → Go `[]byte`. Eval uses CEL's
+// `size()` function on bytes.
+caveat extsvc/has_token(token bytes) {
+	size(token) > 0
+}
+
+// AUZ-007 ext — `uint` param type → Go `uint64`.
+caveat extsvc/version_check(min_version uint) {
+	min_version > 0
+}
+
+// AUZ-007 ext — nested list type `list<list<string>>`. The codegen
+// emits `[][]string`; serialize must coerce nested typed slices to
+// `[]any` recursively, exercising the reflection fallback in
+// pkg/authz/spicedb/crud.go's coerceStructpbValue.
+caveat extsvc/matrix_check(rows list<list<string>>) {
+	size(rows) > 0
+}
+
 definition extsvc/folder {
 	// 3-way type union — exercises adapter walking 3 entries in
 	// AllowedDirectRelations and template emitting 3-arm Objects struct.
@@ -98,6 +204,12 @@ definition extsvc/folder {
 	// MUST attach the caveat (SpiceDB enforces this for `with` relations).
 	relation tenanted_viewer: extsvc/user with extsvc/tenant_match
 
+	// AUZ-007 wildcard + caveat fixture — exercises both the wildcard
+	// branch (objects.Wildcards.User = true) AND the caveated routing
+	// in Create<Rel>Relations. Authzed docs confirm this combination
+	// is schema-legal (SPEC-003 A5).
+	relation guarded_viewer: extsvc/user:* with extsvc/tenant_match
+
 	// Permission == single relation alias.
 	permission browse = viewer
 
@@ -106,6 +218,80 @@ definition extsvc/folder {
 	// gains `Caveat *TenantMatchArgs` and the method calls
 	// CheckPermissionWithCaveat.
 	permission tenanted_browse = tenanted_viewer
+
+	// AUZ-007 — wildcard + caveat permission. Reaches a wildcard
+	// caveated relation via a single-relation permission.
+	permission guarded_browse = guarded_viewer
+
+	// AUZ-007 multi-param caveat fixture — single allowed type, caveat
+	// has list<string> + string params. Exercises multi-key context
+	// emission in both Create<Rel> and Check<Perm> paths.
+	relation actor: extsvc/user with extsvc/within_window
+	permission act = actor
+
+	// AUZ-007 mixed caveated / non-caveated allowed types in one
+	// relation. The User branch routes through CreateRelationsWithCaveat
+	// (caveated); the Group branch routes through CreateRelations
+	// (non-caveated) — both within the same generated method body.
+	// permCaveat walker finds one distinct caveat (within_window) so
+	// CheckCollaborateInputs gets a single Caveat field.
+	relation collaborator: extsvc/user with extsvc/within_window | extsvc/group
+	permission collaborate = collaborator
+
+	// AUZ-007 bool + int param types — exercises caveatTypeToGo for
+	// non-string caveat parameters.
+	relation rate_limited: extsvc/user with extsvc/quota_check
+	permission rate_check = rate_limited
+
+	// AUZ-007 ext — double / float64 param.
+	relation scored_viewer: extsvc/user with extsvc/min_score
+	permission score_check = scored_viewer
+
+	// AUZ-007 ext — bytes param.
+	relation token_viewer: extsvc/user with extsvc/has_token
+	permission token_check = token_viewer
+
+	// AUZ-007 ext — uint param.
+	relation versioned_viewer: extsvc/user with extsvc/version_check
+	permission version_check_perm = versioned_viewer
+
+	// AUZ-007 ext — nested list type.
+	relation matrix_viewer: extsvc/user with extsvc/matrix_check
+	permission matrix_check_perm = matrix_viewer
+
+	// AUZ-007 ext — multi-caveat-per-permission. The cap from AUZ-006
+	// (one distinct caveat per permission) is lifted by the
+	// CheckXInputs.Caveats nested sub-struct. `multi_check` reaches
+	// BOTH tenant_match (via tenanted_user) and within_window (via
+	// windowed_user). Generated CheckMultiCheckInputs.Caveats has one
+	// field per reachable caveat name; the Check method merges all
+	// non-nil entries into a single wire Context map. SpiceDB matches
+	// keys to whichever tuple's caveat needs them.
+	relation tenanted_user: extsvc/user with extsvc/tenant_match
+	relation windowed_user: extsvc/user with extsvc/within_window
+	permission multi_check = tenanted_user + windowed_user
+
+	// AUZ-007 ext — caveat × ARROW. gated_root is a folder→folder
+	// relation gated by tenant_match. The arrow `gated_root->browse`
+	// reaches tenant_match via the LeftRel only (per SPEC-003 A6 +
+	// walkPermCaveats arrow handling: caveats on the right side
+	// resolve through a different object's permission and are not
+	// part of this Check call's wire Context).
+	relation gated_root: extsvc/folder with extsvc/tenant_match
+	permission via_gated_root = gated_root->browse
+
+	// AUZ-007 ext — caveat × INTERSECTION. Both legs are caveated;
+	// CheckEliteAccessInputs.Caveats has BOTH MinScore + HasToken
+	// fields. SpiceDB grants only when both legs match AND both
+	// caveats evaluate true.
+	permission elite_access = scored_viewer & token_viewer
+
+	// AUZ-007 ext — caveat × EXCLUSION. left = scored_viewer (with
+	// min_score), right = token_viewer (with has_token). Grants when
+	// scored_viewer holds AND token_viewer doesn't. Caveats on both
+	// legs are still collected (intersection/exclusion/union all walk
+	// children identically per SPEC-001).
+	permission scored_minus_token = scored_viewer - token_viewer
 }
 
 definition extsvc/document {

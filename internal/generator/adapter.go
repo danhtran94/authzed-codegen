@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	core "github.com/authzed/spicedb/pkg/proto/core/v1"
+
+	"github.com/danhtran94/authzed-codegen/internal/utilstr"
 )
 
 const (
@@ -44,6 +46,21 @@ type AllowedType struct {
 	Namespace  string
 	IsWildcard bool
 	CaveatName string
+
+	// IDFieldName is the Go field name used in the generated <Rel>Objects
+	// struct for the ID slice of this allowed type, and in the Wildcards
+	// sub-struct for the wildcard bool. For non-colliding allowed types
+	// it equals utilstr.TypeName(Namespace) — the existing convention.
+	// When two AllowedDirectRelations share (Namespace, IsWildcard) but
+	// declare different caveats, the codegen disambiguates by appending
+	// the caveat's PascalCase name so each branch has its own field
+	// (e.g. UserCavA, UserCavB) — see flattenAllowedTypes.
+	IDFieldName string
+
+	// CaveatFieldName is the Go field name in the <Rel>Caveats sub-struct
+	// for this allowed type's caveat pointer. Same disambiguation rules
+	// as IDFieldName. Empty when the allowed type has no caveat.
+	CaveatFieldName string
 }
 
 // ParamSpec is a single caveat parameter as the generator sees it: the
@@ -134,11 +151,15 @@ func buildCaveatMap(caveatDefs []*core.CaveatDefinition) map[string][]ParamSpec 
 // on the right side resolve through a different object's permission and
 // are not part of this Check call's wire Context.
 //
-// Returns a map keyed by "<defType>/<perm>" → unique caveat name. An
-// empty value means the permission has no caveat path. Multi-caveat
-// reach errors out — multi-caveat per permission is deferred (AUZ-006
-// out-of-scope).
-func collectPermCaveats(defs []*DefinitionView) (map[string]string, error) {
+// Returns a map keyed by "<defType>/<perm>" → sorted slice of unique
+// caveat names reachable from the permission. An entry is omitted when
+// the permission has no caveat path. Multiple distinct caveats are
+// allowed (the codegen emits a Caveats sub-struct on Check<Perm>Inputs
+// with one field per reachable caveat); the wire-level Context is a
+// merged key bag where SpiceDB matches keys to whichever tuple's
+// caveat needs them. Cross-caveat parameter-name collisions are
+// detected separately by detectPermCaveatCollisions.
+func collectPermCaveats(defs []*DefinitionView) map[string][]string {
 	relIdx := make(map[string]map[string][]AllowedType, len(defs))
 	permIdx := make(map[string]map[string][]PermissionExpr, len(defs))
 	for _, d := range defs {
@@ -153,30 +174,51 @@ func collectPermCaveats(defs []*DefinitionView) (map[string]string, error) {
 		}
 	}
 
-	out := make(map[string]string)
+	out := make(map[string][]string)
 	for _, d := range defs {
 		ot := d.ObjectType.String()
 		for _, p := range d.Permissions {
 			seen := make(map[string]bool)
 			walkPermCaveats(ot, p.Name, relIdx, permIdx, seen, map[string]bool{})
+			if len(seen) == 0 {
+				continue
+			}
 			distinct := make([]string, 0, len(seen))
 			for c := range seen {
 				distinct = append(distinct, c)
 			}
 			sort.Strings(distinct)
-			switch len(distinct) {
-			case 0:
-			case 1:
-				out[fmt.Sprintf("%s/%s", ot, p.Name)] = distinct[0]
-			default:
-				return nil, fmt.Errorf(
-					"permission %s/%s reaches multiple caveats %v — multi-caveat per permission is out of scope (AUZ-006)",
-					ot, p.Name, distinct,
-				)
+			out[fmt.Sprintf("%s/%s", ot, p.Name)] = distinct
+		}
+	}
+	return out
+}
+
+// detectPermCaveatCollisions walks every permission that reaches 2+
+// distinct caveats and errors if any two of those caveats declare the
+// same parameter name. Reason: the wire Context on
+// CheckPermissionRequest is a single shared key-bag — when two caveats
+// claim the same key, the codegen has no way to disambiguate at call
+// time. The schema author resolves by renaming in one of the caveats.
+func detectPermCaveatCollisions(permCaveats map[string][]string, caveatMap map[string][]ParamSpec) error {
+	for permKey, caveatNames := range permCaveats {
+		if len(caveatNames) < 2 {
+			continue
+		}
+		paramOrigin := make(map[string]string)
+		for _, cn := range caveatNames {
+			for _, p := range caveatMap[cn] {
+				if owner, ok := paramOrigin[p.Name]; ok && owner != cn {
+					return fmt.Errorf(
+						"permission %s reaches caveats %q and %q which both declare parameter %q — rename one in the schema to disambiguate",
+						permKey, owner, cn, p.Name,
+					)
+				}
+				paramOrigin[p.Name] = cn
 			}
 		}
 	}
-	return out, nil
+	return nil
 }
 
 func walkPermCaveats(
@@ -222,13 +264,52 @@ func walkPermCaveats(
 	}
 }
 
-// caveatTypeToGo maps a SpiceDB caveat type to a Go type literal. The
-// SpiceDB type set is registered in
+// caveatTypeToGo maps a SpiceDB caveat type to the Go type literal
+// emitted on a generated caveat Args struct field. Scalars are wrapped
+// in a pointer so callers can express "defer this parameter to check
+// time" via nil; container types (slices, maps, bytes) are left as-is
+// because they are naturally nilable in Go. The element types inside
+// list<T> are unwrapped (no pointer) — those are values inside the
+// slice, not optional fields.
+//
+// The SpiceDB type set is registered in
 // github.com/authzed/spicedb/pkg/caveats/types/basic.go: any, bool,
 // string, int, uint, double, bytes, duration, timestamp, list<T>,
-// map<T>, ipaddress. Types without a clean Go analogue surface as `any`
-// — caller passes a structpb-compatible value at the call site.
+// map<T>, ipaddress. Types without a clean Go analogue surface as
+// `any` — caller passes a structpb-compatible value at the call site.
 func caveatTypeToGo(t *core.CaveatTypeReference) string {
+	if t == nil {
+		return "any"
+	}
+	switch t.GetTypeName() {
+	case "bool":
+		return "*bool"
+	case "string":
+		return "*string"
+	case "int":
+		return "*int"
+	case "uint":
+		return "*uint"
+	case "double":
+		return "*float64"
+	case "bytes":
+		return "[]byte"
+	case "list":
+		children := t.GetChildTypes()
+		if len(children) != 1 {
+			return "any"
+		}
+		return "[]" + caveatTypeToGoElem(children[0])
+	default:
+		return "any"
+	}
+}
+
+// caveatTypeToGoElem returns the Go element type for use inside a
+// slice — never wrapped in pointer. Used by caveatTypeToGo when
+// recursing into list<T> children: the inner type is a value sitting
+// inside the slice, not an optional field that needs nullability.
+func caveatTypeToGoElem(t *core.CaveatTypeReference) string {
 	if t == nil {
 		return "any"
 	}
@@ -238,9 +319,9 @@ func caveatTypeToGo(t *core.CaveatTypeReference) string {
 	case "string":
 		return "string"
 	case "int":
-		return "int64"
+		return "int"
 	case "uint":
-		return "uint64"
+		return "uint"
 	case "double":
 		return "float64"
 	case "bytes":
@@ -250,7 +331,7 @@ func caveatTypeToGo(t *core.CaveatTypeReference) string {
 		if len(children) != 1 {
 			return "any"
 		}
-		return "[]" + caveatTypeToGo(children[0])
+		return "[]" + caveatTypeToGoElem(children[0])
 	default:
 		return "any"
 	}
@@ -286,7 +367,69 @@ func flattenAllowedTypes(ti *core.TypeInformation) ([]AllowedType, error) {
 			CaveatName: caveatName,
 		})
 	}
+
+	// Compute IDFieldName and CaveatFieldName for each allowed type.
+	// Singletons keep the existing typeName-based convention; entries
+	// that collide on (Namespace, IsWildcard) get the caveat suffix
+	// appended so each branch has its own struct field. SpiceDB's
+	// tuple identity is (resource, relation, subject) — caveat is
+	// metadata, not part of the key — so `relation foo: user with
+	// cav_a | user with cav_b` means "a user-tuple can be written with
+	// EITHER cav_a or cav_b." The disambiguated field names let the
+	// caller pick per-batch which caveat applies.
+	//
+	// Pure duplicates (same Namespace + IsWildcard + identical caveat,
+	// or both un-caveated) are still rejected — no semantic
+	// disambiguation is possible.
+	groupIdxs := make(map[string][]int, len(types))
+	for i, t := range types {
+		key := fmt.Sprintf("%s|wildcard=%v", t.Namespace, t.IsWildcard)
+		groupIdxs[key] = append(groupIdxs[key], i)
+	}
+	for _, idxs := range groupIdxs {
+		if len(idxs) == 1 {
+			t := &types[idxs[0]]
+			t.IDFieldName = utilstr.TypeName(t.Namespace)
+			if t.CaveatName != "" {
+				t.CaveatFieldName = t.IDFieldName
+			}
+			continue
+		}
+		caveats := make(map[string]bool, len(idxs))
+		anyEmpty := false
+		for _, i := range idxs {
+			caveats[types[i].CaveatName] = true
+			if types[i].CaveatName == "" {
+				anyEmpty = true
+			}
+		}
+		if anyEmpty || len(caveats) != len(idxs) {
+			return nil, fmt.Errorf(
+				"duplicate allowed type %q — multiple AllowedDirectRelations with same namespace must each declare a distinct caveat to be disambiguated",
+				types[idxs[0]].Namespace,
+			)
+		}
+		for _, i := range idxs {
+			t := &types[i]
+			disamb := utilstr.TypeName(t.Namespace) + pascalCaveatName(t.CaveatName)
+			t.IDFieldName = disamb
+			t.CaveatFieldName = disamb
+		}
+	}
+
 	return types, nil
+}
+
+// pascalCaveatName mirrors the template's pascalCaveat helper —
+// strips the schema prefix from the caveat name and PascalCases the
+// local part. Lives here so the adapter can pre-compute disambiguated
+// field names without taking a dependency on the template's FuncMap.
+func pascalCaveatName(name string) string {
+	local := name
+	if i := strings.LastIndex(name, "/"); i >= 0 {
+		local = name[i+1:]
+	}
+	return utilstr.SnakeToPascal(local)
 }
 
 func adaptPermission(r *core.Relation) (*PermissionView, error) {

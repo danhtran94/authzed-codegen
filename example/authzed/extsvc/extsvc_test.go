@@ -7,7 +7,6 @@ import (
 	"os"
 	"testing"
 
-	v1 "github.com/authzed/authzed-go/proto/authzed/api/v1"
 	extsvc "github.com/danhtran94/authzed-codegen/example/authzed/extsvc"
 	"github.com/danhtran94/authzed-codegen/pkg/authz"
 	"github.com/danhtran94/authzed-codegen/pkg/authz/spicedbtest"
@@ -21,9 +20,12 @@ type strID string
 
 func (s strID) String() string { return string(s) }
 
-// sb is the package-scoped Sandbox so tests can reach the underlying
-// authzed.Client for write paths the codegen doesn't yet cover (e.g.
-// attaching a caveat at write time — deferred per AUZ-006 scope).
+// sb is the package-scoped Sandbox so tests that need direct API access
+// (writing relationships outside the codegen's CreateXRelations methods,
+// e.g. for fixtures the codegen doesn't yet cover) can reach
+// authzed.Client. After AUZ-007 the codegen handles caveated writes
+// natively, so this is no longer required for the tenant_match path —
+// but the field stays available for future tests.
 var sb *spicedbtest.Sandbox
 
 func TestMain(m *testing.M) {
@@ -52,32 +54,6 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-// writeTenantedViewer attaches a tenant_match caveat (no pre-context)
-// to a tenanted_viewer relationship via authzed-go directly. The
-// codegen's CreateTenantedViewerRelations issues the write without a
-// caveat — SpiceDB rejects that for `with caveat` relations, so
-// caveat-aware tests bypass the codegen for the write half.
-func writeTenantedViewer(ctx context.Context, t *testing.T, folderID, userID string) {
-	t.Helper()
-	res, err := sb.Client.WriteRelationships(ctx, &v1.WriteRelationshipsRequest{
-		Updates: []*v1.RelationshipUpdate{{
-			Operation: v1.RelationshipUpdate_OPERATION_CREATE,
-			Relationship: &v1.Relationship{
-				Resource: &v1.ObjectReference{ObjectType: "extsvc/folder", ObjectId: folderID},
-				Relation: "tenanted_viewer",
-				Subject: &v1.SubjectReference{
-					Object: &v1.ObjectReference{ObjectType: "extsvc/user", ObjectId: userID},
-				},
-				OptionalCaveat: &v1.ContextualizedCaveat{CaveatName: "extsvc/tenant_match"},
-			},
-		}},
-	})
-	require.NoError(t, err)
-	// Engine reads use snapshot consistency at the last token it wrote
-	// itself; this direct write bypassed Engine.CreateRelations, so the
-	// engine's snapshot would predate the new tuple. Advance it.
-	sb.Engine.SetSnapshotToken(res.WrittenAt.Token)
-}
 
 // --- Boilerplate identity tests (User / Group / Role) ---
 
@@ -431,21 +407,27 @@ func TestArticle_LookupEditorUserSubjects(t *testing.T) {
 	assert.Contains(t, ids, extsvc.User("au7"))
 }
 
-// --- Folder.tenanted_browse: caveat codegen path ---
+// --- Folder.tenanted_browse: caveat codegen path (AUZ-006 read + AUZ-007 write) ---
 //
 // Schema: relation tenanted_viewer: extsvc/user with extsvc/tenant_match,
 // caveat tenant_match(tenant string) { tenant == "acme" }.
-// The write path attaches the caveat with no pre-context (writeTenantedViewer);
-// the check provides the binding at request time via input.Caveat.
+// Writes go through the codegen's CreateTenantedViewerRelations with
+// UserCaveat: nil — equivalent to a name-only attach on the wire,
+// deferring all parameter binding to check time. SPEC-003 A6 [B1]
+// verified this is wire-legal.
 
 func TestFolder_CheckTenantedBrowse_MatchTenant(t *testing.T) {
 	ctx := context.Background()
 
-	writeTenantedViewer(ctx, t, "tcb-match", "u-match")
+	require.NoError(t, extsvc.Folder("tcb-match").CreateTenantedViewerRelations(ctx, extsvc.FolderTenantedViewerObjects{
+		User: []extsvc.User{"u-match"}, // Caveats zero-value defers all binding to check time
+	}))
 
 	ok, err := extsvc.Folder("tcb-match").CheckTenantedBrowse(ctx, extsvc.CheckFolderTenantedBrowseInputs{
-		User:   []extsvc.User{"u-match"},
-		Caveat: &extsvc.TenantMatchArgs{Tenant: "acme"},
+		User: []extsvc.User{"u-match"},
+		Caveats: extsvc.CheckFolderTenantedBrowseCaveats{
+			TenantMatch: &extsvc.TenantMatchArgs{Tenant: new("acme")},
+		},
 	})
 	require.NoError(t, err)
 	assert.True(t, ok)
@@ -454,11 +436,15 @@ func TestFolder_CheckTenantedBrowse_MatchTenant(t *testing.T) {
 func TestFolder_CheckTenantedBrowse_WrongTenant(t *testing.T) {
 	ctx := context.Background()
 
-	writeTenantedViewer(ctx, t, "tcb-wrong", "u-wrong")
+	require.NoError(t, extsvc.Folder("tcb-wrong").CreateTenantedViewerRelations(ctx, extsvc.FolderTenantedViewerObjects{
+		User: []extsvc.User{"u-wrong"},
+	}))
 
 	_, err := extsvc.Folder("tcb-wrong").CheckTenantedBrowse(ctx, extsvc.CheckFolderTenantedBrowseInputs{
-		User:   []extsvc.User{"u-wrong"},
-		Caveat: &extsvc.TenantMatchArgs{Tenant: "not-acme"},
+		User: []extsvc.User{"u-wrong"},
+		Caveats: extsvc.CheckFolderTenantedBrowseCaveats{
+			TenantMatch: &extsvc.TenantMatchArgs{Tenant: new("not-acme")},
+		},
 	})
 	assert.ErrorIs(t, err, authz.ErrPermissionDenied)
 }
@@ -470,12 +456,791 @@ func TestFolder_CheckTenantedBrowse_WrongTenant(t *testing.T) {
 func TestFolder_CheckTenantedBrowse_NilCaveat(t *testing.T) {
 	ctx := context.Background()
 
-	writeTenantedViewer(ctx, t, "tcb-nil", "u-nil")
+	require.NoError(t, extsvc.Folder("tcb-nil").CreateTenantedViewerRelations(ctx, extsvc.FolderTenantedViewerObjects{
+		User: []extsvc.User{"u-nil"},
+	}))
 
 	_, err := extsvc.Folder("tcb-nil").CheckTenantedBrowse(ctx, extsvc.CheckFolderTenantedBrowseInputs{
 		User: []extsvc.User{"u-nil"},
 	})
 	assert.ErrorIs(t, err, authz.ErrPermissionDenied)
+}
+
+// AUZ-007 wildcard + caveat — exercises the wildcard branch of
+// CreateGuardedViewerRelations (objects.Wildcards.User = true) with a
+// nil UserCaveat (defer pattern). The generated wildcard branch must
+// route through CreateRelationsWithCaveat (not the existing
+// CreateRelations) and embed "extsvc/tenant_match" as the caveat-name
+// literal. Schema legality of `type:* with caveat` confirmed by
+// SPEC-003 A5 (Authzed docs).
+func TestFolder_CreateGuardedViewer_WildcardDefer(t *testing.T) {
+	ctx := context.Background()
+
+	require.NoError(t, extsvc.Folder("gv-defer").CreateGuardedViewerRelations(ctx, extsvc.FolderGuardedViewerObjects{
+		Wildcards: extsvc.FolderGuardedViewerWildcards{User: true},
+	}))
+
+	ok, err := extsvc.Folder("gv-defer").CheckGuardedBrowse(ctx, extsvc.CheckFolderGuardedBrowseInputs{
+		User: []extsvc.User{"any-user"},
+		Caveats: extsvc.CheckFolderGuardedBrowseCaveats{
+			TenantMatch: &extsvc.TenantMatchArgs{Tenant: new("acme")},
+		},
+	})
+	require.NoError(t, err)
+	assert.True(t, ok, "wildcard caveat tuple must grant any user when check supplies the matching tenant")
+}
+
+// AUZ-007 wildcard + caveat — pre-binding variant. Write supplies
+// {tenant=acme} at write time; check supplies a conflicting tenant.
+// Write-time wins (SPEC-003 A6 [A3]).
+func TestFolder_CreateGuardedViewer_WildcardPreBound(t *testing.T) {
+	ctx := context.Background()
+
+	require.NoError(t, extsvc.Folder("gv-prebind").CreateGuardedViewerRelations(ctx, extsvc.FolderGuardedViewerObjects{
+		Wildcards: extsvc.FolderGuardedViewerWildcards{User: true},
+		Caveats: extsvc.FolderGuardedViewerCaveats{
+			User: &extsvc.TenantMatchArgs{Tenant: new("acme")},
+		},
+	}))
+
+	ok, err := extsvc.Folder("gv-prebind").CheckGuardedBrowse(ctx, extsvc.CheckFolderGuardedBrowseInputs{
+		User: []extsvc.User{"some-other-user"},
+		Caveats: extsvc.CheckFolderGuardedBrowseCaveats{
+			TenantMatch: &extsvc.TenantMatchArgs{Tenant: new("would-fail-if-check-won")},
+		},
+	})
+	require.NoError(t, err)
+	assert.True(t, ok, "wildcard caveat with write-time pre-binding must override conflicting check-time context")
+}
+
+// AUZ-007 write-time pre-binding — write {tenant=acme}, then attempt to
+// override at check time with a different tenant. SPEC-003 A6 [A3]:
+// write-time wins on key collision, so the override is silently ignored
+// and the check still grants. Locks in the precedence semantics.
+func TestFolder_CreateTenantedViewer_PreBound_WriteWins(t *testing.T) {
+	ctx := context.Background()
+
+	require.NoError(t, extsvc.Folder("tcb-prebind").CreateTenantedViewerRelations(ctx, extsvc.FolderTenantedViewerObjects{
+		User: []extsvc.User{"u-prebind"},
+		Caveats: extsvc.FolderTenantedViewerCaveats{
+			User: &extsvc.TenantMatchArgs{Tenant: new("acme")}, // pre-bind at write
+		},
+	}))
+
+	ok, err := extsvc.Folder("tcb-prebind").CheckTenantedBrowse(ctx, extsvc.CheckFolderTenantedBrowseInputs{
+		User: []extsvc.User{"u-prebind"},
+		Caveats: extsvc.CheckFolderTenantedBrowseCaveats{
+			TenantMatch: &extsvc.TenantMatchArgs{Tenant: new("attacker-override")}, // would deny if check could win
+		},
+	})
+	require.NoError(t, err)
+	assert.True(t, ok, "write-time pre-binding must override conflicting check-time context")
+}
+
+// --- Multi-param caveat: extsvc/within_window(allowed_actions list<string>, requested_action string) ---
+//
+// Exercises the codegen's multi-key context map emission and the
+// list<string> → []string type mapping. Test pattern uses defer-all
+// (write nil, check supplies both) to side-step the "pre-bind binds
+// zero values" gotcha that single-struct partial binding can't avoid
+// without per-field pointer types (deferred to a future job).
+
+func TestFolder_Act_DeferAll_ActionAllowed(t *testing.T) {
+	ctx := context.Background()
+
+	require.NoError(t, extsvc.Folder("act-allow").CreateActorRelations(ctx, extsvc.FolderActorObjects{
+		User: []extsvc.User{"u-actor"},
+	}))
+
+	ok, err := extsvc.Folder("act-allow").CheckAct(ctx, extsvc.CheckFolderActInputs{
+		User: []extsvc.User{"u-actor"},
+		Caveats: extsvc.CheckFolderActCaveats{
+			WithinWindow: &extsvc.WithinWindowArgs{
+				AllowedActions:  []string{"read", "write"},
+				RequestedAction: new("read"),
+			},
+		},
+	})
+	require.NoError(t, err)
+	assert.True(t, ok, "requested_action in allowed_actions must grant")
+}
+
+func TestFolder_Act_DeferAll_ActionDenied(t *testing.T) {
+	ctx := context.Background()
+
+	require.NoError(t, extsvc.Folder("act-deny").CreateActorRelations(ctx, extsvc.FolderActorObjects{
+		User: []extsvc.User{"u-act-deny"},
+	}))
+
+	_, err := extsvc.Folder("act-deny").CheckAct(ctx, extsvc.CheckFolderActInputs{
+		User: []extsvc.User{"u-act-deny"},
+		Caveats: extsvc.CheckFolderActCaveats{
+			WithinWindow: &extsvc.WithinWindowArgs{
+				AllowedActions:  []string{"read", "write"},
+				RequestedAction: new("delete"),
+			},
+		},
+	})
+	assert.ErrorIs(t, err, authz.ErrPermissionDenied)
+}
+
+// Pre-bind {AllowedActions: ["read"], RequestedAction: "read"} at write
+// time, confirming the multi-key wire encoding works end-to-end. Check
+// supplies a different action; write-time wins, eval evaluates against
+// the write-time RequestedAction = "read". "read" in ["read"] → grant.
+func TestFolder_Act_PreBoundBoth_WriteWinsOnAction(t *testing.T) {
+	ctx := context.Background()
+
+	require.NoError(t, extsvc.Folder("act-prebind").CreateActorRelations(ctx, extsvc.FolderActorObjects{
+		User: []extsvc.User{"u-act-prebind"},
+		Caveats: extsvc.FolderActorCaveats{
+			User: &extsvc.WithinWindowArgs{
+				AllowedActions:  []string{"read"},
+				RequestedAction: new("read"),
+			},
+		},
+	}))
+
+	ok, err := extsvc.Folder("act-prebind").CheckAct(ctx, extsvc.CheckFolderActInputs{
+		User: []extsvc.User{"u-act-prebind"},
+		Caveats: extsvc.CheckFolderActCaveats{
+			WithinWindow: &extsvc.WithinWindowArgs{
+				AllowedActions:  []string{"read"},
+				RequestedAction: new("delete"), // would deny if check could win
+			},
+		},
+	})
+	require.NoError(t, err)
+	assert.True(t, ok, "write-time RequestedAction must take precedence over check-time on key collision")
+}
+
+// --- Mixed caveated/non-caveated allowed types: relation collaborator: user with within_window | group ---
+//
+// The User branch routes through CreateRelationsWithCaveat (caveated);
+// the Group branch routes through plain CreateRelations (non-caveated).
+// Both within the same generated method body. permCaveat walker finds
+// one distinct caveat reachable from `collaborate = collaborator`, so
+// CheckCollaborateInputs gets a single Caveat *WithinWindowArgs field.
+// For Group subjects, SpiceDB doesn't evaluate the caveat (the Group
+// tuple is non-caveated).
+
+func TestFolder_Collaborator_UserBranchCaveated(t *testing.T) {
+	ctx := context.Background()
+
+	require.NoError(t, extsvc.Folder("co-u").CreateCollaboratorRelations(ctx, extsvc.FolderCollaboratorObjects{
+		User: []extsvc.User{"u-co"},
+	}))
+
+	ok, err := extsvc.Folder("co-u").CheckCollaborate(ctx, extsvc.CheckFolderCollaborateInputs{
+		User: []extsvc.User{"u-co"},
+		Caveats: extsvc.CheckFolderCollaborateCaveats{
+			WithinWindow: &extsvc.WithinWindowArgs{
+				AllowedActions:  []string{"edit"},
+				RequestedAction: new("edit"),
+			},
+		},
+	})
+	require.NoError(t, err)
+	assert.True(t, ok)
+}
+
+func TestFolder_Collaborator_GroupBranchNonCaveated(t *testing.T) {
+	ctx := context.Background()
+
+	require.NoError(t, extsvc.Folder("co-g").CreateCollaboratorRelations(ctx, extsvc.FolderCollaboratorObjects{
+		Group: []extsvc.Group{"g-co"},
+	}))
+
+	// Group tuple is non-caveated; the Caveat field on CheckCollaborateInputs
+	// can be nil for Group-only checks.
+	ok, err := extsvc.Folder("co-g").CheckCollaborate(ctx, extsvc.CheckFolderCollaborateInputs{
+		Group: []extsvc.Group{"g-co"},
+	})
+	require.NoError(t, err)
+	assert.True(t, ok, "non-caveated Group tuple must grant without caveat context")
+}
+
+// Both branches in one Create call — User via CreateRelationsWithCaveat,
+// Group via CreateRelations, atomically.
+func TestFolder_Collaborator_BothBranchesInOneCall(t *testing.T) {
+	ctx := context.Background()
+
+	require.NoError(t, extsvc.Folder("co-both").CreateCollaboratorRelations(ctx, extsvc.FolderCollaboratorObjects{
+		User:  []extsvc.User{"u-both"},
+		Group: []extsvc.Group{"g-both"},
+	}))
+
+	// Check via User (caveat eval required)
+	okUser, err := extsvc.Folder("co-both").CheckCollaborate(ctx, extsvc.CheckFolderCollaborateInputs{
+		User: []extsvc.User{"u-both"},
+		Caveats: extsvc.CheckFolderCollaborateCaveats{
+			WithinWindow: &extsvc.WithinWindowArgs{
+				AllowedActions:  []string{"edit"},
+				RequestedAction: new("edit"),
+			},
+		},
+	})
+	require.NoError(t, err)
+	assert.True(t, okUser)
+
+	// Check via Group (no caveat eval)
+	okGroup, err := extsvc.Folder("co-both").CheckCollaborate(ctx, extsvc.CheckFolderCollaborateInputs{
+		Group: []extsvc.Group{"g-both"},
+	})
+	require.NoError(t, err)
+	assert.True(t, okGroup)
+}
+
+// --- Bool + int param types: caveat quota_check(within_quota bool, max_uses int) ---
+//
+// Exercises caveatTypeToGo for non-string types: `int` → `int64`,
+// `bool` → `bool`. Generated QuotaCheckArgs has typed fields, the
+// generated map building emits the correct value types, and SpiceDB
+// evaluates the CEL boolean expression against them.
+
+func TestFolder_RateCheck_QuotaActive(t *testing.T) {
+	ctx := context.Background()
+
+	require.NoError(t, extsvc.Folder("rc-ok").CreateRateLimitedRelations(ctx, extsvc.FolderRateLimitedObjects{
+		User: []extsvc.User{"u-rc-ok"},
+		Caveats: extsvc.FolderRateLimitedCaveats{
+			User: &extsvc.QuotaCheckArgs{
+				WithinQuota: new(true),
+				MaxUses:     new(5),
+			},
+		},
+	}))
+
+	ok, err := extsvc.Folder("rc-ok").CheckRateCheck(ctx, extsvc.CheckFolderRateCheckInputs{
+		User: []extsvc.User{"u-rc-ok"},
+	})
+	require.NoError(t, err)
+	assert.True(t, ok)
+}
+
+func TestFolder_RateCheck_QuotaExhausted(t *testing.T) {
+	ctx := context.Background()
+
+	require.NoError(t, extsvc.Folder("rc-no").CreateRateLimitedRelations(ctx, extsvc.FolderRateLimitedObjects{
+		User: []extsvc.User{"u-rc-no"},
+		Caveats: extsvc.FolderRateLimitedCaveats{
+			User: &extsvc.QuotaCheckArgs{
+				WithinQuota: new(false),
+				MaxUses:     new(5),
+			},
+		},
+	}))
+
+	_, err := extsvc.Folder("rc-no").CheckRateCheck(ctx, extsvc.CheckFolderRateCheckInputs{
+		User: []extsvc.User{"u-rc-no"},
+	})
+	assert.ErrorIs(t, err, authz.ErrPermissionDenied, "WithinQuota=false must collapse the && to deny")
+}
+
+// --- AUZ-007 extension: type-coverage gap closure ---
+
+// SPEC-003 C5 / A3 verification — DeleteRelations on a caveated tuple
+// matches by 6-column identity (no caveat needed). Source-line evidence
+// (memdb readwrite.go:66-75 + postgres readwrite.go:779-788) confirmed
+// the semantics; this test verifies it empirically end-to-end. Write a
+// caveated tuple, prove it grants, delete via codegen Delete<Rel>, prove
+// it denies (tuple gone).
+func TestFolder_TenantedViewer_DeleteRemovesCaveatedTuple(t *testing.T) {
+	ctx := context.Background()
+
+	require.NoError(t, extsvc.Folder("tcb-del").CreateTenantedViewerRelations(ctx, extsvc.FolderTenantedViewerObjects{
+		User: []extsvc.User{"u-del"},
+	}))
+
+	ok, err := extsvc.Folder("tcb-del").CheckTenantedBrowse(ctx, extsvc.CheckFolderTenantedBrowseInputs{
+		User: []extsvc.User{"u-del"},
+		Caveats: extsvc.CheckFolderTenantedBrowseCaveats{
+			TenantMatch: &extsvc.TenantMatchArgs{Tenant: new("acme")},
+		},
+	})
+	require.NoError(t, err)
+	require.True(t, ok, "tuple must exist before delete")
+
+	// Delete via codegen — Delete<Rel>Relations uses plain DeleteRelations
+	// with no OptionalCaveat (SPEC-003 C5). The 6-column identity match
+	// removes the caveated tuple.
+	require.NoError(t, extsvc.Folder("tcb-del").DeleteTenantedViewerRelations(ctx, extsvc.FolderTenantedViewerObjects{
+		User: []extsvc.User{"u-del"},
+	}))
+
+	_, err = extsvc.Folder("tcb-del").CheckTenantedBrowse(ctx, extsvc.CheckFolderTenantedBrowseInputs{
+		User: []extsvc.User{"u-del"},
+		Caveats: extsvc.CheckFolderTenantedBrowseCaveats{
+			TenantMatch: &extsvc.TenantMatchArgs{Tenant: new("acme")},
+		},
+	})
+	assert.ErrorIs(t, err, authz.ErrPermissionDenied, "tuple must be gone after delete — SPEC-003 C5/A3")
+}
+
+// --- double param type → Go float64 ---
+
+func TestFolder_ScoreCheck_AboveMin_Grants(t *testing.T) {
+	ctx := context.Background()
+
+	require.NoError(t, extsvc.Folder("sc-ok").CreateScoredViewerRelations(ctx, extsvc.FolderScoredViewerObjects{
+		User: []extsvc.User{"u-sc-ok"},
+	}))
+
+	ok, err := extsvc.Folder("sc-ok").CheckScoreCheck(ctx, extsvc.CheckFolderScoreCheckInputs{
+		User: []extsvc.User{"u-sc-ok"},
+		Caveats: extsvc.CheckFolderScoreCheckCaveats{
+			MinScore: &extsvc.MinScoreArgs{
+				MinRequired: new(0.5),
+				Current:     new(0.7),
+			},
+		},
+	})
+	require.NoError(t, err)
+	assert.True(t, ok, "current 0.7 >= min 0.5 must grant")
+}
+
+func TestFolder_ScoreCheck_BelowMin_Denies(t *testing.T) {
+	ctx := context.Background()
+
+	require.NoError(t, extsvc.Folder("sc-no").CreateScoredViewerRelations(ctx, extsvc.FolderScoredViewerObjects{
+		User: []extsvc.User{"u-sc-no"},
+	}))
+
+	_, err := extsvc.Folder("sc-no").CheckScoreCheck(ctx, extsvc.CheckFolderScoreCheckInputs{
+		User: []extsvc.User{"u-sc-no"},
+		Caveats: extsvc.CheckFolderScoreCheckCaveats{
+			MinScore: &extsvc.MinScoreArgs{
+				MinRequired: new(0.5),
+				Current:     new(0.3),
+			},
+		},
+	})
+	assert.ErrorIs(t, err, authz.ErrPermissionDenied)
+}
+
+// --- bytes param type → Go []byte ---
+
+func TestFolder_TokenCheck_NonEmptyToken_Grants(t *testing.T) {
+	ctx := context.Background()
+
+	require.NoError(t, extsvc.Folder("tk-ok").CreateTokenViewerRelations(ctx, extsvc.FolderTokenViewerObjects{
+		User: []extsvc.User{"u-tk"},
+		Caveats: extsvc.FolderTokenViewerCaveats{
+			User: &extsvc.HasTokenArgs{
+				Token: []byte("hello"),
+			},
+		},
+	}))
+
+	ok, err := extsvc.Folder("tk-ok").CheckTokenCheck(ctx, extsvc.CheckFolderTokenCheckInputs{
+		User: []extsvc.User{"u-tk"},
+	})
+	require.NoError(t, err)
+	assert.True(t, ok, "size(token) > 0 must grant for non-empty bytes")
+}
+
+// --- uint param type → Go uint64 ---
+
+func TestFolder_VersionCheck_PositiveVersion_Grants(t *testing.T) {
+	ctx := context.Background()
+
+	require.NoError(t, extsvc.Folder("vc-ok").CreateVersionedViewerRelations(ctx, extsvc.FolderVersionedViewerObjects{
+		User: []extsvc.User{"u-vc"},
+		Caveats: extsvc.FolderVersionedViewerCaveats{
+			User: &extsvc.VersionCheckArgs{
+				MinVersion: new(uint(1)),
+			},
+		},
+	}))
+
+	ok, err := extsvc.Folder("vc-ok").CheckVersionCheckPerm(ctx, extsvc.CheckFolderVersionCheckPermInputs{
+		User: []extsvc.User{"u-vc"},
+	})
+	require.NoError(t, err)
+	assert.True(t, ok, "min_version 1 > 0 must grant")
+}
+
+// --- nested list type list<list<string>> → Go [][]string ---
+//
+// Exercises the reflection fallback in coerceStructpbValue. Without it,
+// structpb.NewStruct would reject [][]string. With it, the outer slice
+// converts to []any of []any of string. This test would fail if the
+// reflection fallback were removed.
+func TestFolder_MatrixCheck_NonEmptyMatrix_Grants(t *testing.T) {
+	ctx := context.Background()
+
+	require.NoError(t, extsvc.Folder("mx-ok").CreateMatrixViewerRelations(ctx, extsvc.FolderMatrixViewerObjects{
+		User: []extsvc.User{"u-mx"},
+		Caveats: extsvc.FolderMatrixViewerCaveats{
+			User: &extsvc.MatrixCheckArgs{
+				Rows: [][]string{{"a", "b"}, {"c"}},
+			},
+		},
+	}))
+
+	ok, err := extsvc.Folder("mx-ok").CheckMatrixCheckPerm(ctx, extsvc.CheckFolderMatrixCheckPermInputs{
+		User: []extsvc.User{"u-mx"},
+	})
+	require.NoError(t, err)
+	assert.True(t, ok, "non-empty rows must grant — verifies reflection-based slice coercion")
+}
+
+// --- Multi-caveat-per-permission: lifts AUZ-006 single-caveat cap ---
+//
+// Schema: permission multi_check = tenanted_user + windowed_user, where
+//   tenanted_user: user with tenant_match
+//   windowed_user: user with within_window
+// Generated CheckFolderMultiCheckInputs.Caveats has one field per
+// reachable caveat (TenantMatch + WithinWindow). The Check method
+// body merges non-nil entries into one wire Context map; SpiceDB
+// routes keys to whichever tuple's caveat needs them.
+
+func TestFolder_MultiCheck_GrantsViaTenantedPath(t *testing.T) {
+	ctx := context.Background()
+
+	require.NoError(t, extsvc.Folder("mc-t").CreateTenantedUserRelations(ctx, extsvc.FolderTenantedUserObjects{
+		User: []extsvc.User{"u-mc-t"},
+	}))
+
+	ok, err := extsvc.Folder("mc-t").CheckMultiCheck(ctx, extsvc.CheckFolderMultiCheckInputs{
+		User: []extsvc.User{"u-mc-t"},
+		Caveats: extsvc.CheckFolderMultiCheckCaveats{
+			TenantMatch: &extsvc.TenantMatchArgs{Tenant: new("acme")},
+			// WithinWindow nil — irrelevant since no windowed_user tuple
+		},
+	})
+	require.NoError(t, err)
+	assert.True(t, ok, "tenanted_user tuple matches via tenant_match alone")
+}
+
+func TestFolder_MultiCheck_GrantsViaWindowedPath(t *testing.T) {
+	ctx := context.Background()
+
+	require.NoError(t, extsvc.Folder("mc-w").CreateWindowedUserRelations(ctx, extsvc.FolderWindowedUserObjects{
+		User: []extsvc.User{"u-mc-w"},
+	}))
+
+	ok, err := extsvc.Folder("mc-w").CheckMultiCheck(ctx, extsvc.CheckFolderMultiCheckInputs{
+		User: []extsvc.User{"u-mc-w"},
+		Caveats: extsvc.CheckFolderMultiCheckCaveats{
+			WithinWindow: &extsvc.WithinWindowArgs{
+				AllowedActions:  []string{"edit"},
+				RequestedAction: new("edit"),
+			},
+		},
+	})
+	require.NoError(t, err)
+	assert.True(t, ok, "windowed_user tuple matches via within_window alone")
+}
+
+func TestFolder_MultiCheck_DeniedWhenNeitherCaveatBound(t *testing.T) {
+	ctx := context.Background()
+
+	require.NoError(t, extsvc.Folder("mc-no").CreateTenantedUserRelations(ctx, extsvc.FolderTenantedUserObjects{
+		User: []extsvc.User{"u-mc-no"},
+	}))
+
+	// No caveats supplied — tenanted_user tuple's tenant_match can't bind
+	// `tenant`, returns CONDITIONAL_PERMISSION which errorIfDenied maps
+	// to ErrPermissionDenied.
+	_, err := extsvc.Folder("mc-no").CheckMultiCheck(ctx, extsvc.CheckFolderMultiCheckInputs{
+		User: []extsvc.User{"u-mc-no"},
+	})
+	assert.ErrorIs(t, err, authz.ErrPermissionDenied)
+}
+
+// --- Caveat × Arrow ---
+//
+// `permission via_gated_root = gated_root->browse` where
+// `gated_root: extsvc/folder with extsvc/tenant_match`.
+// walkPermCaveats collects LeftRel caveats only — TenantMatch reaches
+// the permission, but the right side's `browse` permission resolves
+// through a different folder object's permission tree and is not part
+// of this Check call's wire Context.
+
+func TestFolder_ViaGatedRoot_GrantsWhenTenantMatches(t *testing.T) {
+	ctx := context.Background()
+
+	// Folder B has user X via plain (non-caveated) viewer.
+	require.NoError(t, extsvc.Folder("vgr-b").CreateViewerRelations(ctx, extsvc.FolderViewerObjects{
+		User: []extsvc.User{"u-vgr"},
+	}))
+
+	// Folder A has gated_root → folder B with tenant_match attached, deferred.
+	require.NoError(t, extsvc.Folder("vgr-a").CreateGatedRootRelations(ctx, extsvc.FolderGatedRootObjects{
+		Folder: []extsvc.Folder{"vgr-b"},
+	}))
+
+	ok, err := extsvc.Folder("vgr-a").CheckViaGatedRoot(ctx, extsvc.CheckFolderViaGatedRootInputs{
+		User: []extsvc.User{"u-vgr"},
+		Caveats: extsvc.CheckFolderViaGatedRootCaveats{
+			TenantMatch: &extsvc.TenantMatchArgs{Tenant: new("acme")},
+		},
+	})
+	require.NoError(t, err)
+	assert.True(t, ok, "arrow + caveat: LeftRel caveat satisfied + arrow target grants → grant")
+}
+
+func TestFolder_ViaGatedRoot_DeniesWhenTenantMismatches(t *testing.T) {
+	ctx := context.Background()
+
+	require.NoError(t, extsvc.Folder("vgr-x-b").CreateViewerRelations(ctx, extsvc.FolderViewerObjects{
+		User: []extsvc.User{"u-vgr-x"},
+	}))
+	require.NoError(t, extsvc.Folder("vgr-x-a").CreateGatedRootRelations(ctx, extsvc.FolderGatedRootObjects{
+		Folder: []extsvc.Folder{"vgr-x-b"},
+	}))
+
+	_, err := extsvc.Folder("vgr-x-a").CheckViaGatedRoot(ctx, extsvc.CheckFolderViaGatedRootInputs{
+		User: []extsvc.User{"u-vgr-x"},
+		Caveats: extsvc.CheckFolderViaGatedRootCaveats{
+			TenantMatch: &extsvc.TenantMatchArgs{Tenant: new("wrong")},
+		},
+	})
+	assert.ErrorIs(t, err, authz.ErrPermissionDenied)
+}
+
+// --- Caveat × Intersection ---
+//
+// `permission elite_access = scored_viewer & token_viewer` — both legs
+// caveated. CheckEliteAccessInputs.Caveats has both MinScore + HasToken
+// fields. SpiceDB grants only when both legs match AND both caveats
+// evaluate true.
+
+func TestFolder_EliteAccess_GrantsWhenBothLegsHold(t *testing.T) {
+	ctx := context.Background()
+
+	require.NoError(t, extsvc.Folder("ea-ok").CreateScoredViewerRelations(ctx, extsvc.FolderScoredViewerObjects{
+		User: []extsvc.User{"u-ea"},
+	}))
+	require.NoError(t, extsvc.Folder("ea-ok").CreateTokenViewerRelations(ctx, extsvc.FolderTokenViewerObjects{
+		User: []extsvc.User{"u-ea"},
+		Caveats: extsvc.FolderTokenViewerCaveats{
+			User: &extsvc.HasTokenArgs{Token: []byte("opaque")},
+		},
+	}))
+
+	ok, err := extsvc.Folder("ea-ok").CheckEliteAccess(ctx, extsvc.CheckFolderEliteAccessInputs{
+		User: []extsvc.User{"u-ea"},
+		Caveats: extsvc.CheckFolderEliteAccessCaveats{
+			MinScore: &extsvc.MinScoreArgs{MinRequired: new(0.5), Current: new(0.9)},
+			// HasToken pre-bound at write — check-side empty is fine
+		},
+	})
+	require.NoError(t, err)
+	assert.True(t, ok, "intersection + caveat: both legs held with caveats satisfied → grant")
+}
+
+// AUZ-007 ext — cross-caveat split merge through codegen.
+//
+// elite_access intersects scored_viewer (caveat: min_score) and
+// token_viewer (caveat: has_token). Each caveat is bound on a
+// DIFFERENT side: min_score is fully pre-bound at WRITE time,
+// has_token is deferred at write and supplied at CHECK time.
+//
+// SpiceDB's per-tuple evaluation merges write-time + check-time
+// context for each tuple independently:
+//   - scored_viewer tuple sees {min_required:0.5, current:0.9} from
+//     write only → eval true.
+//   - token_viewer tuple sees {token:<bytes>} from check only → eval true.
+// Intersection: both legs grant → grant.
+//
+// This proves the codegen-driven path matches SpiceDB's documented
+// per-key union behavior (SPEC-003 A6 [A1]) end-to-end through nested
+// Caveats sub-structs on both Objects and CheckXInputs.
+func TestFolder_EliteAccess_SplitWriteCheckMerge_Grants(t *testing.T) {
+	ctx := context.Background()
+
+	// scored_viewer: write supplies all min_score params.
+	require.NoError(t, extsvc.Folder("ea-split").CreateScoredViewerRelations(ctx, extsvc.FolderScoredViewerObjects{
+		User: []extsvc.User{"u-ea-split"},
+		Caveats: extsvc.FolderScoredViewerCaveats{
+			User: &extsvc.MinScoreArgs{MinRequired: new(0.5), Current: new(0.9)},
+		},
+	}))
+
+	// token_viewer: write defers (no Caveats), check will supply Token.
+	require.NoError(t, extsvc.Folder("ea-split").CreateTokenViewerRelations(ctx, extsvc.FolderTokenViewerObjects{
+		User: []extsvc.User{"u-ea-split"},
+	}))
+
+	// Check supplies HasToken only — MinScore omitted (write-bound).
+	ok, err := extsvc.Folder("ea-split").CheckEliteAccess(ctx, extsvc.CheckFolderEliteAccessInputs{
+		User: []extsvc.User{"u-ea-split"},
+		Caveats: extsvc.CheckFolderEliteAccessCaveats{
+			HasToken: &extsvc.HasTokenArgs{Token: []byte("opaque")},
+			// MinScore deliberately nil — its keys come from the
+			// write-time pre-context attached to the scored_viewer tuple.
+		},
+	})
+	require.NoError(t, err)
+	assert.True(t, ok, "intersection across one write-bound caveat and one check-bound caveat must grant when each side's keys come together via per-tuple merge")
+}
+
+// Same setup but check supplies NEITHER caveat. min_score still
+// satisfies (write-bound), has_token can't bind → CONDITIONAL → deny.
+func TestFolder_EliteAccess_SplitMerge_DeniesWhenCheckTokenMissing(t *testing.T) {
+	ctx := context.Background()
+
+	require.NoError(t, extsvc.Folder("ea-split-no").CreateScoredViewerRelations(ctx, extsvc.FolderScoredViewerObjects{
+		User: []extsvc.User{"u-ea-split-no"},
+		Caveats: extsvc.FolderScoredViewerCaveats{
+			User: &extsvc.MinScoreArgs{MinRequired: new(0.5), Current: new(0.9)},
+		},
+	}))
+	require.NoError(t, extsvc.Folder("ea-split-no").CreateTokenViewerRelations(ctx, extsvc.FolderTokenViewerObjects{
+		User: []extsvc.User{"u-ea-split-no"},
+	}))
+
+	// Check supplies neither caveat. token_viewer leg can't bind.
+	_, err := extsvc.Folder("ea-split-no").CheckEliteAccess(ctx, extsvc.CheckFolderEliteAccessInputs{
+		User: []extsvc.User{"u-ea-split-no"},
+	})
+	assert.ErrorIs(t, err, authz.ErrPermissionDenied)
+}
+
+func TestFolder_EliteAccess_DeniesWhenScoreFails(t *testing.T) {
+	ctx := context.Background()
+
+	require.NoError(t, extsvc.Folder("ea-no").CreateScoredViewerRelations(ctx, extsvc.FolderScoredViewerObjects{
+		User: []extsvc.User{"u-ea-no"},
+	}))
+	require.NoError(t, extsvc.Folder("ea-no").CreateTokenViewerRelations(ctx, extsvc.FolderTokenViewerObjects{
+		User: []extsvc.User{"u-ea-no"},
+		Caveats: extsvc.FolderTokenViewerCaveats{
+			User: &extsvc.HasTokenArgs{Token: []byte("opaque")},
+		},
+	}))
+
+	// Score below threshold — intersection: any leg failing → deny
+	_, err := extsvc.Folder("ea-no").CheckEliteAccess(ctx, extsvc.CheckFolderEliteAccessInputs{
+		User: []extsvc.User{"u-ea-no"},
+		Caveats: extsvc.CheckFolderEliteAccessCaveats{
+			MinScore: &extsvc.MinScoreArgs{MinRequired: new(0.5), Current: new(0.3)},
+		},
+	})
+	assert.ErrorIs(t, err, authz.ErrPermissionDenied)
+}
+
+// --- Caveat × Exclusion ---
+//
+// `permission scored_minus_token = scored_viewer - token_viewer` —
+// grants when user is in scored_viewer (caveat satisfied) AND NOT in
+// token_viewer. Both legs' caveats are collected by walkPermCaveats
+// (SPEC-001: intersection/exclusion treated as union for caveat reach).
+
+func TestFolder_ScoredMinusToken_GrantsWhenInScoredOnly(t *testing.T) {
+	ctx := context.Background()
+
+	require.NoError(t, extsvc.Folder("smt-only").CreateScoredViewerRelations(ctx, extsvc.FolderScoredViewerObjects{
+		User: []extsvc.User{"u-smt-only"},
+	}))
+	// Deliberately NOT writing to token_viewer
+
+	ok, err := extsvc.Folder("smt-only").CheckScoredMinusToken(ctx, extsvc.CheckFolderScoredMinusTokenInputs{
+		User: []extsvc.User{"u-smt-only"},
+		Caveats: extsvc.CheckFolderScoredMinusTokenCaveats{
+			MinScore: &extsvc.MinScoreArgs{MinRequired: new(0.5), Current: new(0.9)},
+		},
+	})
+	require.NoError(t, err)
+	assert.True(t, ok, "exclusion + caveat: left leg holds, right leg has no tuple → grant")
+}
+
+func TestFolder_ScoredMinusToken_DeniesWhenInBoth(t *testing.T) {
+	ctx := context.Background()
+
+	require.NoError(t, extsvc.Folder("smt-both").CreateScoredViewerRelations(ctx, extsvc.FolderScoredViewerObjects{
+		User: []extsvc.User{"u-smt-both"},
+	}))
+	require.NoError(t, extsvc.Folder("smt-both").CreateTokenViewerRelations(ctx, extsvc.FolderTokenViewerObjects{
+		User: []extsvc.User{"u-smt-both"},
+		Caveats: extsvc.FolderTokenViewerCaveats{
+			User: &extsvc.HasTokenArgs{Token: []byte("opaque")},
+		},
+	}))
+
+	// User holds both legs with caveats satisfied → exclusion excludes → deny
+	_, err := extsvc.Folder("smt-both").CheckScoredMinusToken(ctx, extsvc.CheckFolderScoredMinusTokenInputs{
+		User: []extsvc.User{"u-smt-both"},
+		Caveats: extsvc.CheckFolderScoredMinusTokenCaveats{
+			MinScore: &extsvc.MinScoreArgs{MinRequired: new(0.5), Current: new(0.9)},
+		},
+	})
+	assert.ErrorIs(t, err, authz.ErrPermissionDenied, "exclusion + caveat: both legs grant → exclude → deny")
+}
+
+// AUZ-007 ext — within-a-single-caveat partial binding via per-field
+// pointers. The within_window caveat has two parameters
+// (allowed_actions: list<string>, requested_action: string). Pre-bind
+// allowed_actions as POLICY at write time, defer requested_action as
+// REQUEST DATA to check time. Per SPEC-003 A6, SpiceDB merges write +
+// check per-tuple per-key — write supplies allowed_actions, check
+// supplies requested_action, eval evaluates against the union.
+//
+// Without per-field pointers (the pre-AUZ-007-ext-pointers state), the
+// typed Args struct would force RequestedAction to its zero value ""
+// at write time, which write-time-precedence would lock in, causing
+// any check to evaluate against "" → false → deny.
+//
+// With per-field pointers: omitting RequestedAction in the write-time
+// Args (leaving it nil) causes the codegen to omit the wire key
+// entirely. Check-time then supplies it; the merged context contains
+// both keys; eval succeeds.
+func TestFolder_Act_PartialBindWithinSingleCaveat_Grants(t *testing.T) {
+	ctx := context.Background()
+
+	// Write: AllowedActions pre-bound (policy), RequestedAction left nil.
+	require.NoError(t, extsvc.Folder("act-partial").CreateActorRelations(ctx, extsvc.FolderActorObjects{
+		User: []extsvc.User{"u-act-partial"},
+		Caveats: extsvc.FolderActorCaveats{
+			User: &extsvc.WithinWindowArgs{
+				AllowedActions: []string{"read", "write"},
+				// RequestedAction left nil — deferred to check time
+			},
+		},
+	}))
+
+	// Check: supplies RequestedAction (request data). Merged context is
+	// {allowed_actions: [...], requested_action: "read"}. Eval:
+	// "read" in ["read", "write"] → true → grant.
+	ok, err := extsvc.Folder("act-partial").CheckAct(ctx, extsvc.CheckFolderActInputs{
+		User: []extsvc.User{"u-act-partial"},
+		Caveats: extsvc.CheckFolderActCaveats{
+			WithinWindow: &extsvc.WithinWindowArgs{
+				RequestedAction: new("read"),
+				// AllowedActions left nil — pre-bound at write time
+			},
+		},
+	})
+	require.NoError(t, err)
+	assert.True(t, ok, "partial binding within a single caveat: write supplies one key, check supplies the other, merge produces eval-ready context")
+}
+
+// Same setup but check supplies a RequestedAction NOT in AllowedActions
+// → eval false → deny. Confirms the merge actually flows the policy
+// value from write through to eval.
+func TestFolder_Act_PartialBind_DeniesWhenActionNotPolicyAllowed(t *testing.T) {
+	ctx := context.Background()
+
+	require.NoError(t, extsvc.Folder("act-partial-no").CreateActorRelations(ctx, extsvc.FolderActorObjects{
+		User: []extsvc.User{"u-act-partial-no"},
+		Caveats: extsvc.FolderActorCaveats{
+			User: &extsvc.WithinWindowArgs{
+				AllowedActions: []string{"read"},
+			},
+		},
+	}))
+
+	_, err := extsvc.Folder("act-partial-no").CheckAct(ctx, extsvc.CheckFolderActInputs{
+		User: []extsvc.User{"u-act-partial-no"},
+		Caveats: extsvc.CheckFolderActCaveats{
+			WithinWindow: &extsvc.WithinWindowArgs{
+				RequestedAction: new("delete"),
+			},
+		},
+	})
+	assert.ErrorIs(t, err, authz.ErrPermissionDenied, "delete not in [read] → eval false → deny")
 }
 
 func TestArticle_LookupAuthorOnlyUserSubjects(t *testing.T) {

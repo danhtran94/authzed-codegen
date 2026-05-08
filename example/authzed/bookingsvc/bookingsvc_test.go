@@ -401,3 +401,39 @@ func TestBooking_ReadRelations(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []bookingsvc.Customer{"t-c-read"}, creators)
 }
+
+
+// AUZ-007 ext — caveat codegen in bookingsvc namespace.
+
+func TestBooking_RegionalWrite_GrantsWhenRegionMatches(t *testing.T) {
+	ctx := context.Background()
+
+	require.NoError(t, bookingsvc.Booking("rw-ok").CreateRegionalOwnerRelations(ctx, bookingsvc.BookingRegionalOwnerObjects{
+		Employee: []bookingsvc.Employee{"e-rw"},
+	}))
+
+	ok, err := bookingsvc.Booking("rw-ok").CheckRegionalWrite(ctx, bookingsvc.CheckBookingRegionalWriteInputs{
+		Employee: []bookingsvc.Employee{"e-rw"},
+		Caveats: bookingsvc.CheckBookingRegionalWriteCaveats{
+			RegionMatch: &bookingsvc.RegionMatchArgs{Region: new("asia")},
+		},
+	})
+	require.NoError(t, err)
+	assert.True(t, ok)
+}
+
+func TestBooking_RegionalWrite_DeniesWhenRegionMismatches(t *testing.T) {
+	ctx := context.Background()
+
+	require.NoError(t, bookingsvc.Booking("rw-no").CreateRegionalOwnerRelations(ctx, bookingsvc.BookingRegionalOwnerObjects{
+		Employee: []bookingsvc.Employee{"e-rw-no"},
+	}))
+
+	_, err := bookingsvc.Booking("rw-no").CheckRegionalWrite(ctx, bookingsvc.CheckBookingRegionalWriteInputs{
+		Employee: []bookingsvc.Employee{"e-rw-no"},
+		Caveats: bookingsvc.CheckBookingRegionalWriteCaveats{
+			RegionMatch: &bookingsvc.RegionMatchArgs{Region: new("europe")},
+		},
+	})
+	assert.ErrorIs(t, err, authz.ErrPermissionDenied)
+}

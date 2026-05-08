@@ -21,6 +21,18 @@ type BookingCreatorObjects struct {
   Employee []Employee
   Customer []Customer
 }
+const BookingRegionalOwner RelationBooking = "regional_owner"
+type BookingRegionalOwnerObjects struct {
+  Employee []Employee
+  Caveats BookingRegionalOwnerCaveats
+}
+type BookingRegionalOwnerCaveats struct {
+  Employee *RegionMatchArgs
+}
+type RegionMatchArgs struct {
+  Region *string
+}
+
 
 type Booking authz.ID
 func BookingStringer(id authz.StringConvertable) Booking {
@@ -72,6 +84,25 @@ func (booking Booking) CreateCreatorRelations(ctx context.Context, objects Booki
   }
   return nil
 }
+func (booking Booking) CreateRegionalOwnerRelations(ctx context.Context, objects BookingRegionalOwnerObjects) error {
+  if len(objects.Employee) > 0 {
+    var caveatCtx map[string]any
+    if c := objects.Caveats.Employee; c != nil {
+      caveatCtx = map[string]any{}
+      if c.Region != nil {
+        caveatCtx["region"] = *c.Region
+      }
+    }
+    err := authz.GetEngine(ctx).CreateRelationsWithCaveat(ctx, authz.Resource{
+      Type: TypeBooking,
+      ID: authz.ID(booking),
+    }, authz.Relation(BookingRegionalOwner), TypeEmployee, authz.IDs(objects.Employee), "bookingsvc/region_match", caveatCtx)
+    if err != nil {
+      return err
+    }
+  }
+  return nil
+}
 
 func (booking Booking) DeleteOwnerRelations(ctx context.Context, objects BookingOwnerObjects) error {
   if len(objects.Employee) > 0 {
@@ -101,6 +132,19 @@ func (booking Booking) DeleteCreatorRelations(ctx context.Context, objects Booki
       Type: TypeBooking,
       ID: authz.ID(booking),
     }, authz.Relation(BookingCreator), TypeCustomer, authz.IDs(objects.Customer))
+    if err != nil {
+      return err
+    }
+  }
+  return nil
+}
+
+func (booking Booking) DeleteRegionalOwnerRelations(ctx context.Context, objects BookingRegionalOwnerObjects) error {
+  if len(objects.Employee) > 0 {
+    err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
+      Type: TypeBooking,
+      ID: authz.ID(booking),
+    }, authz.Relation(BookingRegionalOwner), TypeEmployee, authz.IDs(objects.Employee))
     if err != nil {
       return err
     }
@@ -142,6 +186,18 @@ func (booking Booking) ReadCreatorCustomerRelations(ctx context.Context) ([]Cust
   }
 
   return authz.FromIDsExcludingWildcard[Customer](ids), nil
+}
+
+func (booking Booking) ReadRegionalOwnerEmployeeRelations(ctx context.Context) ([]Employee, error) {
+  ids, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+    Type: TypeBooking,
+    ID: authz.ID(booking),
+  }, authz.Relation(BookingRegionalOwner), TypeEmployee)
+  if err != nil {
+    return nil, err
+  }
+
+  return authz.FromIDsExcludingWildcard[Employee](ids), nil
 }
 
 const BookingWrite PermissionBooking = "write"
@@ -306,6 +362,59 @@ func LookupChangeOwnerBookingResources(ctx context.Context, input CheckBookingCh
   
   return []Booking{}, nil
 }
+const BookingRegionalWrite PermissionBooking = "regional_write"
+
+type CheckBookingRegionalWriteInputs struct {
+  Employee []Employee
+  Caveats CheckBookingRegionalWriteCaveats
+}
+type CheckBookingRegionalWriteCaveats struct {
+  RegionMatch *RegionMatchArgs
+}
+
+func (booking Booking) CheckRegionalWrite(ctx context.Context, input CheckBookingRegionalWriteInputs) (bool, error) {
+  if len(input.Employee) == 0 && true {
+    return false, authz.ErrNoInput
+  }
+
+  var caveatCtx map[string]any
+  if c := input.Caveats.RegionMatch; c != nil {
+    if caveatCtx == nil {
+      caveatCtx = map[string]any{}
+    }
+    if c.Region != nil {
+      caveatCtx["region"] = *c.Region
+    }
+  }
+
+  if len(input.Employee) > 0 {
+    err := authz.GetEngine(ctx).CheckPermissionWithCaveat(ctx, authz.Resource{
+      Type: TypeBooking,
+      ID: authz.ID(booking),
+    }, authz.Permission(BookingRegionalWrite), TypeEmployee, authz.IDs(input.Employee), caveatCtx)
+    if err != nil {
+      return false, err
+    }
+  }
+  
+  return true, nil
+}
+
+func LookupRegionalWriteBookingResources(ctx context.Context, input CheckBookingRegionalWriteInputs) ([]Booking, error) {
+  if len(input.Employee) > 0 {
+    ids, err := authz.GetEngine(ctx).LookupResources(ctx,
+      TypeBooking, authz.Permission(BookingRegionalWrite), 
+      TypeEmployee, authz.IDs(input.Employee),
+    )
+    if err != nil {
+      return nil, err
+    }
+
+    return authz.FromIDs[Booking](ids), nil
+  }
+  
+  return []Booking{}, nil
+}
 
 func (booking Booking) LookupWriteEmployeeSubjects(ctx context.Context) ([]Employee, error) {
   ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
@@ -450,5 +559,30 @@ func (booking Booking) LookupChangeOwnerUserWildcardSubjects(ctx context.Context
       ID: authz.ID(booking),
     },
     authz.Permission(BookingChangeOwner), TypeUser,
+  )
+}
+
+func (booking Booking) LookupRegionalWriteEmployeeSubjects(ctx context.Context) ([]Employee, error) {
+  ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+    authz.Resource{
+      Type: TypeBooking,
+      ID: authz.ID(booking),
+    },
+    authz.Permission(BookingRegionalWrite), TypeEmployee,
+  )
+  if err != nil {
+    return nil, err
+  }
+
+  return authz.FromIDsExcludingWildcard[Employee](ids), nil
+}
+
+func (booking Booking) LookupRegionalWriteEmployeeWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeBooking,
+      ID: authz.ID(booking),
+    },
+    authz.Permission(BookingRegionalWrite), TypeEmployee,
   )
 }

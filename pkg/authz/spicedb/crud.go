@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"reflect"
 	"slices"
 	"time"
 
@@ -80,6 +81,46 @@ func (e *Engine) getConsistencySnapshot() *v1.Consistency {
 			},
 		},
 	}
+}
+
+func (e *Engine) CreateRelationsWithCaveat(ctx context.Context, to authz.Resource, relation authz.Relation, subject authz.Type, ids []authz.ID, caveatName string, caveatParams map[string]any) error {
+	e.debugLog("Creating caveated relations: to=%v, relation=%v, subject=%v, ids=%v, caveat=%s, params=%v", to, relation, subject, ids, caveatName, caveatParams)
+
+	caveatCtx, err := serializeCaveatMap(caveatParams)
+	if err != nil {
+		return fmt.Errorf("serialize caveat params: %w", err)
+	}
+
+	updates := make([]*v1.RelationshipUpdate, 0, len(ids))
+	for _, id := range ids {
+		updates = append(updates, &v1.RelationshipUpdate{
+			Operation: v1.RelationshipUpdate_OPERATION_CREATE,
+			Relationship: &v1.Relationship{
+				Resource: &v1.ObjectReference{
+					ObjectType: string(to.Type),
+					ObjectId:   string(to.ID),
+				},
+				Relation: string(relation),
+				Subject: &v1.SubjectReference{
+					Object: &v1.ObjectReference{
+						ObjectType: string(subject),
+						ObjectId:   string(id),
+					},
+				},
+				OptionalCaveat: &v1.ContextualizedCaveat{
+					CaveatName: caveatName,
+					Context:    caveatCtx,
+				},
+			},
+		})
+	}
+
+	res, err := e.client.WriteRelationships(ctx, &v1.WriteRelationshipsRequest{Updates: updates})
+	if err != nil {
+		return err
+	}
+	e.setToken(res.WrittenAt.Token)
+	return nil
 }
 
 func (e *Engine) CreateRelations(ctx context.Context, to authz.Resource, relation authz.Relation, subject authz.Type, ids []authz.ID) error {
@@ -186,14 +227,82 @@ func (e *Engine) CheckPermissionWithCaveat(ctx context.Context, dest authz.Resou
 }
 
 // serializeCaveatMap converts the codegen wire-boundary map into a
-// structpb.Struct for SpiceDB's CheckPermissionRequest.Context. Empty /
-// nil input returns (nil, nil) so the wire field stays unset, matching
-// non-caveat checks.
+// structpb.Struct for SpiceDB's CheckPermissionRequest.Context and the
+// write-time OptionalCaveat.Context. Empty / nil input returns
+// (nil, nil) so the wire field stays unset, matching non-caveat checks.
+//
+// structpb.NewStruct only accepts a narrow set of value types and in
+// particular rejects typed slices like []string, []int64, etc. — only
+// []any reaches its ListValue encoder. The codegen emits typed slices
+// when caveat parameters are list<T>, so we coerce here at the wire
+// boundary so call sites stay simple.
 func serializeCaveatMap(m map[string]any) (*structpb.Struct, error) {
 	if len(m) == 0 {
 		return nil, nil
 	}
-	return structpb.NewStruct(m)
+	return structpb.NewStruct(coerceStructpbMap(m))
+}
+
+func coerceStructpbMap(m map[string]any) map[string]any {
+	out := make(map[string]any, len(m))
+	for k, v := range m {
+		out[k] = coerceStructpbValue(v)
+	}
+	return out
+}
+
+func coerceStructpbValue(v any) any {
+	switch x := v.(type) {
+	case []byte:
+		// structpb.NewValue natively encodes []byte as a base64-string
+		// StringValue — exactly what SpiceDB CEL's bytes type expects on
+		// the wire. Pass through unchanged; the reflection fallback below
+		// would otherwise convert it to []any of int64, which SpiceDB
+		// rejects with "bytes requires a base64 unicode string".
+		return x
+	case []any:
+		coerced := make([]any, len(x))
+		for i, e := range x {
+			coerced[i] = coerceStructpbValue(e)
+		}
+		return coerced
+	case []string:
+		return toAnySlice(x)
+	case []int64:
+		return toAnySlice(x)
+	case []int:
+		return toAnySlice(x)
+	case []uint64:
+		return toAnySlice(x)
+	case []float64:
+		return toAnySlice(x)
+	case []bool:
+		return toAnySlice(x)
+	case map[string]any:
+		return coerceStructpbMap(x)
+	default:
+		// Reflection fallback for typed slices not enumerated above —
+		// e.g. [][]string from a list<list<string>> caveat parameter, or
+		// any other typed slice the codegen produces. Recurses through
+		// each element so nested structures coerce all the way down.
+		rv := reflect.ValueOf(v)
+		if rv.IsValid() && rv.Kind() == reflect.Slice {
+			out := make([]any, rv.Len())
+			for i := 0; i < rv.Len(); i++ {
+				out[i] = coerceStructpbValue(rv.Index(i).Interface())
+			}
+			return out
+		}
+		return v
+	}
+}
+
+func toAnySlice[T any](in []T) []any {
+	out := make([]any, len(in))
+	for i, v := range in {
+		out[i] = v
+	}
+	return out
 }
 
 func (e *Engine) CheckPermission(ctx context.Context, dest authz.Resource, has authz.Permission, subject authz.Type, audIDs []authz.ID) error {

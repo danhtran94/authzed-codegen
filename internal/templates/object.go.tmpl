@@ -14,11 +14,15 @@ type Permission{{ $typeName }} authz.Permission
 
 {{ range $rel := .Relations }}const {{ $typeName }}{{ snakeToPascal $rel.Name }} Relation{{ $typeName }} = "{{ $rel.Name }}"
 type {{ $typeName }}{{ snakeToPascal $rel.Name }}Objects struct {
-{{ range $idx, $relType := $rel.AllowedTypes }}  {{ typeName $relType.Namespace }} []{{ typeName $relType.Namespace }}
+{{ range $idx, $relType := $rel.AllowedTypes }}  {{ $relType.IDFieldName }} []{{ typeName $relType.Namespace }}
 {{ end }}{{ if anyWildcard $rel.AllowedTypes }}  Wildcards {{ $typeName }}{{ snakeToPascal $rel.Name }}Wildcards
+{{ end }}{{ if anyCaveat $rel.AllowedTypes }}  Caveats {{ $typeName }}{{ snakeToPascal $rel.Name }}Caveats
 {{ end }}}
 {{ if anyWildcard $rel.AllowedTypes }}type {{ $typeName }}{{ snakeToPascal $rel.Name }}Wildcards struct {
-{{ range $idx, $relType := $rel.AllowedTypes }}{{ if $relType.IsWildcard }}  {{ typeName $relType.Namespace }} bool
+{{ range $idx, $relType := $rel.AllowedTypes }}{{ if $relType.IsWildcard }}  {{ $relType.IDFieldName }} bool
+{{ end }}{{ end }}}
+{{ end }}{{ if anyCaveat $rel.AllowedTypes }}type {{ $typeName }}{{ snakeToPascal $rel.Name }}Caveats struct {
+{{ range $idx, $relType := $rel.AllowedTypes }}{{ if $relType.CaveatName }}  {{ $relType.CaveatFieldName }} *{{ pascalCaveat $relType.CaveatName }}Args
 {{ end }}{{ end }}}
 {{ end }}{{ end }}{{ range $caveatName := definitionCaveats .Relations }}type {{ pascalCaveat $caveatName }}Args struct {
 {{ range $param := caveatParams $caveatName }}  {{ snakeToPascal $param.Name }} {{ $param.GoType }}
@@ -43,20 +47,34 @@ func ({{ $var }} {{ $typeName }}) ToList() []{{ $typeName }} {
 }
 
 {{ range $rel := .Relations }}func ({{ $var }} {{ $typeName }}) Create{{ snakeToPascal $rel.Name}}Relations(ctx context.Context, objects {{ $typeName }}{{ snakeToPascal $rel.Name }}Objects) error {
-  {{ range $idx, $relType := $rel.AllowedTypes }}if len(objects.{{ typeName $relType.Namespace }}) > 0 {
-    err := authz.GetEngine(ctx).CreateRelations(ctx, authz.Resource{
+  {{ range $idx, $relType := $rel.AllowedTypes }}if len(objects.{{ $relType.IDFieldName }}) > 0 {
+{{ if $relType.CaveatName }}    var caveatCtx map[string]any
+    if c := objects.Caveats.{{ $relType.CaveatFieldName }}; c != nil {
+      caveatCtx = map[string]any{}
+{{ range $param := caveatParams $relType.CaveatName }}      if c.{{ snakeToPascal $param.Name }} != nil {
+        caveatCtx["{{ $param.Name }}"] = {{ deref $param.GoType }}c.{{ snakeToPascal $param.Name }}
+      }
+{{ end }}    }
+{{ end }}    err := authz.GetEngine(ctx).{{ if $relType.CaveatName }}CreateRelationsWithCaveat{{ else }}CreateRelations{{ end }}(ctx, authz.Resource{
       Type: Type{{ $typeName }},
       ID: authz.ID({{ $var }}),
-    }, authz.Relation({{ $typeName }}{{ snakeToPascal $rel.Name }}), Type{{ typeName $relType.Namespace }}, authz.IDs(objects.{{ typeName $relType.Namespace }}))
+    }, authz.Relation({{ $typeName }}{{ snakeToPascal $rel.Name }}), Type{{ typeName $relType.Namespace }}, authz.IDs(objects.{{ $relType.IDFieldName }}){{ if $relType.CaveatName }}, "{{ $relType.CaveatName }}", caveatCtx{{ end }})
     if err != nil {
       return err
     }
   }
-  {{ if $relType.IsWildcard }}if objects.Wildcards.{{ typeName $relType.Namespace }} {
-    err := authz.GetEngine(ctx).CreateRelations(ctx, authz.Resource{
+  {{ if $relType.IsWildcard }}if objects.Wildcards.{{ $relType.IDFieldName }} {
+{{ if $relType.CaveatName }}    var caveatCtx map[string]any
+    if c := objects.Caveats.{{ $relType.CaveatFieldName }}; c != nil {
+      caveatCtx = map[string]any{}
+{{ range $param := caveatParams $relType.CaveatName }}      if c.{{ snakeToPascal $param.Name }} != nil {
+        caveatCtx["{{ $param.Name }}"] = {{ deref $param.GoType }}c.{{ snakeToPascal $param.Name }}
+      }
+{{ end }}    }
+{{ end }}    err := authz.GetEngine(ctx).{{ if $relType.CaveatName }}CreateRelationsWithCaveat{{ else }}CreateRelations{{ end }}(ctx, authz.Resource{
       Type: Type{{ $typeName }},
       ID: authz.ID({{ $var }}),
-    }, authz.Relation({{ $typeName }}{{ snakeToPascal $rel.Name }}), Type{{ typeName $relType.Namespace }}, []authz.ID{authz.WildcardID})
+    }, authz.Relation({{ $typeName }}{{ snakeToPascal $rel.Name }}), Type{{ typeName $relType.Namespace }}, []authz.ID{authz.WildcardID}{{ if $relType.CaveatName }}, "{{ $relType.CaveatName }}", caveatCtx{{ end }})
     if err != nil {
       return err
     }
@@ -65,16 +83,16 @@ func ({{ $var }} {{ $typeName }}) ToList() []{{ $typeName }} {
 }
 {{ end }}{{ $var := .ObjectType.Name }}{{ range $rel := .Relations }}
 func ({{ $var }} {{ $typeName }}) Delete{{ snakeToPascal $rel.Name}}Relations(ctx context.Context, objects {{ $typeName }}{{ snakeToPascal $rel.Name }}Objects) error {
-  {{ range $idx, $relType := $rel.AllowedTypes }}if len(objects.{{ typeName $relType.Namespace }}) > 0 {
+  {{ range $idx, $relType := $rel.AllowedTypes }}if len(objects.{{ $relType.IDFieldName }}) > 0 {
     err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
       Type: Type{{ $typeName }},
       ID: authz.ID({{ $var }}),
-    }, authz.Relation({{ $typeName }}{{ snakeToPascal $rel.Name }}), Type{{ typeName $relType.Namespace }}, authz.IDs(objects.{{ typeName $relType.Namespace }}))
+    }, authz.Relation({{ $typeName }}{{ snakeToPascal $rel.Name }}), Type{{ typeName $relType.Namespace }}, authz.IDs(objects.{{ $relType.IDFieldName }}))
     if err != nil {
       return err
     }
   }
-  {{ if $relType.IsWildcard }}if objects.Wildcards.{{ typeName $relType.Namespace }} {
+  {{ if $relType.IsWildcard }}if objects.Wildcards.{{ $relType.IDFieldName }} {
     err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
       Type: Type{{ $typeName }},
       ID: authz.ID({{ $var }}),
@@ -85,7 +103,7 @@ func ({{ $var }} {{ $typeName }}) Delete{{ snakeToPascal $rel.Name}}Relations(ct
   }
   {{ end }}{{ end }}return nil
 }
-{{ end }}{{ range $rel := .Relations }}{{ range $idx, $relType := $rel.AllowedTypes }}
+{{ end }}{{ range $rel := .Relations }}{{ range $idx, $relType := uniqueByNamespace $rel.AllowedTypes }}
 func ({{ $var }} {{ $typeName }}) Read{{ snakeToPascal $rel.Name}}{{ typeName $relType.Namespace }}Relations(ctx context.Context) ([]{{ typeName $relType.Namespace }}, error) {
   ids, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
     Type: Type{{ $typeName }},
@@ -105,29 +123,35 @@ func ({{ $var }} {{ $typeName }}) Read{{ snakeToPascal $rel.Name}}{{ typeName $r
 }
 {{ end }}{{ end }}{{ end }}
 {{ range $perm := .Permissions }}const {{ $typeName }}{{ snakeToPascal $perm.Name }} Permission{{ $typeName }} = "{{ $perm.Name }}"
-{{ $inputName := (print "Check" $typeName (snakeToPascal $perm.Name) "Inputs") }}
+{{ $inputName := (print "Check" $typeName (snakeToPascal $perm.Name) "Inputs") }}{{ $caveatsTypeName := (print "Check" $typeName (snakeToPascal $perm.Name) "Caveats") }}
 type {{ $inputName }} struct {
 {{ range $inputType := permissionInputTypes $objectType $perm.Name }}  {{ typeName $inputType }} []{{ typeName $inputType }}
-{{ end }}{{ if permCaveat $objectType $perm.Name }}  Caveat *{{ pascalCaveat (permCaveat $objectType $perm.Name) }}Args
+{{ end }}{{ if hasPermCaveats $objectType $perm.Name }}  Caveats {{ $caveatsTypeName }}
 {{ end }}}
-
+{{ if hasPermCaveats $objectType $perm.Name }}type {{ $caveatsTypeName }} struct {
+{{ range $caveatName := permCaveats $objectType $perm.Name }}  {{ pascalCaveat $caveatName }} *{{ pascalCaveat $caveatName }}Args
+{{ end }}}
+{{ end }}
 func ({{ $var }} {{ $typeName }}) Check{{ snakeToPascal $perm.Name }}(ctx context.Context, input {{ $inputName }}) (bool, error) {
   if {{ range $idx, $inputType := permissionInputTypes $objectType $perm.Name }}len(input.{{ typeName $inputType }}) == 0 && {{ end }}true {
     return false, authz.ErrNoInput
   }
-{{ if permCaveat $objectType $perm.Name }}{{ $caveatName := permCaveat $objectType $perm.Name }}
+{{ if hasPermCaveats $objectType $perm.Name }}
   var caveatCtx map[string]any
-  if input.Caveat != nil {
-    caveatCtx = map[string]any{
-{{ range $param := caveatParams $caveatName }}      "{{ $param.Name }}": input.Caveat.{{ snakeToPascal $param.Name }},
-{{ end }}    }
-  }
-{{ end }}
+{{ range $caveatName := permCaveats $objectType $perm.Name }}  if c := input.Caveats.{{ pascalCaveat $caveatName }}; c != nil {
+    if caveatCtx == nil {
+      caveatCtx = map[string]any{}
+    }
+{{ range $param := caveatParams $caveatName }}    if c.{{ snakeToPascal $param.Name }} != nil {
+      caveatCtx["{{ $param.Name }}"] = {{ deref $param.GoType }}c.{{ snakeToPascal $param.Name }}
+    }
+{{ end }}  }
+{{ end }}{{ end }}
   {{ range $inputType := permissionInputTypes $objectType $perm.Name }}if len(input.{{ typeName $inputType }}) > 0 {
-    err := authz.GetEngine(ctx).{{ if permCaveat $objectType $perm.Name }}CheckPermissionWithCaveat{{ else }}CheckPermission{{ end }}(ctx, authz.Resource{
+    err := authz.GetEngine(ctx).{{ if hasPermCaveats $objectType $perm.Name }}CheckPermissionWithCaveat{{ else }}CheckPermission{{ end }}(ctx, authz.Resource{
       Type: Type{{ $typeName }},
       ID: authz.ID({{ $var }}),
-    }, authz.Permission({{ $typeName }}{{ snakeToPascal $perm.Name }}), Type{{ typeName $inputType }}, authz.IDs(input.{{ typeName $inputType }}){{ if permCaveat $objectType $perm.Name }}, caveatCtx{{ end }})
+    }, authz.Permission({{ $typeName }}{{ snakeToPascal $perm.Name }}), Type{{ typeName $inputType }}, authz.IDs(input.{{ typeName $inputType }}){{ if hasPermCaveats $objectType $perm.Name }}, caveatCtx{{ end }})
     if err != nil {
       return false, err
     }

@@ -505,3 +505,245 @@ func TestBooking_ReadRelations(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []menusvc.Customer{"t-tvc1br"}, customers)
 }
+
+
+// AUZ-007 ext — caveat codegen in menusvc namespace.
+
+func TestBooking_HoursCheck_GrantsWhenWithinHours(t *testing.T) {
+	ctx := context.Background()
+
+	require.NoError(t, menusvc.Booking("hc-ok").CreateHoursKeeperRelations(ctx, menusvc.BookingHoursKeeperObjects{
+		User: []menusvc.User{"u-hc"},
+	}))
+
+	ok, err := menusvc.Booking("hc-ok").CheckHoursCheck(ctx, menusvc.CheckBookingHoursCheckInputs{
+		User: []menusvc.User{"u-hc"},
+		Caveats: menusvc.CheckBookingHoursCheckCaveats{
+			WithinHours: &menusvc.WithinHoursArgs{
+				OpenHour:    new(9),
+				CloseHour:   new(17),
+				CurrentHour: new(12),
+			},
+		},
+	})
+	require.NoError(t, err)
+	assert.True(t, ok, "12 in [9, 17] → grant")
+}
+
+// AUZ-007 ext — multi-allowed-type relation where each allowed type
+// has a DIFFERENT caveat. User branch gated by within_hours; Customer
+// branch by within_months. Generated Caveats sub-struct holds one
+// typed pointer per allowed type; the Create method routes each
+// branch to its OWN caveat-name literal independently.
+
+func TestBooking_MultiTemporal_GrantsViaUserHours(t *testing.T) {
+	ctx := context.Background()
+
+	// Write only the User branch (with within_hours pre-bound).
+	require.NoError(t, menusvc.Booking("mt-u").CreateMultiTemporalRelations(ctx, menusvc.BookingMultiTemporalObjects{
+		User: []menusvc.User{"u-mt"},
+		Caveats: menusvc.BookingMultiTemporalCaveats{
+			User: &menusvc.WithinHoursArgs{
+				OpenHour:    new(9),
+				CloseHour:   new(17),
+				CurrentHour: new(12),
+			},
+			// Customer left nil — no Customer write happens
+		},
+	}))
+
+	// Check via User — only WithinHours caveat needs binding.
+	ok, err := menusvc.Booking("mt-u").CheckMultiTemporalCheck(ctx, menusvc.CheckBookingMultiTemporalCheckInputs{
+		User: []menusvc.User{"u-mt"},
+		// Caveats can be empty: WithinHours was pre-bound at write time.
+	})
+	require.NoError(t, err)
+	assert.True(t, ok, "User branch grants via within_hours pre-bound at write")
+}
+
+func TestBooking_MultiTemporal_GrantsViaCustomerMonths(t *testing.T) {
+	ctx := context.Background()
+
+	// Write only the Customer branch (with within_months pre-bound).
+	require.NoError(t, menusvc.Booking("mt-c").CreateMultiTemporalRelations(ctx, menusvc.BookingMultiTemporalObjects{
+		Customer: []menusvc.Customer{"c-mt"},
+		Caveats: menusvc.BookingMultiTemporalCaveats{
+			Customer: &menusvc.WithinMonthsArgs{
+				OpenMonth:    new(1),
+				CloseMonth:   new(12),
+				CurrentMonth: new(6),
+			},
+		},
+	}))
+
+	ok, err := menusvc.Booking("mt-c").CheckMultiTemporalCheck(ctx, menusvc.CheckBookingMultiTemporalCheckInputs{
+		Customer: []menusvc.Customer{"c-mt"},
+	})
+	require.NoError(t, err)
+	assert.True(t, ok, "Customer branch grants via within_months pre-bound at write")
+}
+
+// Both branches in one Create call — atomic mixed-caveat write.
+func TestBooking_MultiTemporal_BothBranchesAtomic(t *testing.T) {
+	ctx := context.Background()
+
+	require.NoError(t, menusvc.Booking("mt-both").CreateMultiTemporalRelations(ctx, menusvc.BookingMultiTemporalObjects{
+		User:     []menusvc.User{"u-mt-both"},
+		Customer: []menusvc.Customer{"c-mt-both"},
+		Caveats: menusvc.BookingMultiTemporalCaveats{
+			User: &menusvc.WithinHoursArgs{
+				OpenHour: new(0), CloseHour: new(23), CurrentHour: new(10),
+			},
+			Customer: &menusvc.WithinMonthsArgs{
+				OpenMonth: new(1), CloseMonth: new(12), CurrentMonth: new(6),
+			},
+		},
+	}))
+
+	// Either subject grants
+	okU, err := menusvc.Booking("mt-both").CheckMultiTemporalCheck(ctx, menusvc.CheckBookingMultiTemporalCheckInputs{
+		User: []menusvc.User{"u-mt-both"},
+	})
+	require.NoError(t, err)
+	assert.True(t, okU)
+
+	okC, err := menusvc.Booking("mt-both").CheckMultiTemporalCheck(ctx, menusvc.CheckBookingMultiTemporalCheckInputs{
+		Customer: []menusvc.Customer{"c-mt-both"},
+	})
+	require.NoError(t, err)
+	assert.True(t, okC)
+}
+
+// AUZ-007 ext — Edge case 2 (LEGAL): different allowed types gated by
+// the SAME caveat name. The Caveats sub-struct disambiguates by
+// allowed-type name; both fields point to the same *WithinHoursArgs
+// struct type but carry independent per-tuple write-time pre-context.
+//
+// Edge case 1 (same allowed type with different caveats) is rejected
+// at codegen by flattenAllowedTypes — see adapter_test.go for the
+// detection unit tests.
+func TestBooking_SharedCav_GrantsViaUserOrCustomer(t *testing.T) {
+	ctx := context.Background()
+
+	require.NoError(t, menusvc.Booking("sc-u").CreateSharedCavRelations(ctx, menusvc.BookingSharedCavObjects{
+		User: []menusvc.User{"u-sc"},
+		Caveats: menusvc.BookingSharedCavCaveats{
+			User: &menusvc.WithinHoursArgs{
+				OpenHour: new(0), CloseHour: new(23), CurrentHour: new(10),
+			},
+		},
+	}))
+
+	require.NoError(t, menusvc.Booking("sc-c").CreateSharedCavRelations(ctx, menusvc.BookingSharedCavObjects{
+		Customer: []menusvc.Customer{"c-sc"},
+		Caveats: menusvc.BookingSharedCavCaveats{
+			Customer: &menusvc.WithinHoursArgs{
+				OpenHour: new(0), CloseHour: new(23), CurrentHour: new(10),
+			},
+		},
+	}))
+
+	okU, err := menusvc.Booking("sc-u").CheckSharedCavCheck(ctx, menusvc.CheckBookingSharedCavCheckInputs{
+		User: []menusvc.User{"u-sc"},
+	})
+	require.NoError(t, err)
+	assert.True(t, okU, "User branch grants — within_hours pre-bound at write")
+
+	okC, err := menusvc.Booking("sc-c").CheckSharedCavCheck(ctx, menusvc.CheckBookingSharedCavCheckInputs{
+		Customer: []menusvc.Customer{"c-sc"},
+	})
+	require.NoError(t, err)
+	assert.True(t, okC, "Customer branch grants — same caveat, independent pre-context")
+}
+
+// AUZ-007 ext — Edge case 1 (LEGAL with disambiguation): same allowed
+// type gated by DIFFERENT caveats. The codegen disambiguates field
+// names by appending the caveat's PascalCase suffix, letting the
+// caller pick per-batch which caveat applies.
+//
+// Schema:
+//   relation dup_typed: menusvc/user with menusvc/within_hours
+//                     | menusvc/user with menusvc/within_months
+
+func TestBooking_DupTyped_GrantsViaWithinHoursPath(t *testing.T) {
+	ctx := context.Background()
+
+	require.NoError(t, menusvc.Booking("dt-h").CreateDupTypedRelations(ctx, menusvc.BookingDupTypedObjects{
+		UserWithinHours: []menusvc.User{"u-dt-h"},
+		// UserWithinMonths intentionally empty — different write batch
+		Caveats: menusvc.BookingDupTypedCaveats{
+			UserWithinHours: &menusvc.WithinHoursArgs{
+				OpenHour: new(0), CloseHour: new(23), CurrentHour: new(10),
+			},
+		},
+	}))
+
+	ok, err := menusvc.Booking("dt-h").CheckDupTypedCheck(ctx, menusvc.CheckBookingDupTypedCheckInputs{
+		User: []menusvc.User{"u-dt-h"},
+		// CheckXInputs.Caveats is keyed by caveat name (not allowed-type)
+		// so it stays flat: WithinHours + WithinMonths
+	})
+	require.NoError(t, err)
+	assert.True(t, ok, "User-via-within_hours grants — write-time pre-bound")
+}
+
+func TestBooking_DupTyped_GrantsViaWithinMonthsPath(t *testing.T) {
+	ctx := context.Background()
+
+	require.NoError(t, menusvc.Booking("dt-m").CreateDupTypedRelations(ctx, menusvc.BookingDupTypedObjects{
+		UserWithinMonths: []menusvc.User{"u-dt-m"},
+		Caveats: menusvc.BookingDupTypedCaveats{
+			UserWithinMonths: &menusvc.WithinMonthsArgs{
+				OpenMonth: new(1), CloseMonth: new(12), CurrentMonth: new(6),
+			},
+		},
+	}))
+
+	ok, err := menusvc.Booking("dt-m").CheckDupTypedCheck(ctx, menusvc.CheckBookingDupTypedCheckInputs{
+		User: []menusvc.User{"u-dt-m"},
+	})
+	require.NoError(t, err)
+	assert.True(t, ok, "User-via-within_months grants — different caveat, separate Create branch")
+}
+
+// Read methods deduplicate by namespace — there's only ONE
+// ReadDupTypedUserRelations even though two branches share namespace,
+// because Read doesn't care which caveat is attached.
+func TestBooking_DupTyped_ReadDeduplicatesByNamespace(t *testing.T) {
+	ctx := context.Background()
+
+	require.NoError(t, menusvc.Booking("dt-r").CreateDupTypedRelations(ctx, menusvc.BookingDupTypedObjects{
+		UserWithinHours: []menusvc.User{"u-r-h"},
+		Caveats: menusvc.BookingDupTypedCaveats{
+			UserWithinHours: &menusvc.WithinHoursArgs{
+				OpenHour: new(0), CloseHour: new(23), CurrentHour: new(10),
+			},
+		},
+	}))
+
+	// Single Read method covers all User relationships of dup_typed,
+	// regardless of which caveat is attached at the wire level.
+	users, err := menusvc.Booking("dt-r").ReadDupTypedUserRelations(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, []menusvc.User{"u-r-h"}, users)
+}
+
+func TestBooking_HoursCheck_DeniesOutsideHours(t *testing.T) {
+	ctx := context.Background()
+
+	require.NoError(t, menusvc.Booking("hc-no").CreateHoursKeeperRelations(ctx, menusvc.BookingHoursKeeperObjects{
+		User: []menusvc.User{"u-hc-no"},
+	}))
+
+	_, err := menusvc.Booking("hc-no").CheckHoursCheck(ctx, menusvc.CheckBookingHoursCheckInputs{
+		User: []menusvc.User{"u-hc-no"},
+		Caveats: menusvc.CheckBookingHoursCheckCaveats{
+			WithinHours: &menusvc.WithinHoursArgs{
+				OpenHour:    new(9),
+				CloseHour:   new(17),
+				CurrentHour: new(22),
+			},
+		},
+	})
+	assert.ErrorIs(t, err, authz.ErrPermissionDenied)
+}
