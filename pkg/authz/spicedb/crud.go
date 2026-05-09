@@ -668,9 +668,18 @@ func errorIfDenied(res *v1.CheckPermissionResponse, err error) error {
 		return err
 	}
 
-	if res.Permissionship == v1.CheckPermissionResponse_PERMISSIONSHIP_HAS_PERMISSION {
+	switch res.Permissionship {
+	case v1.CheckPermissionResponse_PERMISSIONSHIP_HAS_PERMISSION:
 		return nil
-	}
 
-	return authz.ErrPermissionDenied
+	case v1.CheckPermissionResponse_PERMISSIONSHIP_CONDITIONAL_PERMISSION:
+		var missing []string
+		if pci := res.PartialCaveatInfo; pci != nil {
+			missing = pci.MissingRequiredContext
+		}
+		return &authz.ConditionalPermissionError{MissingKeys: missing}
+
+	default:
+		return authz.ErrPermissionDenied
+	}
 }

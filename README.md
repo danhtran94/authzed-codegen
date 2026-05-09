@@ -236,6 +236,34 @@ Read-side rows surface a `SubRelation` field on the metadata struct — empty fo
 
 See `docs/spec-006-sub-relation-references.md` for the wire-level walkthrough, the rare-case Check semantics (literal-match vs chain-walking), and the deferred Lookup-with-userset-results work.
 
+## Conditional Permission
+
+SpiceDB returns `CONDITIONAL_PERMISSION` when a caveat reaches the Check chain but the request is missing parameter context. `Check<Perm>` paths surface this as a typed error so callers can distinguish recoverable failures (missing context) from hard denies:
+
+```go
+err := folder.CheckTenantedBrowse(ctx, extsvc.CheckFolderTenantedBrowseInputs{
+    User: []extsvc.User{user},
+    // Caveats omitted — caller forgot to supply tenant
+})
+
+switch {
+case err == nil:
+    // granted
+
+case errors.Is(err, authz.ErrConditionalPermission):
+    var cpe *authz.ConditionalPermissionError
+    errors.As(err, &cpe)
+    // cpe.MissingKeys == ["tenant"] — fetch from request context and retry
+
+case errors.Is(err, authz.ErrPermissionDenied):
+    // hard deny — user genuinely lacks permission
+}
+```
+
+The typed error's custom `Is` method matches both `ErrConditionalPermission` (for the rich-signal opt-in path) and `ErrPermissionDenied` (for backward compat with existing deny checks). Callers that only care about "denied vs. granted" keep working unchanged.
+
+Lookup paths (`LookupResources` / `LookupSubjects`) silently filter conditional results from the returned slice — the rich-signal surface applies to Check paths only in v1.6. See `docs/spec-007-conditional-permission-signal.md` for the SPEC and the deferred Lookup-with-conditional-entries work.
+
 ## Behavior Notes
 
 - **Permission chains.** `Check<Permission>Inputs` exposes the full set

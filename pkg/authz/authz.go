@@ -2,12 +2,44 @@ package authz
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 )
 
 var ErrNoInput = fmt.Errorf("no input")
 var ErrPermissionDenied = fmt.Errorf("permission denied")
+
+// ErrConditionalPermission is the sentinel returned (via wrapping) when
+// SpiceDB indicates PERMISSIONSHIP_CONDITIONAL_PERMISSION — the permission
+// would be granted IF the caller supplied additional caveat context.
+//
+// Backward compat: errors satisfying this sentinel ALSO satisfy
+// ErrPermissionDenied via *ConditionalPermissionError's custom Is method,
+// so existing code matching `errors.Is(err, ErrPermissionDenied)` keeps
+// working. New code can additionally check for ErrConditionalPermission
+// and use errors.As to extract a *ConditionalPermissionError carrying the
+// caveat parameter names the caller forgot to supply.
+var ErrConditionalPermission = errors.New("conditional permission")
+
+// ConditionalPermissionError wraps SpiceDB's PartialCaveatInfo signal.
+// MissingKeys is the list of caveat parameter names the caller should
+// fetch and retry with — directly from PartialCaveatInfo.MissingRequiredContext.
+// May be empty when SpiceDB returns CONDITIONAL without a specific recovery
+// hint (e.g. CEL evaluator returned indeterminate for an ambiguous expression).
+type ConditionalPermissionError struct {
+	MissingKeys []string
+}
+
+func (e *ConditionalPermissionError) Error() string {
+	return fmt.Sprintf("conditional permission: missing %v", e.MissingKeys)
+}
+
+// Is matches both ErrConditionalPermission (rich-signal path) and
+// ErrPermissionDenied (backward-compat path). See package docs.
+func (e *ConditionalPermissionError) Is(target error) bool {
+	return target == ErrConditionalPermission || target == ErrPermissionDenied
+}
 
 // WildcardID is the SpiceDB wire-level marker for a wildcard subject
 // (relation granted to all subjects of a given type). The codegen

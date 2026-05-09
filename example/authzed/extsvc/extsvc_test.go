@@ -1940,6 +1940,120 @@ func TestDocument_InheritedCollab_UserViaArrowChainThroughUserset(t *testing.T) 
 	assert.True(t, ok, "user reachable via arrow → userset → owner chain grants inherited_collab")
 }
 
+// AUZ-012 — rich CONDITIONAL_PERMISSION signal.
+//
+// SpiceDB returns Permissionship == CONDITIONAL_PERMISSION when a caveat
+// reaches the chain but the request didn't supply the parameter context.
+// Today the codegen collapsed CONDITIONAL → ErrPermissionDenied silently,
+// dropping PartialCaveatInfo.MissingRequiredContext. SPEC-007 routes
+// CONDITIONAL into a typed *ConditionalPermissionError carrying MissingKeys;
+// existing callers checking errors.Is(_, ErrPermissionDenied) keep working
+// via the typed error's custom Is method.
+//
+// Three semantic cases distinguish:
+//   1. Granted        — caveat satisfied
+//   2. Conditional    — caveat reachable but context missing → MissingKeys = ["tenant"]
+//   3. Hard-denied    — caveat eval returned false (wrong value) → ErrPermissionDenied
+//                       (NOT conditional — CEL returned false, not indeterminate)
+
+func TestFolder_TenantedBrowse_GrantedPath_NoErrorRegression(t *testing.T) {
+	ctx := context.Background()
+
+	folder := extsvc.Folder("cps-grant")
+	require.NoError(t, folder.CreateTenantedViewerRelations(ctx, extsvc.FolderTenantedViewerObjects{
+		User: []extsvc.User{"u-grant"},
+		Caveats: extsvc.FolderTenantedViewerCaveats{
+			User: &extsvc.TenantMatchArgs{Tenant: new("acme")},
+		},
+	}))
+
+	ok, err := folder.CheckTenantedBrowse(ctx, extsvc.CheckFolderTenantedBrowseInputs{
+		User: []extsvc.User{"u-grant"},
+	})
+	require.NoError(t, err)
+	assert.True(t, ok, "matching pre-bound caveat grants — no behavior change vs v1.5")
+}
+
+func TestFolder_TenantedBrowse_ConditionalPath_RichSignal(t *testing.T) {
+	ctx := context.Background()
+
+	folder := extsvc.Folder("cps-cond")
+
+	// Defer the caveat at write — Caveats sub-struct empty. Check-time
+	// caller also doesn't supply tenant. SpiceDB returns CONDITIONAL
+	// because the caveat is reachable but its `tenant` parameter is
+	// indeterminate.
+	require.NoError(t, folder.CreateTenantedViewerRelations(ctx, extsvc.FolderTenantedViewerObjects{
+		User: []extsvc.User{"u-cond"},
+	}))
+
+	_, err := folder.CheckTenantedBrowse(ctx, extsvc.CheckFolderTenantedBrowseInputs{
+		User: []extsvc.User{"u-cond"},
+		// Caveats omitted — no tenant key supplied
+	})
+
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, authz.ErrConditionalPermission),
+		"missing-context case matches ErrConditionalPermission sentinel")
+
+	var cpe *authz.ConditionalPermissionError
+	require.True(t, errors.As(err, &cpe), "errors.As extracts the typed error")
+	assert.Contains(t, cpe.MissingKeys, "tenant",
+		"PartialCaveatInfo.MissingRequiredContext surfaces the caveat key the caller forgot")
+}
+
+func TestFolder_TenantedBrowse_ConditionalPath_BackwardCompatStillMatchesPermissionDenied(t *testing.T) {
+	ctx := context.Background()
+
+	folder := extsvc.Folder("cps-bc")
+	require.NoError(t, folder.CreateTenantedViewerRelations(ctx, extsvc.FolderTenantedViewerObjects{
+		User: []extsvc.User{"u-bc"},
+	}))
+
+	_, err := folder.CheckTenantedBrowse(ctx, extsvc.CheckFolderTenantedBrowseInputs{
+		User: []extsvc.User{"u-bc"},
+	})
+	require.Error(t, err)
+
+	// Backward-compat: existing v1.5 callers checking ErrPermissionDenied
+	// still see the conditional case as "denied" via the typed error's
+	// custom Is method matching both targets (per SPEC-007 C2).
+	assert.True(t, errors.Is(err, authz.ErrPermissionDenied),
+		"conditional permission still satisfies ErrPermissionDenied for backward compat")
+	assert.True(t, errors.Is(err, authz.ErrConditionalPermission),
+		"and also matches the new sentinel for callers that want the rich signal")
+}
+
+func TestFolder_TenantedBrowse_HardDenyPath_NotConditional(t *testing.T) {
+	ctx := context.Background()
+
+	folder := extsvc.Folder("cps-hard")
+
+	require.NoError(t, folder.CreateTenantedViewerRelations(ctx, extsvc.FolderTenantedViewerObjects{
+		User: []extsvc.User{"u-hard"},
+	}))
+
+	// Wrong tenant — CEL evaluates `"not-acme" == "acme"` to false.
+	// SpiceDB returns NO_PERMISSION (hard deny), not CONDITIONAL.
+	_, err := folder.CheckTenantedBrowse(ctx, extsvc.CheckFolderTenantedBrowseInputs{
+		User: []extsvc.User{"u-hard"},
+		Caveats: extsvc.CheckFolderTenantedBrowseCaveats{
+			TenantMatch: &extsvc.TenantMatchArgs{Tenant: new("not-acme")},
+		},
+	})
+	require.Error(t, err)
+
+	assert.True(t, errors.Is(err, authz.ErrPermissionDenied),
+		"caveat eval false → hard deny via existing ErrPermissionDenied")
+	assert.False(t, errors.Is(err, authz.ErrConditionalPermission),
+		"hard deny is NOT conditional — CEL returned false, not indeterminate")
+
+	// And errors.As to *ConditionalPermissionError must NOT succeed.
+	var cpe *authz.ConditionalPermissionError
+	assert.False(t, errors.As(err, &cpe),
+		"the plain sentinel error is not the rich type")
+}
+
 func TestDocument_InheritedCollab_UnrelatedUserDenied(t *testing.T) {
 	ctx := context.Background()
 

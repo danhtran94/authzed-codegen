@@ -4,6 +4,52 @@ All notable changes to this project are documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] - 2026-05-09
+
+Surfaces SpiceDB's `CONDITIONAL_PERMISSION` signal as a typed error path. Recoverable failures (caller forgot to supply caveat context) are now distinguishable from hard denies (user genuinely lacks permission) via `errors.Is(err, ErrConditionalPermission)` and `errors.As(err, &cpe)` — `cpe.MissingKeys` carries the caveat parameter names from `PartialCaveatInfo.MissingRequiredContext` so callers can fetch and retry. Backward compat preserved: existing `errors.Is(err, ErrPermissionDenied)` checks still match all deny cases via the typed error's custom `Is` method.
+
+This was documented as deferred work in CHANGELOG entries from v1.1.0 through v1.4.0; SPEC-007 closes the gap with zero codegen template change.
+
+### Added
+
+- **`authz.ErrConditionalPermission`** — sentinel error for `errors.Is` matching the rich-signal path.
+- **`authz.ConditionalPermissionError`** — typed struct carrying `MissingKeys []string` (from `PartialCaveatInfo.MissingRequiredContext`). Implements custom `Is(target error) bool` matching BOTH `ErrConditionalPermission` AND `ErrPermissionDenied`.
+- **4 new e2e tests** covering: granted path (regression check, no behavior change); conditional path (assert `errors.Is(_, ErrConditionalPermission)` + `errors.As` extracts `MissingKeys = ["tenant"]`); backward-compat (conditional also matches `ErrPermissionDenied`); hard-deny path (CEL false → NOT conditional, plain `ErrPermissionDenied`).
+
+### Changed
+
+- **`*spicedb.Engine.errorIfDenied`** — switch on `Permissionship` covering HAS_PERMISSION (nil), CONDITIONAL_PERMISSION (typed pointer error), default (`ErrPermissionDenied`). Single point of error construction; propagates rich signal to every Check method (`CheckPermission`, `CheckPermissionWithCaveat`, `CheckPermissionUserset`).
+- Generated `Check<Perm>` method bodies are unchanged — the richer error flows through the existing `(bool, error)` return shape. No template diff, no regenerated `.gen.go` files. Round-trip stable against v1.5.0 baseline.
+
+### Caller migration (rich-signal opt-in)
+
+```go
+err := folder.CheckTenantedBrowse(ctx, input)
+switch {
+case err == nil:
+    // granted
+case errors.Is(err, authz.ErrConditionalPermission):
+    var cpe *authz.ConditionalPermissionError
+    errors.As(err, &cpe)
+    // cpe.MissingKeys lists the caveat keys to fetch and retry with
+case errors.Is(err, authz.ErrPermissionDenied):
+    // hard deny — user genuinely lacks permission
+}
+```
+
+Existing v1.5 callers checking only `errors.Is(err, ErrPermissionDenied)` see no behavior change.
+
+### Verified
+
+- All 4 e2e packages pass.
+- Codegen idempotent at the new baseline (zero diff vs v1.5.0).
+- `go build ./...` + `go vet ./...` clean.
+
+### Deferred
+
+- **Lookup paths surfacing CONDITIONAL** — `LookupResources` / `LookupSubjects` / their `WithCaveat` variants continue to silently filter `Permissionship != HAS_PERMISSION` per AUZ-008. Surfacing the conditional-but-recoverable subset would change the typed return shape (e.g. `[]ID + []ConditionalEntry{ID, MissingKeys}`); deferred until concrete demand.
+- **Auto-retry helper** — the SPEC surfaces missing keys; deciding whether to fetch and retry is the caller's concern. A future `CheckPermissionWithFetcher(ctx, ..., fetcher func([]string) map[string]any)` could wrap the pattern but is out of scope here.
+
 ## [1.5.0] - 2026-05-09
 
 Closes the last big rejected schema construct from ADR-001 — sub-relation references (`relation member: team#admin`). After this release, the codegen accepts every commonly-used SpiceDB schema feature: caveats, expiration, intersection, exclusion, wildcards, read-side metadata, and now usersets. Schema constructs of the form `T#R` are captured into a new `AllowedType.SubRelation` field, written via `Subject.OptionalRelation` on the wire, and surfaced through both write fields (`<TypeName><PascalSubRel>`) on `<Rel>Objects` and Check-input fields on `Check<Perm>Inputs`.
