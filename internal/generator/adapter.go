@@ -637,6 +637,13 @@ func lowerSetOperationChild(permName string, c *core.SetOperation_Child) (Permis
 		// identically to regular TupleToUserset; downstream consumers
 		// (perm tree resolver, walkPermCaveats, walkPermUsersets, template
 		// arrow walker) key on PermExprArrow + LeftRel/RightPerm.
+		//
+		// Historical note: pre-v1.11 the rejection message read "with
+		// self/expiration is not supported" — that phrasing was a
+		// misnomer carried over from early adapter work. SpiceDB schema
+		// syntax has no `with self` construct; the parser only accepts
+		// `with <caveat>` and `with expiration` after a relation type
+		// (per pkg/schemadsl/parser/parser.go:425-463).
 		fttu := ct.FunctionedTupleToUserset
 		return PermissionExpr{
 			Kind:      PermExprArrow,

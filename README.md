@@ -65,7 +65,7 @@ a complete schema and its generated output.
 | Sub-relation references (`foo#bar`)    | ✓ — typed userset write field (`<TypeName><PascalSubRel>`) on `<Rel>Objects`; userset Check input field; `SubRelation` on metadata struct |
 | Functioned arrows (`.any()` / `.all()`) | ✓ — server-side function semantic; `.all()` enforces strict-intersection across parent rows (dual-control / multi-approver patterns) |
 | `_self` (`use self`)                    | ✓ — identity-match base case for recursive permissions (`permission ancestor_or_self = self + parent->ancestor_or_self`) — tree-walk patterns |
-| `_this`, `_nil`, `with self`            | ✗ rejected at adapt time (rare; revisit if a real schema needs them)                            |
+| `_this`, `_nil`                         | ✗ rejected at adapt time. `_this` is fully deprecated upstream per the SpiceDB proto; modern schemas don't emit it. `_nil` is a compiler-internal optimization marker users don't write directly. |
 
 Parsing delegates to `github.com/authzed/spicedb/pkg/schemadsl/compiler` —
 any schema SpiceDB accepts will parse. The codegen layer is narrower;
