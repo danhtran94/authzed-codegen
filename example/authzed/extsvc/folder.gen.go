@@ -2214,9 +2214,8 @@ func (folder Folder) CheckTenantedBrowse(ctx context.Context, input CheckFolderT
 
   var caveatCtx map[string]any
   if c := input.Caveats.TenantMatch; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.Tenant != nil {
       caveatCtx["tenant"] = *c.Tenant
     }
@@ -2239,9 +2238,8 @@ func LookupTenantedBrowseFolderResources(ctx context.Context, input CheckFolderT
 
   var caveatCtx map[string]any
   if c := input.Caveats.TenantMatch; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.Tenant != nil {
       caveatCtx["tenant"] = *c.Tenant
     }
@@ -2289,9 +2287,8 @@ func (folder Folder) CheckGuardedBrowse(ctx context.Context, input CheckFolderGu
 
   var caveatCtx map[string]any
   if c := input.Caveats.TenantMatch; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.Tenant != nil {
       caveatCtx["tenant"] = *c.Tenant
     }
@@ -2314,9 +2311,8 @@ func LookupGuardedBrowseFolderResources(ctx context.Context, input CheckFolderGu
 
   var caveatCtx map[string]any
   if c := input.Caveats.TenantMatch; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.Tenant != nil {
       caveatCtx["tenant"] = *c.Tenant
     }
@@ -2364,9 +2360,8 @@ func (folder Folder) CheckAct(ctx context.Context, input CheckFolderActInputs) (
 
   var caveatCtx map[string]any
   if c := input.Caveats.WithinWindow; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.AllowedActions != nil {
       caveatCtx["allowed_actions"] = c.AllowedActions
     }
@@ -2392,9 +2387,8 @@ func LookupActFolderResources(ctx context.Context, input CheckFolderActInputs) (
 
   var caveatCtx map[string]any
   if c := input.Caveats.WithinWindow; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.AllowedActions != nil {
       caveatCtx["allowed_actions"] = c.AllowedActions
     }
@@ -2446,9 +2440,8 @@ func (folder Folder) CheckCollaborate(ctx context.Context, input CheckFolderColl
 
   var caveatCtx map[string]any
   if c := input.Caveats.WithinWindow; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.AllowedActions != nil {
       caveatCtx["allowed_actions"] = c.AllowedActions
     }
@@ -2483,9 +2476,8 @@ func LookupCollaborateFolderResources(ctx context.Context, input CheckFolderColl
 
   var caveatCtx map[string]any
   if c := input.Caveats.WithinWindow; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.AllowedActions != nil {
       caveatCtx["allowed_actions"] = c.AllowedActions
     }
@@ -2558,9 +2550,8 @@ func (folder Folder) CheckRateCheck(ctx context.Context, input CheckFolderRateCh
 
   var caveatCtx map[string]any
   if c := input.Caveats.QuotaCheck; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.MaxUses != nil {
       caveatCtx["max_uses"] = *c.MaxUses
     }
@@ -2586,9 +2577,8 @@ func LookupRateCheckFolderResources(ctx context.Context, input CheckFolderRateCh
 
   var caveatCtx map[string]any
   if c := input.Caveats.QuotaCheck; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.MaxUses != nil {
       caveatCtx["max_uses"] = *c.MaxUses
     }
@@ -2639,9 +2629,8 @@ func (folder Folder) CheckScoreCheck(ctx context.Context, input CheckFolderScore
 
   var caveatCtx map[string]any
   if c := input.Caveats.MinScore; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.Current != nil {
       caveatCtx["current"] = *c.Current
     }
@@ -2667,9 +2656,8 @@ func LookupScoreCheckFolderResources(ctx context.Context, input CheckFolderScore
 
   var caveatCtx map[string]any
   if c := input.Caveats.MinScore; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.Current != nil {
       caveatCtx["current"] = *c.Current
     }
@@ -2720,9 +2708,8 @@ func (folder Folder) CheckTokenCheck(ctx context.Context, input CheckFolderToken
 
   var caveatCtx map[string]any
   if c := input.Caveats.HasToken; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.Token != nil {
       caveatCtx["token"] = c.Token
     }
@@ -2745,9 +2732,8 @@ func LookupTokenCheckFolderResources(ctx context.Context, input CheckFolderToken
 
   var caveatCtx map[string]any
   if c := input.Caveats.HasToken; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.Token != nil {
       caveatCtx["token"] = c.Token
     }
@@ -2795,9 +2781,8 @@ func (folder Folder) CheckVersionCheckPerm(ctx context.Context, input CheckFolde
 
   var caveatCtx map[string]any
   if c := input.Caveats.VersionCheck; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.MinVersion != nil {
       caveatCtx["min_version"] = *c.MinVersion
     }
@@ -2820,9 +2805,8 @@ func LookupVersionCheckPermFolderResources(ctx context.Context, input CheckFolde
 
   var caveatCtx map[string]any
   if c := input.Caveats.VersionCheck; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.MinVersion != nil {
       caveatCtx["min_version"] = *c.MinVersion
     }
@@ -2870,9 +2854,8 @@ func (folder Folder) CheckMatrixCheckPerm(ctx context.Context, input CheckFolder
 
   var caveatCtx map[string]any
   if c := input.Caveats.MatrixCheck; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.Rows != nil {
       caveatCtx["rows"] = c.Rows
     }
@@ -2895,9 +2878,8 @@ func LookupMatrixCheckPermFolderResources(ctx context.Context, input CheckFolder
 
   var caveatCtx map[string]any
   if c := input.Caveats.MatrixCheck; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.Rows != nil {
       caveatCtx["rows"] = c.Rows
     }
@@ -2946,9 +2928,8 @@ func (folder Folder) CheckMultiCheck(ctx context.Context, input CheckFolderMulti
 
   var caveatCtx map[string]any
   if c := input.Caveats.TenantMatch; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.Tenant != nil {
       caveatCtx["tenant"] = *c.Tenant
     }
@@ -2957,6 +2938,7 @@ func (folder Folder) CheckMultiCheck(ctx context.Context, input CheckFolderMulti
     if caveatCtx == nil {
       caveatCtx = map[string]any{}
     }
+
     if c.AllowedActions != nil {
       caveatCtx["allowed_actions"] = c.AllowedActions
     }
@@ -2982,9 +2964,8 @@ func LookupMultiCheckFolderResources(ctx context.Context, input CheckFolderMulti
 
   var caveatCtx map[string]any
   if c := input.Caveats.TenantMatch; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.Tenant != nil {
       caveatCtx["tenant"] = *c.Tenant
     }
@@ -2993,6 +2974,7 @@ func LookupMultiCheckFolderResources(ctx context.Context, input CheckFolderMulti
     if caveatCtx == nil {
       caveatCtx = map[string]any{}
     }
+
     if c.AllowedActions != nil {
       caveatCtx["allowed_actions"] = c.AllowedActions
     }
@@ -3045,9 +3027,8 @@ func (folder Folder) CheckViaGatedRoot(ctx context.Context, input CheckFolderVia
 
   var caveatCtx map[string]any
   if c := input.Caveats.TenantMatch; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.Tenant != nil {
       caveatCtx["tenant"] = *c.Tenant
     }
@@ -3088,9 +3069,8 @@ func LookupViaGatedRootFolderResources(ctx context.Context, input CheckFolderVia
 
   var caveatCtx map[string]any
   if c := input.Caveats.TenantMatch; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.Tenant != nil {
       caveatCtx["tenant"] = *c.Tenant
     }
@@ -3183,9 +3163,8 @@ func (folder Folder) CheckEliteAccess(ctx context.Context, input CheckFolderElit
 
   var caveatCtx map[string]any
   if c := input.Caveats.HasToken; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.Token != nil {
       caveatCtx["token"] = c.Token
     }
@@ -3194,6 +3173,7 @@ func (folder Folder) CheckEliteAccess(ctx context.Context, input CheckFolderElit
     if caveatCtx == nil {
       caveatCtx = map[string]any{}
     }
+
     if c.Current != nil {
       caveatCtx["current"] = *c.Current
     }
@@ -3219,9 +3199,8 @@ func LookupEliteAccessFolderResources(ctx context.Context, input CheckFolderElit
 
   var caveatCtx map[string]any
   if c := input.Caveats.HasToken; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.Token != nil {
       caveatCtx["token"] = c.Token
     }
@@ -3230,6 +3209,7 @@ func LookupEliteAccessFolderResources(ctx context.Context, input CheckFolderElit
     if caveatCtx == nil {
       caveatCtx = map[string]any{}
     }
+
     if c.Current != nil {
       caveatCtx["current"] = *c.Current
     }
@@ -3281,9 +3261,8 @@ func (folder Folder) CheckScoredMinusToken(ctx context.Context, input CheckFolde
 
   var caveatCtx map[string]any
   if c := input.Caveats.HasToken; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.Token != nil {
       caveatCtx["token"] = c.Token
     }
@@ -3292,6 +3271,7 @@ func (folder Folder) CheckScoredMinusToken(ctx context.Context, input CheckFolde
     if caveatCtx == nil {
       caveatCtx = map[string]any{}
     }
+
     if c.Current != nil {
       caveatCtx["current"] = *c.Current
     }
@@ -3317,9 +3297,8 @@ func LookupScoredMinusTokenFolderResources(ctx context.Context, input CheckFolde
 
   var caveatCtx map[string]any
   if c := input.Caveats.HasToken; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.Token != nil {
       caveatCtx["token"] = c.Token
     }
@@ -3328,6 +3307,7 @@ func LookupScoredMinusTokenFolderResources(ctx context.Context, input CheckFolde
     if caveatCtx == nil {
       caveatCtx = map[string]any{}
     }
+
     if c.Current != nil {
       caveatCtx["current"] = *c.Current
     }
@@ -3428,9 +3408,8 @@ func (folder Folder) CheckGatedTokenCheck(ctx context.Context, input CheckFolder
 
   var caveatCtx map[string]any
   if c := input.Caveats.TenantMatch; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.Tenant != nil {
       caveatCtx["tenant"] = *c.Tenant
     }
@@ -3453,9 +3432,8 @@ func LookupGatedTokenCheckFolderResources(ctx context.Context, input CheckFolder
 
   var caveatCtx map[string]any
   if c := input.Caveats.TenantMatch; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.Tenant != nil {
       caveatCtx["tenant"] = *c.Tenant
     }
@@ -3553,9 +3531,8 @@ func (folder Folder) CheckPublicGatedCheck(ctx context.Context, input CheckFolde
 
   var caveatCtx map[string]any
   if c := input.Caveats.TenantMatch; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.Tenant != nil {
       caveatCtx["tenant"] = *c.Tenant
     }
@@ -3578,9 +3555,8 @@ func LookupPublicGatedCheckFolderResources(ctx context.Context, input CheckFolde
 
   var caveatCtx map[string]any
   if c := input.Caveats.TenantMatch; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.Tenant != nil {
       caveatCtx["tenant"] = *c.Tenant
     }
@@ -3717,9 +3693,8 @@ func (folder Folder) CheckGatedCollabView(ctx context.Context, input CheckFolder
 
   var caveatCtx map[string]any
   if c := input.Caveats.TenantMatch; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.Tenant != nil {
       caveatCtx["tenant"] = *c.Tenant
     }
@@ -3742,9 +3717,8 @@ func LookupGatedCollabViewFolderResources(ctx context.Context, input CheckFolder
 
   var caveatCtx map[string]any
   if c := input.Caveats.TenantMatch; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.Tenant != nil {
       caveatCtx["tenant"] = *c.Tenant
     }
@@ -3893,9 +3867,8 @@ func (folder Folder) LookupTenantedBrowseUserSubjects(ctx context.Context, cavea
 
   var caveatCtx map[string]any
   if c := caveats.TenantMatch; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.Tenant != nil {
       caveatCtx["tenant"] = *c.Tenant
     }
@@ -3940,9 +3913,8 @@ func (folder Folder) LookupGuardedBrowseUserSubjects(ctx context.Context, caveat
 
   var caveatCtx map[string]any
   if c := caveats.TenantMatch; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.Tenant != nil {
       caveatCtx["tenant"] = *c.Tenant
     }
@@ -3987,9 +3959,8 @@ func (folder Folder) LookupActUserSubjects(ctx context.Context, caveats CheckFol
 
   var caveatCtx map[string]any
   if c := caveats.WithinWindow; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.AllowedActions != nil {
       caveatCtx["allowed_actions"] = c.AllowedActions
     }
@@ -4037,9 +4008,8 @@ func (folder Folder) LookupCollaborateUserSubjects(ctx context.Context, caveats 
 
   var caveatCtx map[string]any
   if c := caveats.WithinWindow; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.AllowedActions != nil {
       caveatCtx["allowed_actions"] = c.AllowedActions
     }
@@ -4086,9 +4056,8 @@ func (folder Folder) LookupCollaborateGroupSubjects(ctx context.Context, caveats
 
   var caveatCtx map[string]any
   if c := caveats.WithinWindow; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.AllowedActions != nil {
       caveatCtx["allowed_actions"] = c.AllowedActions
     }
@@ -4136,9 +4105,8 @@ func (folder Folder) LookupRateCheckUserSubjects(ctx context.Context, caveats Ch
 
   var caveatCtx map[string]any
   if c := caveats.QuotaCheck; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.MaxUses != nil {
       caveatCtx["max_uses"] = *c.MaxUses
     }
@@ -4186,9 +4154,8 @@ func (folder Folder) LookupScoreCheckUserSubjects(ctx context.Context, caveats C
 
   var caveatCtx map[string]any
   if c := caveats.MinScore; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.Current != nil {
       caveatCtx["current"] = *c.Current
     }
@@ -4236,9 +4203,8 @@ func (folder Folder) LookupTokenCheckUserSubjects(ctx context.Context, caveats C
 
   var caveatCtx map[string]any
   if c := caveats.HasToken; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.Token != nil {
       caveatCtx["token"] = c.Token
     }
@@ -4283,9 +4249,8 @@ func (folder Folder) LookupVersionCheckPermUserSubjects(ctx context.Context, cav
 
   var caveatCtx map[string]any
   if c := caveats.VersionCheck; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.MinVersion != nil {
       caveatCtx["min_version"] = *c.MinVersion
     }
@@ -4330,9 +4295,8 @@ func (folder Folder) LookupMatrixCheckPermUserSubjects(ctx context.Context, cave
 
   var caveatCtx map[string]any
   if c := caveats.MatrixCheck; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.Rows != nil {
       caveatCtx["rows"] = c.Rows
     }
@@ -4377,9 +4341,8 @@ func (folder Folder) LookupMultiCheckUserSubjects(ctx context.Context, caveats C
 
   var caveatCtx map[string]any
   if c := caveats.TenantMatch; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.Tenant != nil {
       caveatCtx["tenant"] = *c.Tenant
     }
@@ -4388,6 +4351,7 @@ func (folder Folder) LookupMultiCheckUserSubjects(ctx context.Context, caveats C
     if caveatCtx == nil {
       caveatCtx = map[string]any{}
     }
+
     if c.AllowedActions != nil {
       caveatCtx["allowed_actions"] = c.AllowedActions
     }
@@ -4435,9 +4399,8 @@ func (folder Folder) LookupViaGatedRootUserSubjects(ctx context.Context, caveats
 
   var caveatCtx map[string]any
   if c := caveats.TenantMatch; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.Tenant != nil {
       caveatCtx["tenant"] = *c.Tenant
     }
@@ -4481,9 +4444,8 @@ func (folder Folder) LookupViaGatedRootGroupSubjects(ctx context.Context, caveat
 
   var caveatCtx map[string]any
   if c := caveats.TenantMatch; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.Tenant != nil {
       caveatCtx["tenant"] = *c.Tenant
     }
@@ -4527,9 +4489,8 @@ func (folder Folder) LookupViaGatedRootRoleSubjects(ctx context.Context, caveats
 
   var caveatCtx map[string]any
   if c := caveats.TenantMatch; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.Tenant != nil {
       caveatCtx["tenant"] = *c.Tenant
     }
@@ -4574,9 +4535,8 @@ func (folder Folder) LookupEliteAccessUserSubjects(ctx context.Context, caveats 
 
   var caveatCtx map[string]any
   if c := caveats.HasToken; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.Token != nil {
       caveatCtx["token"] = c.Token
     }
@@ -4585,6 +4545,7 @@ func (folder Folder) LookupEliteAccessUserSubjects(ctx context.Context, caveats 
     if caveatCtx == nil {
       caveatCtx = map[string]any{}
     }
+
     if c.Current != nil {
       caveatCtx["current"] = *c.Current
     }
@@ -4632,9 +4593,8 @@ func (folder Folder) LookupScoredMinusTokenUserSubjects(ctx context.Context, cav
 
   var caveatCtx map[string]any
   if c := caveats.HasToken; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.Token != nil {
       caveatCtx["token"] = c.Token
     }
@@ -4643,6 +4603,7 @@ func (folder Folder) LookupScoredMinusTokenUserSubjects(ctx context.Context, cav
     if caveatCtx == nil {
       caveatCtx = map[string]any{}
     }
+
     if c.Current != nil {
       caveatCtx["current"] = *c.Current
     }
@@ -4726,9 +4687,8 @@ func (folder Folder) LookupGatedTokenCheckUserSubjects(ctx context.Context, cave
 
   var caveatCtx map[string]any
   if c := caveats.TenantMatch; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.Tenant != nil {
       caveatCtx["tenant"] = *c.Tenant
     }
@@ -4809,9 +4769,8 @@ func (folder Folder) LookupPublicGatedCheckUserSubjects(ctx context.Context, cav
 
   var caveatCtx map[string]any
   if c := caveats.TenantMatch; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.Tenant != nil {
       caveatCtx["tenant"] = *c.Tenant
     }

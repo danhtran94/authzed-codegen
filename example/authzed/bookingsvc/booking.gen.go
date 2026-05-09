@@ -540,9 +540,8 @@ func (booking Booking) CheckRegionalWrite(ctx context.Context, input CheckBookin
 
   var caveatCtx map[string]any
   if c := input.Caveats.RegionMatch; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.Region != nil {
       caveatCtx["region"] = *c.Region
     }
@@ -565,9 +564,8 @@ func LookupRegionalWriteBookingResources(ctx context.Context, input CheckBooking
 
   var caveatCtx map[string]any
   if c := input.Caveats.RegionMatch; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.Region != nil {
       caveatCtx["region"] = *c.Region
     }
@@ -815,9 +813,8 @@ func (booking Booking) LookupRegionalWriteEmployeeSubjects(ctx context.Context, 
 
   var caveatCtx map[string]any
   if c := caveats.RegionMatch; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.Region != nil {
       caveatCtx["region"] = *c.Region
     }

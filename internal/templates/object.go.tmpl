@@ -199,10 +199,12 @@ func ({{ $var }} {{ $typeName }}) Check{{ snakeToPascal $perm.Name }}(ctx contex
   }
 {{ if hasPermCaveats $objectType $perm.Name }}
   var caveatCtx map[string]any
-{{ range $caveatName := permCaveats $objectType $perm.Name }}  if c := input.Caveats.{{ pascalCaveat $caveatName }}; c != nil {
-    if caveatCtx == nil {
+{{ range $idx, $caveatName := permCaveats $objectType $perm.Name }}  if c := input.Caveats.{{ pascalCaveat $caveatName }}; c != nil {
+{{ if eq $idx 0 }}    caveatCtx = map[string]any{}
+{{ else }}    if caveatCtx == nil {
       caveatCtx = map[string]any{}
     }
+{{ end }}
 {{ range $param := caveatParams $caveatName }}    if c.{{ snakeToPascal $param.Name }} != nil {
       caveatCtx["{{ $param.Name }}"] = {{ deref $param.GoType }}c.{{ snakeToPascal $param.Name }}
     }
@@ -233,10 +235,12 @@ func ({{ $var }} {{ $typeName }}) Check{{ snakeToPascal $perm.Name }}(ctx contex
 func Lookup{{ snakeToPascal $perm.Name }}{{ $typeName }}Resources(ctx context.Context, input {{ $inputName }}) ({{ $typeName }}LookupResult, error) {
 {{ if hasPermCaveats $objectType $perm.Name }}
   var caveatCtx map[string]any
-{{ range $caveatName := permCaveats $objectType $perm.Name }}  if c := input.Caveats.{{ pascalCaveat $caveatName }}; c != nil {
-    if caveatCtx == nil {
+{{ range $idx, $caveatName := permCaveats $objectType $perm.Name }}  if c := input.Caveats.{{ pascalCaveat $caveatName }}; c != nil {
+{{ if eq $idx 0 }}    caveatCtx = map[string]any{}
+{{ else }}    if caveatCtx == nil {
       caveatCtx = map[string]any{}
     }
+{{ end }}
 {{ range $param := caveatParams $caveatName }}    if c.{{ snakeToPascal $param.Name }} != nil {
       caveatCtx["{{ $param.Name }}"] = {{ deref $param.GoType }}c.{{ snakeToPascal $param.Name }}
     }
@@ -271,10 +275,12 @@ func Lookup{{ snakeToPascal $perm.Name }}{{ $typeName }}Resources(ctx context.Co
 {{ range $inputType := permissionInputTypes $objectType $perm.Name }}func ({{ $var }} {{ $typeName }}) Lookup{{ snakeToPascal $perm.Name }}{{ typeName $inputType }}Subjects(ctx context.Context{{ if hasPermCaveats $objectType $perm.Name }}, caveats {{ $caveatsTypeName }}{{ end }}) ({{ typeName $inputType }}LookupResult, error) {
 {{ if hasPermCaveats $objectType $perm.Name }}
   var caveatCtx map[string]any
-{{ range $caveatName := permCaveats $objectType $perm.Name }}  if c := caveats.{{ pascalCaveat $caveatName }}; c != nil {
-    if caveatCtx == nil {
+{{ range $idx, $caveatName := permCaveats $objectType $perm.Name }}  if c := caveats.{{ pascalCaveat $caveatName }}; c != nil {
+{{ if eq $idx 0 }}    caveatCtx = map[string]any{}
+{{ else }}    if caveatCtx == nil {
       caveatCtx = map[string]any{}
     }
+{{ end }}
 {{ range $param := caveatParams $caveatName }}    if c.{{ snakeToPascal $param.Name }} != nil {
       caveatCtx["{{ $param.Name }}"] = {{ deref $param.GoType }}c.{{ snakeToPascal $param.Name }}
     }

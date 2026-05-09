@@ -818,9 +818,8 @@ func (booking Booking) CheckHoursCheck(ctx context.Context, input CheckBookingHo
 
   var caveatCtx map[string]any
   if c := input.Caveats.WithinHours; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.CloseHour != nil {
       caveatCtx["close_hour"] = *c.CloseHour
     }
@@ -849,9 +848,8 @@ func LookupHoursCheckBookingResources(ctx context.Context, input CheckBookingHou
 
   var caveatCtx map[string]any
   if c := input.Caveats.WithinHours; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.CloseHour != nil {
       caveatCtx["close_hour"] = *c.CloseHour
     }
@@ -907,9 +905,8 @@ func (booking Booking) CheckMultiTemporalCheck(ctx context.Context, input CheckB
 
   var caveatCtx map[string]any
   if c := input.Caveats.WithinHours; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.CloseHour != nil {
       caveatCtx["close_hour"] = *c.CloseHour
     }
@@ -924,6 +921,7 @@ func (booking Booking) CheckMultiTemporalCheck(ctx context.Context, input CheckB
     if caveatCtx == nil {
       caveatCtx = map[string]any{}
     }
+
     if c.CloseMonth != nil {
       caveatCtx["close_month"] = *c.CloseMonth
     }
@@ -961,9 +959,8 @@ func LookupMultiTemporalCheckBookingResources(ctx context.Context, input CheckBo
 
   var caveatCtx map[string]any
   if c := input.Caveats.WithinHours; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.CloseHour != nil {
       caveatCtx["close_hour"] = *c.CloseHour
     }
@@ -978,6 +975,7 @@ func LookupMultiTemporalCheckBookingResources(ctx context.Context, input CheckBo
     if caveatCtx == nil {
       caveatCtx = map[string]any{}
     }
+
     if c.CloseMonth != nil {
       caveatCtx["close_month"] = *c.CloseMonth
     }
@@ -1054,9 +1052,8 @@ func (booking Booking) CheckSharedCavCheck(ctx context.Context, input CheckBooki
 
   var caveatCtx map[string]any
   if c := input.Caveats.WithinHours; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.CloseHour != nil {
       caveatCtx["close_hour"] = *c.CloseHour
     }
@@ -1094,9 +1091,8 @@ func LookupSharedCavCheckBookingResources(ctx context.Context, input CheckBookin
 
   var caveatCtx map[string]any
   if c := input.Caveats.WithinHours; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.CloseHour != nil {
       caveatCtx["close_hour"] = *c.CloseHour
     }
@@ -1173,9 +1169,8 @@ func (booking Booking) CheckDupTypedCheck(ctx context.Context, input CheckBookin
 
   var caveatCtx map[string]any
   if c := input.Caveats.WithinHours; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.CloseHour != nil {
       caveatCtx["close_hour"] = *c.CloseHour
     }
@@ -1190,6 +1185,7 @@ func (booking Booking) CheckDupTypedCheck(ctx context.Context, input CheckBookin
     if caveatCtx == nil {
       caveatCtx = map[string]any{}
     }
+
     if c.CloseMonth != nil {
       caveatCtx["close_month"] = *c.CloseMonth
     }
@@ -1218,9 +1214,8 @@ func LookupDupTypedCheckBookingResources(ctx context.Context, input CheckBooking
 
   var caveatCtx map[string]any
   if c := input.Caveats.WithinHours; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.CloseHour != nil {
       caveatCtx["close_hour"] = *c.CloseHour
     }
@@ -1235,6 +1230,7 @@ func LookupDupTypedCheckBookingResources(ctx context.Context, input CheckBooking
     if caveatCtx == nil {
       caveatCtx = map[string]any{}
     }
+
     if c.CloseMonth != nil {
       caveatCtx["close_month"] = *c.CloseMonth
     }
@@ -1347,9 +1343,8 @@ func (booking Booking) LookupHoursCheckUserSubjects(ctx context.Context, caveats
 
   var caveatCtx map[string]any
   if c := caveats.WithinHours; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.CloseHour != nil {
       caveatCtx["close_hour"] = *c.CloseHour
     }
@@ -1400,9 +1395,8 @@ func (booking Booking) LookupMultiTemporalCheckUserSubjects(ctx context.Context,
 
   var caveatCtx map[string]any
   if c := caveats.WithinHours; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.CloseHour != nil {
       caveatCtx["close_hour"] = *c.CloseHour
     }
@@ -1417,6 +1411,7 @@ func (booking Booking) LookupMultiTemporalCheckUserSubjects(ctx context.Context,
     if caveatCtx == nil {
       caveatCtx = map[string]any{}
     }
+
     if c.CloseMonth != nil {
       caveatCtx["close_month"] = *c.CloseMonth
     }
@@ -1466,9 +1461,8 @@ func (booking Booking) LookupMultiTemporalCheckCustomerSubjects(ctx context.Cont
 
   var caveatCtx map[string]any
   if c := caveats.WithinHours; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.CloseHour != nil {
       caveatCtx["close_hour"] = *c.CloseHour
     }
@@ -1483,6 +1477,7 @@ func (booking Booking) LookupMultiTemporalCheckCustomerSubjects(ctx context.Cont
     if caveatCtx == nil {
       caveatCtx = map[string]any{}
     }
+
     if c.CloseMonth != nil {
       caveatCtx["close_month"] = *c.CloseMonth
     }
@@ -1533,9 +1528,8 @@ func (booking Booking) LookupSharedCavCheckUserSubjects(ctx context.Context, cav
 
   var caveatCtx map[string]any
   if c := caveats.WithinHours; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.CloseHour != nil {
       caveatCtx["close_hour"] = *c.CloseHour
     }
@@ -1585,9 +1579,8 @@ func (booking Booking) LookupSharedCavCheckCustomerSubjects(ctx context.Context,
 
   var caveatCtx map[string]any
   if c := caveats.WithinHours; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.CloseHour != nil {
       caveatCtx["close_hour"] = *c.CloseHour
     }
@@ -1638,9 +1631,8 @@ func (booking Booking) LookupDupTypedCheckUserSubjects(ctx context.Context, cave
 
   var caveatCtx map[string]any
   if c := caveats.WithinHours; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+    caveatCtx = map[string]any{}
+
     if c.CloseHour != nil {
       caveatCtx["close_hour"] = *c.CloseHour
     }
@@ -1655,6 +1647,7 @@ func (booking Booking) LookupDupTypedCheckUserSubjects(ctx context.Context, cave
     if caveatCtx == nil {
       caveatCtx = map[string]any{}
     }
+
     if c.CloseMonth != nil {
       caveatCtx["close_month"] = *c.CloseMonth
     }
