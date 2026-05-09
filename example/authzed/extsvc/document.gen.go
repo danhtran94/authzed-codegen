@@ -457,6 +457,46 @@ func LookupAdminDocumentResources(ctx context.Context, input CheckDocumentAdminI
   
   return []Document{}, nil
 }
+const DocumentInheritedCollab PermissionDocument = "inherited_collab"
+
+type CheckDocumentInheritedCollabInputs struct {
+  User []User
+}
+
+func (document Document) CheckInheritedCollab(ctx context.Context, input CheckDocumentInheritedCollabInputs) (bool, error) {
+  if len(input.User) == 0 && true {
+    return false, authz.ErrNoInput
+  }
+
+  if len(input.User) > 0 {
+    err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
+      Type: TypeDocument,
+      ID: authz.ID(document),
+    }, authz.Permission(DocumentInheritedCollab), TypeUser, authz.IDs(input.User))
+    if err != nil {
+      return false, err
+    }
+  }
+  
+  return true, nil
+}
+
+func LookupInheritedCollabDocumentResources(ctx context.Context, input CheckDocumentInheritedCollabInputs) ([]Document, error) {
+
+  if len(input.User) > 0 {
+    ids, err := authz.GetEngine(ctx).LookupResources(ctx,
+      TypeDocument, authz.Permission(DocumentInheritedCollab),
+      TypeUser, authz.IDs(input.User),
+    )
+    if err != nil {
+      return nil, err
+    }
+
+    return authz.FromIDs[Document](ids), nil
+  }
+  
+  return []Document{}, nil
+}
 
 func (document Document) LookupViewUserSubjects(ctx context.Context) ([]User, error) {
 
@@ -683,5 +723,31 @@ func (document Document) LookupAdminRoleWildcardSubjects(ctx context.Context) (b
       ID: authz.ID(document),
     },
     authz.Permission(DocumentAdmin), TypeRole,
+  )
+}
+
+func (document Document) LookupInheritedCollabUserSubjects(ctx context.Context) ([]User, error) {
+
+  ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+    authz.Resource{
+      Type: TypeDocument,
+      ID: authz.ID(document),
+    },
+    authz.Permission(DocumentInheritedCollab), TypeUser,
+  )
+  if err != nil {
+    return nil, err
+  }
+
+  return authz.FromIDsExcludingWildcard[User](ids), nil
+}
+
+func (document Document) LookupInheritedCollabUserWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeDocument,
+      ID: authz.ID(document),
+    },
+    authz.Permission(DocumentInheritedCollab), TypeUser,
   )
 }

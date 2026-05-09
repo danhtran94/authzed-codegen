@@ -374,6 +374,13 @@ definition extsvc/document {
 	// Permission that references two sibling permissions in the same definition —
 	// exercises GetPermissionTree's permission-resolver pass.
 	permission admin = view + edit
+
+	// AUZ-011 — arrow chain reaching a userset on the parent folder.
+	// Resolves: document.parent → folder → folder.mixed_browse → mixed_view
+	// → finds team#admin tuples. SpiceDB walks the userset chain server-side
+	// when Check is called with user-as-subject; the user must be admin
+	// of a team granted to the parent folder's mixed_view.
+	permission inherited_collab = parent->mixed_browse
 }
 
 definition extsvc/article {

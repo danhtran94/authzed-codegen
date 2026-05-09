@@ -1870,3 +1870,99 @@ func TestFolder_NonUsersetRead_SubRelationIsEmpty(t *testing.T) {
 	require.Len(t, rels, 1)
 	assert.Equal(t, "", rels[0].SubRelation, "direct subject row has empty SubRelation field")
 }
+
+// AUZ-011 follow-up — arrow chain reaching a userset.
+//
+// Schema:
+//   document.parent: folder
+//   document.inherited_collab = parent->mixed_browse
+//   folder.mixed_view: user | team#admin
+//   folder.mixed_browse = mixed_view
+//   team.admin = owner + manager
+//
+// The chain: Check(doc, inherited_collab, user=u1) walks
+//   doc.inherited_collab → doc.parent (folder) → folder.mixed_browse → mixed_view
+//   → matches both direct (user u1 directly) AND team#admin tuples
+//   → for team#admin tuples, expands to team.owner ∪ team.manager → matches u1
+// SpiceDB walks the entire chain server-side; the codegen exposes only
+// User as a Check input (the arrow walker does not surface usersets
+// reachable through right-side permissions, by design — they live on a
+// different resource).
+
+func TestDocument_InheritedCollab_DirectViewerOnParent(t *testing.T) {
+	ctx := context.Background()
+
+	user := extsvc.User("u-ic-direct")
+	folder := extsvc.Folder("f-ic-direct")
+	doc := extsvc.Document("d-ic-direct")
+
+	// Grant user directly as mixed_view on the parent folder.
+	require.NoError(t, folder.CreateMixedViewRelations(ctx, extsvc.FolderMixedViewObjects{
+		User: []extsvc.User{user},
+	}))
+	require.NoError(t, doc.CreateParentRelations(ctx, extsvc.DocumentParentObjects{
+		Folder: []extsvc.Folder{folder},
+	}))
+
+	// Check user → walks doc.parent → folder.mixed_browse → user direct match.
+	ok, err := doc.CheckInheritedCollab(ctx, extsvc.CheckDocumentInheritedCollabInputs{
+		User: []extsvc.User{user},
+	})
+	require.NoError(t, err)
+	assert.True(t, ok, "direct user on parent folder grants inherited_collab via arrow")
+}
+
+func TestDocument_InheritedCollab_UserViaArrowChainThroughUserset(t *testing.T) {
+	ctx := context.Background()
+
+	user := extsvc.User("u-ic-userset")
+	team := extsvc.Team("t-ic-userset")
+	folder := extsvc.Folder("f-ic-userset")
+	doc := extsvc.Document("d-ic-userset")
+
+	// Wire: u1 is owner of t1; t1#admin is granted mixed_view on f1; d1's parent is f1.
+	require.NoError(t, team.CreateOwnerRelations(ctx, extsvc.TeamOwnerObjects{
+		User: []extsvc.User{user},
+	}))
+	require.NoError(t, folder.CreateMixedViewRelations(ctx, extsvc.FolderMixedViewObjects{
+		TeamAdmin: []extsvc.Team{team},
+	}))
+	require.NoError(t, doc.CreateParentRelations(ctx, extsvc.DocumentParentObjects{
+		Folder: []extsvc.Folder{folder},
+	}))
+
+	// Check user → SpiceDB walks: doc.parent (f1) → f1.mixed_browse → mixed_view
+	// → finds team:t1#admin → expands t1#admin → team.owner → finds u1.
+	ok, err := doc.CheckInheritedCollab(ctx, extsvc.CheckDocumentInheritedCollabInputs{
+		User: []extsvc.User{user},
+	})
+	require.NoError(t, err)
+	assert.True(t, ok, "user reachable via arrow → userset → owner chain grants inherited_collab")
+}
+
+func TestDocument_InheritedCollab_UnrelatedUserDenied(t *testing.T) {
+	ctx := context.Background()
+
+	user := extsvc.User("u-ic-no")
+	team := extsvc.Team("t-ic-no")
+	otherUser := extsvc.User("u-ic-other")
+	folder := extsvc.Folder("f-ic-no")
+	doc := extsvc.Document("d-ic-no")
+
+	require.NoError(t, team.CreateOwnerRelations(ctx, extsvc.TeamOwnerObjects{
+		User: []extsvc.User{user},
+	}))
+	require.NoError(t, folder.CreateMixedViewRelations(ctx, extsvc.FolderMixedViewObjects{
+		TeamAdmin: []extsvc.Team{team},
+	}))
+	require.NoError(t, doc.CreateParentRelations(ctx, extsvc.DocumentParentObjects{
+		Folder: []extsvc.Folder{folder},
+	}))
+
+	// otherUser is not owner of the team; not direct viewer of the folder.
+	_, err := doc.CheckInheritedCollab(ctx, extsvc.CheckDocumentInheritedCollabInputs{
+		User: []extsvc.User{otherUser},
+	})
+	assert.ErrorIs(t, err, authz.ErrPermissionDenied,
+		"user outside the userset's expansion is denied through the arrow chain")
+}
