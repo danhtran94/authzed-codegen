@@ -4,6 +4,43 @@ All notable changes to this project are documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2026-05-09
+
+Closes the last big rejected schema construct from ADR-001 — sub-relation references (`relation member: team#admin`). After this release, the codegen accepts every commonly-used SpiceDB schema feature: caveats, expiration, intersection, exclusion, wildcards, read-side metadata, and now usersets. Schema constructs of the form `T#R` are captured into a new `AllowedType.SubRelation` field, written via `Subject.OptionalRelation` on the wire, and surfaced through both write fields (`<TypeName><PascalSubRel>`) on `<Rel>Objects` and Check-input fields on `Check<Perm>Inputs`.
+
+### Added
+
+- **`Engine.CreateRelationsToUserset`** — single new write method covering all four userset combinations (plain / +caveat / +expiration / +both) via sentinel parameters. Always issues `OPERATION_TOUCH` (per SPEC-006 C2/A3 — same expired-collision rationale as AUZ-009).
+- **`Engine.CheckPermissionUserset`** — new Check method for the rare userset-as-subject case ("does t1#admin have view?"). SpiceDB matches the literal userset reference; no recursive expansion (per SPEC-006 A2).
+- **`AllowedType.SubRelation string`** — adapter-level field captured from `AllowedRelation.Relation`. Empty for direct subjects, non-empty for userset references. Drives codegen routing.
+- **`RelationTuple.SubRelation string`** — populated from `Relationship.Subject.OptionalRelation` on read.
+- **Generated `<Rel><Type>Relation.SubRelation`** — read-side field surfacing the sub-relation tag for mixed direct + userset relations.
+- **Generated userset write fields** — `<Rel>Objects.<TypeName><PascalSubRel> []<TypeName>` per userset allowed type. Caller writes `TeamAdmin: []Team{"t1"}` to grant team t1's admin set.
+- **Generated userset Check input fields** — `Check<Perm>Inputs.<TypeName><PascalSubRel> []<TypeName>` for permissions reaching userset allowed types. Routes through `CheckPermissionUserset`.
+- **3-key disambiguation** — `(Namespace, IsWildcard, SubRelation)` extends the existing caveat-disambiguation logic. Schemas declaring `team#admin | team#owner` produce distinct `TeamAdmin` / `TeamOwner` field names.
+- **Schema fixture: `extsvc/team`** — new definition with `owner` / `manager` relations and `admin` permission. Four new userset relations on `extsvc/folder`: `collab` (plain), `mixed_view` (mixed direct + userset), `gated_collab` (userset + caveat), `temp_collab` (userset + expiration).
+- **7 new e2e tests** covering wire-level write/read, literal userset Check, mismatched team Check, mixed direct + userset Read disjoint subsets, userset + caveat, userset + expiration metadata round-trip, regression check on direct-subject SubRelation emptiness.
+- **5 new adapter unit tests** in `adapter_test.go` covering plain userset, mixed direct + userset, two usersets same namespace different sub-relations, direct + userset same namespace, userset with distinct caveats.
+
+### Changed
+
+- The Engine interface gained two new methods (`CreateRelationsToUserset`, `CheckPermissionUserset`). External implementers must add them. The only impl in this repo is `*spicedb.Engine`.
+- `AllowedType` struct gains the `SubRelation string` field. Generated metadata structs (`<Rel><Type>Relation`) gain `SubRelation string` field — positional-stable per AUZ-010 SPEC-005 C6.
+- `*spicedb.Engine.ReadRelations` populates `RelationTuple.SubRelation` from `rel.Subject.OptionalRelation`. No change to the response shape (already a slice of `RelationTuple`).
+- `relationFromView` filters out userset allowed types from the direct-subject permission tree — userset references are exposed via the new `permissionInputUsersets` helper instead.
+
+### Verified
+
+- All 4 e2e packages pass.
+- Codegen idempotent at the new baseline.
+- `go build ./...` + `go vet ./...` clean.
+
+### Deferred
+
+- **Lookup with userset results** (per SPEC-006 C9). `LookupSubjects` still returns `[]<Type>` of direct subject IDs only. Returning userset triples would change the typed return shape and is a heavier scope; deferred until concrete demand.
+- **Lookup with userset inputs**. `LookupResources` accepts direct subjects only; userset-as-input on Lookup is uncommon and follows the same return-shape question as the previous bullet.
+- **Userset expiration deny-after-expiry under AtExactSnapshot consistency** — the engine's snapshot-pinned consistency mode evaluates userset-as-subject Check at the snapshot revision, so expiration filtering doesn't trigger on the wall-clock comparison. Direct-subject expiration filtering (AUZ-009) is unaffected because chain walking handles it differently. Documented in AUZ-011 Discoveries as a consistency-mode constraint.
+
 ## [1.4.0] - 2026-05-09
 
 Closes the read-side metadata gap left by AUZ-006/007/009 (caveat name, caveat context, and expiration timestamp travel on the wire but were silently dropped by `Read<Rel><Type>Relations`). Replaces the read return type uniformly: every relation now returns `[]<Rel><Type>Relation` carrying ID + metadata. Schemas adopting `with caveat` or `with expiration` later don't change method names — only what populates in the existing struct's nil-able fields.

@@ -63,6 +63,7 @@ func (setting Setting) DeleteOwnerRelations(ctx context.Context, objects Setting
 
 type SettingOwnerCompanyRelation struct {
   ID            Company
+  SubRelation   string
   CaveatName    string
   CaveatContext map[string]any
   ExpiresAt     *time.Time
@@ -85,6 +86,7 @@ func (setting Setting) ReadOwnerCompanyRelations(ctx context.Context) ([]Setting
     }
     rels = append(rels, SettingOwnerCompanyRelation{
       ID:            Company(t.ID),
+      SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
       ExpiresAt:     t.ExpiresAt,

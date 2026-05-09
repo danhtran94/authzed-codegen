@@ -111,6 +111,7 @@ func (document Document) DeleteOwnerRelations(ctx context.Context, objects Docum
 
 type DocumentParentFolderRelation struct {
   ID            Folder
+  SubRelation   string
   CaveatName    string
   CaveatContext map[string]any
   ExpiresAt     *time.Time
@@ -133,6 +134,7 @@ func (document Document) ReadParentFolderRelations(ctx context.Context) ([]Docum
     }
     rels = append(rels, DocumentParentFolderRelation{
       ID:            Folder(t.ID),
+      SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
       ExpiresAt:     t.ExpiresAt,
@@ -143,6 +145,7 @@ func (document Document) ReadParentFolderRelations(ctx context.Context) ([]Docum
 
 type DocumentOwnerUserRelation struct {
   ID            User
+  SubRelation   string
   CaveatName    string
   CaveatContext map[string]any
   ExpiresAt     *time.Time
@@ -165,6 +168,7 @@ func (document Document) ReadOwnerUserRelations(ctx context.Context) ([]Document
     }
     rels = append(rels, DocumentOwnerUserRelation{
       ID:            User(t.ID),
+      SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
       ExpiresAt:     t.ExpiresAt,
@@ -175,6 +179,7 @@ func (document Document) ReadOwnerUserRelations(ctx context.Context) ([]Document
 
 type DocumentOwnerGroupRelation struct {
   ID            Group
+  SubRelation   string
   CaveatName    string
   CaveatContext map[string]any
   ExpiresAt     *time.Time
@@ -197,6 +202,7 @@ func (document Document) ReadOwnerGroupRelations(ctx context.Context) ([]Documen
     }
     rels = append(rels, DocumentOwnerGroupRelation{
       ID:            Group(t.ID),
+      SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
       ExpiresAt:     t.ExpiresAt,

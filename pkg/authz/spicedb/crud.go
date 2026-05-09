@@ -215,6 +215,70 @@ func (e *Engine) CreateRelations(ctx context.Context, to authz.Resource, relatio
 	return nil
 }
 
+// CreateRelationsToUserset writes userset references — `Subject.OptionalRelation`
+// is set to subRelation, identifying the row as a reference to another resource's
+// relation/permission rather than a direct subject. Always issues OPERATION_TOUCH:
+// userset writes share the expired-collision concern from AUZ-009 expiration writes,
+// and TOUCH is idempotent so the cost is zero for non-expiring writes (per SPEC-006 C2/A3).
+//
+// Sentinel parameters compress 4 userset combinations into one method:
+//   - Plain userset: caveatName == "", caveatParams == nil, expiresAt zero
+//   - + caveat: caveatName != "" (caveatParams optional — nil defers to check time)
+//   - + expiration: expiresAt non-zero
+//   - + caveat + expiration: both
+func (e *Engine) CreateRelationsToUserset(ctx context.Context, to authz.Resource, relation authz.Relation, subject authz.Type, ids []authz.ID, subRelation string, caveatName string, caveatParams map[string]any, expiresAt time.Time) error {
+	e.debugLog("Creating userset relations: to=%v, relation=%v, subject=%v#%v, ids=%v, caveat=%s, expiresAt=%v", to, relation, subject, subRelation, ids, caveatName, expiresAt)
+
+	var caveatCtx *structpb.Struct
+	if caveatName != "" {
+		var err error
+		caveatCtx, err = serializeCaveatMap(caveatParams)
+		if err != nil {
+			return fmt.Errorf("serialize caveat params: %w", err)
+		}
+	}
+
+	var expiresPb *timestamppb.Timestamp
+	if !expiresAt.IsZero() {
+		expiresPb = timestamppb.New(expiresAt)
+	}
+
+	updates := make([]*v1.RelationshipUpdate, 0, len(ids))
+	for _, id := range ids {
+		rel := &v1.Relationship{
+			Resource: &v1.ObjectReference{
+				ObjectType: string(to.Type),
+				ObjectId:   string(to.ID),
+			},
+			Relation: string(relation),
+			Subject: &v1.SubjectReference{
+				Object: &v1.ObjectReference{
+					ObjectType: string(subject),
+					ObjectId:   string(id),
+				},
+				OptionalRelation: subRelation,
+			},
+		}
+		if caveatName != "" {
+			rel.OptionalCaveat = &v1.ContextualizedCaveat{CaveatName: caveatName, Context: caveatCtx}
+		}
+		if expiresPb != nil {
+			rel.OptionalExpiresAt = expiresPb
+		}
+		updates = append(updates, &v1.RelationshipUpdate{
+			Operation:    v1.RelationshipUpdate_OPERATION_TOUCH,
+			Relationship: rel,
+		})
+	}
+
+	res, err := e.client.WriteRelationships(ctx, &v1.WriteRelationshipsRequest{Updates: updates})
+	if err != nil {
+		return err
+	}
+	e.setToken(res.WrittenAt.Token)
+	return nil
+}
+
 func (e *Engine) DeleteRelations(ctx context.Context, from authz.Resource, relation authz.Relation, subject authz.Type, ids []authz.ID) error {
 	e.debugLog("Deleting relations: from=%v, relation=%v, subject=%v, ids=%v", from, relation, subject, ids)
 	updates := make([]*v1.RelationshipUpdate, 0, len(ids))
@@ -487,6 +551,48 @@ func (e *Engine) LookupSubjectsWithCaveat(ctx context.Context, on authz.Resource
 	return ids, nil
 }
 
+// CheckPermissionUserset answers the rare userset-as-subject question — "does the
+// userset reference {subjectType, id, subRelation} have permission `has` on `dest`?"
+// SpiceDB matches the literal userset reference; it does NOT recursively walk the
+// userset's membership (per SPEC-006 A2). The common case (does user u1 have view?)
+// continues to use CheckPermission / CheckPermissionWithCaveat.
+func (e *Engine) CheckPermissionUserset(ctx context.Context, dest authz.Resource, has authz.Permission, subject authz.Type, audIDs []authz.ID, subRelation string, caveatParams map[string]any) error {
+	e.debugLog("Checking userset permission: dest=%v, has=%v, subject=%v#%v, audIDs=%v, params=%v", dest, has, subject, subRelation, audIDs, caveatParams)
+
+	var caveatCtx *structpb.Struct
+	if caveatParams != nil {
+		var err error
+		caveatCtx, err = serializeCaveatMap(caveatParams)
+		if err != nil {
+			return fmt.Errorf("serialize caveat params: %w", err)
+		}
+	}
+
+	consistency := e.getConsistencySnapshot()
+	for _, id := range audIDs {
+		res, err := e.client.CheckPermission(ctx, &v1.CheckPermissionRequest{
+			Consistency: consistency,
+			Resource: &v1.ObjectReference{
+				ObjectType: string(dest.Type),
+				ObjectId:   string(dest.ID),
+			},
+			Permission: string(has),
+			Subject: &v1.SubjectReference{
+				Object: &v1.ObjectReference{
+					ObjectType: string(subject),
+					ObjectId:   string(id),
+				},
+				OptionalRelation: subRelation,
+			},
+			Context: caveatCtx,
+		})
+		if err := errorIfDenied(res, err); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (e *Engine) ReadRelations(ctx context.Context, from authz.Resource, relation authz.Relation, subject authz.Type) ([]authz.RelationTuple, error) {
 	e.debugLog("Reading relations: from=%v, relation=%v, subject=%v", from, relation, subject)
 	consistency := e.getConsistencySnapshot()
@@ -512,7 +618,8 @@ func (e *Engine) ReadRelations(ctx context.Context, from authz.Resource, relatio
 		e.debugLog("Received data: %+v", data)
 		rel := data.Relationship
 		t := authz.RelationTuple{
-			ID: authz.ID(rel.Subject.Object.ObjectId),
+			ID:          authz.ID(rel.Subject.Object.ObjectId),
+			SubRelation: rel.Subject.OptionalRelation,
 		}
 		if rel.OptionalCaveat != nil {
 			t.CaveatName = rel.OptionalCaveat.CaveatName

@@ -176,6 +176,31 @@ type FolderPublicGatedCaveats struct {
 type FolderPublicGatedExpirations struct {
   User *time.Time
 }
+const FolderCollab RelationFolder = "collab"
+type FolderCollabObjects struct {
+  TeamAdmin []Team
+}
+const FolderMixedView RelationFolder = "mixed_view"
+type FolderMixedViewObjects struct {
+  User []User
+  TeamAdmin []Team
+}
+const FolderGatedCollab RelationFolder = "gated_collab"
+type FolderGatedCollabObjects struct {
+  TeamAdmin []Team
+  Caveats FolderGatedCollabCaveats
+}
+type FolderGatedCollabCaveats struct {
+  TeamAdmin *TenantMatchArgs
+}
+const FolderTempCollab RelationFolder = "temp_collab"
+type FolderTempCollabObjects struct {
+  TeamAdmin []Team
+  Expirations FolderTempCollabExpirations
+}
+type FolderTempCollabExpirations struct {
+  TeamAdmin *time.Time
+}
 type HasTokenArgs struct {
   Token []byte
 }
@@ -655,6 +680,74 @@ func (folder Folder) CreatePublicGatedRelations(ctx context.Context, objects Fol
   }
   return nil
 }
+func (folder Folder) CreateCollabRelations(ctx context.Context, objects FolderCollabObjects) error {
+  if len(objects.TeamAdmin) > 0 {
+    err := authz.GetEngine(ctx).CreateRelationsToUserset(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Relation(FolderCollab), TypeTeam, authz.IDs(objects.TeamAdmin), "admin", "", nil, time.Time{})
+    if err != nil {
+      return err
+    }
+  }
+  return nil
+}
+func (folder Folder) CreateMixedViewRelations(ctx context.Context, objects FolderMixedViewObjects) error {
+  if len(objects.User) > 0 {
+    err := authz.GetEngine(ctx).CreateRelations(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Relation(FolderMixedView), TypeUser, authz.IDs(objects.User))
+    if err != nil {
+      return err
+    }
+  }
+  if len(objects.TeamAdmin) > 0 {
+    err := authz.GetEngine(ctx).CreateRelationsToUserset(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Relation(FolderMixedView), TypeTeam, authz.IDs(objects.TeamAdmin), "admin", "", nil, time.Time{})
+    if err != nil {
+      return err
+    }
+  }
+  return nil
+}
+func (folder Folder) CreateGatedCollabRelations(ctx context.Context, objects FolderGatedCollabObjects) error {
+  if len(objects.TeamAdmin) > 0 {
+    var caveatCtx map[string]any
+    if c := objects.Caveats.TeamAdmin; c != nil {
+      caveatCtx = map[string]any{}
+      if c.Tenant != nil {
+        caveatCtx["tenant"] = *c.Tenant
+      }
+    }
+    err := authz.GetEngine(ctx).CreateRelationsToUserset(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Relation(FolderGatedCollab), TypeTeam, authz.IDs(objects.TeamAdmin), "admin", "extsvc/tenant_match", caveatCtx, time.Time{})
+    if err != nil {
+      return err
+    }
+  }
+  return nil
+}
+func (folder Folder) CreateTempCollabRelations(ctx context.Context, objects FolderTempCollabObjects) error {
+  if len(objects.TeamAdmin) > 0 {
+    var expiresAt time.Time
+    if e := objects.Expirations.TeamAdmin; e != nil {
+      expiresAt = *e
+    }
+    err := authz.GetEngine(ctx).CreateRelationsToUserset(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Relation(FolderTempCollab), TypeTeam, authz.IDs(objects.TeamAdmin), "admin", "", nil, expiresAt)
+    if err != nil {
+      return err
+    }
+  }
+  return nil
+}
 
 func (folder Folder) DeleteViewerRelations(ctx context.Context, objects FolderViewerObjects) error {
   if len(objects.User) > 0 {
@@ -953,8 +1046,70 @@ func (folder Folder) DeletePublicGatedRelations(ctx context.Context, objects Fol
   return nil
 }
 
+func (folder Folder) DeleteCollabRelations(ctx context.Context, objects FolderCollabObjects) error {
+  if len(objects.TeamAdmin) > 0 {
+    err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Relation(FolderCollab), TypeTeam, authz.IDs(objects.TeamAdmin))
+    if err != nil {
+      return err
+    }
+  }
+  return nil
+}
+
+func (folder Folder) DeleteMixedViewRelations(ctx context.Context, objects FolderMixedViewObjects) error {
+  if len(objects.User) > 0 {
+    err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Relation(FolderMixedView), TypeUser, authz.IDs(objects.User))
+    if err != nil {
+      return err
+    }
+  }
+  if len(objects.TeamAdmin) > 0 {
+    err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Relation(FolderMixedView), TypeTeam, authz.IDs(objects.TeamAdmin))
+    if err != nil {
+      return err
+    }
+  }
+  return nil
+}
+
+func (folder Folder) DeleteGatedCollabRelations(ctx context.Context, objects FolderGatedCollabObjects) error {
+  if len(objects.TeamAdmin) > 0 {
+    err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Relation(FolderGatedCollab), TypeTeam, authz.IDs(objects.TeamAdmin))
+    if err != nil {
+      return err
+    }
+  }
+  return nil
+}
+
+func (folder Folder) DeleteTempCollabRelations(ctx context.Context, objects FolderTempCollabObjects) error {
+  if len(objects.TeamAdmin) > 0 {
+    err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Relation(FolderTempCollab), TypeTeam, authz.IDs(objects.TeamAdmin))
+    if err != nil {
+      return err
+    }
+  }
+  return nil
+}
+
 type FolderViewerUserRelation struct {
   ID            User
+  SubRelation   string
   CaveatName    string
   CaveatContext map[string]any
   ExpiresAt     *time.Time
@@ -977,6 +1132,7 @@ func (folder Folder) ReadViewerUserRelations(ctx context.Context) ([]FolderViewe
     }
     rels = append(rels, FolderViewerUserRelation{
       ID:            User(t.ID),
+      SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
       ExpiresAt:     t.ExpiresAt,
@@ -987,6 +1143,7 @@ func (folder Folder) ReadViewerUserRelations(ctx context.Context) ([]FolderViewe
 
 type FolderViewerGroupRelation struct {
   ID            Group
+  SubRelation   string
   CaveatName    string
   CaveatContext map[string]any
   ExpiresAt     *time.Time
@@ -1009,6 +1166,7 @@ func (folder Folder) ReadViewerGroupRelations(ctx context.Context) ([]FolderView
     }
     rels = append(rels, FolderViewerGroupRelation{
       ID:            Group(t.ID),
+      SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
       ExpiresAt:     t.ExpiresAt,
@@ -1019,6 +1177,7 @@ func (folder Folder) ReadViewerGroupRelations(ctx context.Context) ([]FolderView
 
 type FolderViewerRoleRelation struct {
   ID            Role
+  SubRelation   string
   CaveatName    string
   CaveatContext map[string]any
   ExpiresAt     *time.Time
@@ -1041,6 +1200,7 @@ func (folder Folder) ReadViewerRoleRelations(ctx context.Context) ([]FolderViewe
     }
     rels = append(rels, FolderViewerRoleRelation{
       ID:            Role(t.ID),
+      SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
       ExpiresAt:     t.ExpiresAt,
@@ -1051,6 +1211,7 @@ func (folder Folder) ReadViewerRoleRelations(ctx context.Context) ([]FolderViewe
 
 type FolderGuestUserRelation struct {
   ID            User
+  SubRelation   string
   CaveatName    string
   CaveatContext map[string]any
   ExpiresAt     *time.Time
@@ -1073,6 +1234,7 @@ func (folder Folder) ReadGuestUserRelations(ctx context.Context) ([]FolderGuestU
     }
     rels = append(rels, FolderGuestUserRelation{
       ID:            User(t.ID),
+      SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
       ExpiresAt:     t.ExpiresAt,
@@ -1092,6 +1254,7 @@ func (folder Folder) ReadGuestUserWildcard(ctx context.Context) (FolderGuestUser
     if t.ID == authz.WildcardID {
       return FolderGuestUserRelation{
         ID:            User(t.ID),
+        SubRelation:   t.SubRelation,
         CaveatName:    t.CaveatName,
         CaveatContext: t.CaveatContext,
         ExpiresAt:     t.ExpiresAt,
@@ -1103,6 +1266,7 @@ func (folder Folder) ReadGuestUserWildcard(ctx context.Context) (FolderGuestUser
 
 type FolderTenantedViewerUserRelation struct {
   ID            User
+  SubRelation   string
   CaveatName    string
   CaveatContext map[string]any
   ExpiresAt     *time.Time
@@ -1125,6 +1289,7 @@ func (folder Folder) ReadTenantedViewerUserRelations(ctx context.Context) ([]Fol
     }
     rels = append(rels, FolderTenantedViewerUserRelation{
       ID:            User(t.ID),
+      SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
       ExpiresAt:     t.ExpiresAt,
@@ -1135,6 +1300,7 @@ func (folder Folder) ReadTenantedViewerUserRelations(ctx context.Context) ([]Fol
 
 type FolderGuardedViewerUserRelation struct {
   ID            User
+  SubRelation   string
   CaveatName    string
   CaveatContext map[string]any
   ExpiresAt     *time.Time
@@ -1157,6 +1323,7 @@ func (folder Folder) ReadGuardedViewerUserRelations(ctx context.Context) ([]Fold
     }
     rels = append(rels, FolderGuardedViewerUserRelation{
       ID:            User(t.ID),
+      SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
       ExpiresAt:     t.ExpiresAt,
@@ -1176,6 +1343,7 @@ func (folder Folder) ReadGuardedViewerUserWildcard(ctx context.Context) (FolderG
     if t.ID == authz.WildcardID {
       return FolderGuardedViewerUserRelation{
         ID:            User(t.ID),
+        SubRelation:   t.SubRelation,
         CaveatName:    t.CaveatName,
         CaveatContext: t.CaveatContext,
         ExpiresAt:     t.ExpiresAt,
@@ -1187,6 +1355,7 @@ func (folder Folder) ReadGuardedViewerUserWildcard(ctx context.Context) (FolderG
 
 type FolderActorUserRelation struct {
   ID            User
+  SubRelation   string
   CaveatName    string
   CaveatContext map[string]any
   ExpiresAt     *time.Time
@@ -1209,6 +1378,7 @@ func (folder Folder) ReadActorUserRelations(ctx context.Context) ([]FolderActorU
     }
     rels = append(rels, FolderActorUserRelation{
       ID:            User(t.ID),
+      SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
       ExpiresAt:     t.ExpiresAt,
@@ -1219,6 +1389,7 @@ func (folder Folder) ReadActorUserRelations(ctx context.Context) ([]FolderActorU
 
 type FolderCollaboratorUserRelation struct {
   ID            User
+  SubRelation   string
   CaveatName    string
   CaveatContext map[string]any
   ExpiresAt     *time.Time
@@ -1241,6 +1412,7 @@ func (folder Folder) ReadCollaboratorUserRelations(ctx context.Context) ([]Folde
     }
     rels = append(rels, FolderCollaboratorUserRelation{
       ID:            User(t.ID),
+      SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
       ExpiresAt:     t.ExpiresAt,
@@ -1251,6 +1423,7 @@ func (folder Folder) ReadCollaboratorUserRelations(ctx context.Context) ([]Folde
 
 type FolderCollaboratorGroupRelation struct {
   ID            Group
+  SubRelation   string
   CaveatName    string
   CaveatContext map[string]any
   ExpiresAt     *time.Time
@@ -1273,6 +1446,7 @@ func (folder Folder) ReadCollaboratorGroupRelations(ctx context.Context) ([]Fold
     }
     rels = append(rels, FolderCollaboratorGroupRelation{
       ID:            Group(t.ID),
+      SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
       ExpiresAt:     t.ExpiresAt,
@@ -1283,6 +1457,7 @@ func (folder Folder) ReadCollaboratorGroupRelations(ctx context.Context) ([]Fold
 
 type FolderRateLimitedUserRelation struct {
   ID            User
+  SubRelation   string
   CaveatName    string
   CaveatContext map[string]any
   ExpiresAt     *time.Time
@@ -1305,6 +1480,7 @@ func (folder Folder) ReadRateLimitedUserRelations(ctx context.Context) ([]Folder
     }
     rels = append(rels, FolderRateLimitedUserRelation{
       ID:            User(t.ID),
+      SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
       ExpiresAt:     t.ExpiresAt,
@@ -1315,6 +1491,7 @@ func (folder Folder) ReadRateLimitedUserRelations(ctx context.Context) ([]Folder
 
 type FolderScoredViewerUserRelation struct {
   ID            User
+  SubRelation   string
   CaveatName    string
   CaveatContext map[string]any
   ExpiresAt     *time.Time
@@ -1337,6 +1514,7 @@ func (folder Folder) ReadScoredViewerUserRelations(ctx context.Context) ([]Folde
     }
     rels = append(rels, FolderScoredViewerUserRelation{
       ID:            User(t.ID),
+      SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
       ExpiresAt:     t.ExpiresAt,
@@ -1347,6 +1525,7 @@ func (folder Folder) ReadScoredViewerUserRelations(ctx context.Context) ([]Folde
 
 type FolderTokenViewerUserRelation struct {
   ID            User
+  SubRelation   string
   CaveatName    string
   CaveatContext map[string]any
   ExpiresAt     *time.Time
@@ -1369,6 +1548,7 @@ func (folder Folder) ReadTokenViewerUserRelations(ctx context.Context) ([]Folder
     }
     rels = append(rels, FolderTokenViewerUserRelation{
       ID:            User(t.ID),
+      SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
       ExpiresAt:     t.ExpiresAt,
@@ -1379,6 +1559,7 @@ func (folder Folder) ReadTokenViewerUserRelations(ctx context.Context) ([]Folder
 
 type FolderVersionedViewerUserRelation struct {
   ID            User
+  SubRelation   string
   CaveatName    string
   CaveatContext map[string]any
   ExpiresAt     *time.Time
@@ -1401,6 +1582,7 @@ func (folder Folder) ReadVersionedViewerUserRelations(ctx context.Context) ([]Fo
     }
     rels = append(rels, FolderVersionedViewerUserRelation{
       ID:            User(t.ID),
+      SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
       ExpiresAt:     t.ExpiresAt,
@@ -1411,6 +1593,7 @@ func (folder Folder) ReadVersionedViewerUserRelations(ctx context.Context) ([]Fo
 
 type FolderMatrixViewerUserRelation struct {
   ID            User
+  SubRelation   string
   CaveatName    string
   CaveatContext map[string]any
   ExpiresAt     *time.Time
@@ -1433,6 +1616,7 @@ func (folder Folder) ReadMatrixViewerUserRelations(ctx context.Context) ([]Folde
     }
     rels = append(rels, FolderMatrixViewerUserRelation{
       ID:            User(t.ID),
+      SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
       ExpiresAt:     t.ExpiresAt,
@@ -1443,6 +1627,7 @@ func (folder Folder) ReadMatrixViewerUserRelations(ctx context.Context) ([]Folde
 
 type FolderTenantedUserUserRelation struct {
   ID            User
+  SubRelation   string
   CaveatName    string
   CaveatContext map[string]any
   ExpiresAt     *time.Time
@@ -1465,6 +1650,7 @@ func (folder Folder) ReadTenantedUserUserRelations(ctx context.Context) ([]Folde
     }
     rels = append(rels, FolderTenantedUserUserRelation{
       ID:            User(t.ID),
+      SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
       ExpiresAt:     t.ExpiresAt,
@@ -1475,6 +1661,7 @@ func (folder Folder) ReadTenantedUserUserRelations(ctx context.Context) ([]Folde
 
 type FolderWindowedUserUserRelation struct {
   ID            User
+  SubRelation   string
   CaveatName    string
   CaveatContext map[string]any
   ExpiresAt     *time.Time
@@ -1497,6 +1684,7 @@ func (folder Folder) ReadWindowedUserUserRelations(ctx context.Context) ([]Folde
     }
     rels = append(rels, FolderWindowedUserUserRelation{
       ID:            User(t.ID),
+      SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
       ExpiresAt:     t.ExpiresAt,
@@ -1507,6 +1695,7 @@ func (folder Folder) ReadWindowedUserUserRelations(ctx context.Context) ([]Folde
 
 type FolderGatedRootFolderRelation struct {
   ID            Folder
+  SubRelation   string
   CaveatName    string
   CaveatContext map[string]any
   ExpiresAt     *time.Time
@@ -1529,6 +1718,7 @@ func (folder Folder) ReadGatedRootFolderRelations(ctx context.Context) ([]Folder
     }
     rels = append(rels, FolderGatedRootFolderRelation{
       ID:            Folder(t.ID),
+      SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
       ExpiresAt:     t.ExpiresAt,
@@ -1539,6 +1729,7 @@ func (folder Folder) ReadGatedRootFolderRelations(ctx context.Context) ([]Folder
 
 type FolderExpiringViewerUserRelation struct {
   ID            User
+  SubRelation   string
   CaveatName    string
   CaveatContext map[string]any
   ExpiresAt     *time.Time
@@ -1561,6 +1752,7 @@ func (folder Folder) ReadExpiringViewerUserRelations(ctx context.Context) ([]Fol
     }
     rels = append(rels, FolderExpiringViewerUserRelation{
       ID:            User(t.ID),
+      SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
       ExpiresAt:     t.ExpiresAt,
@@ -1571,6 +1763,7 @@ func (folder Folder) ReadExpiringViewerUserRelations(ctx context.Context) ([]Fol
 
 type FolderGatedTokenUserRelation struct {
   ID            User
+  SubRelation   string
   CaveatName    string
   CaveatContext map[string]any
   ExpiresAt     *time.Time
@@ -1593,6 +1786,7 @@ func (folder Folder) ReadGatedTokenUserRelations(ctx context.Context) ([]FolderG
     }
     rels = append(rels, FolderGatedTokenUserRelation{
       ID:            User(t.ID),
+      SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
       ExpiresAt:     t.ExpiresAt,
@@ -1603,6 +1797,7 @@ func (folder Folder) ReadGatedTokenUserRelations(ctx context.Context) ([]FolderG
 
 type FolderPublicUntilUserRelation struct {
   ID            User
+  SubRelation   string
   CaveatName    string
   CaveatContext map[string]any
   ExpiresAt     *time.Time
@@ -1625,6 +1820,7 @@ func (folder Folder) ReadPublicUntilUserRelations(ctx context.Context) ([]Folder
     }
     rels = append(rels, FolderPublicUntilUserRelation{
       ID:            User(t.ID),
+      SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
       ExpiresAt:     t.ExpiresAt,
@@ -1644,6 +1840,7 @@ func (folder Folder) ReadPublicUntilUserWildcard(ctx context.Context) (FolderPub
     if t.ID == authz.WildcardID {
       return FolderPublicUntilUserRelation{
         ID:            User(t.ID),
+        SubRelation:   t.SubRelation,
         CaveatName:    t.CaveatName,
         CaveatContext: t.CaveatContext,
         ExpiresAt:     t.ExpiresAt,
@@ -1655,6 +1852,7 @@ func (folder Folder) ReadPublicUntilUserWildcard(ctx context.Context) (FolderPub
 
 type FolderPublicGatedUserRelation struct {
   ID            User
+  SubRelation   string
   CaveatName    string
   CaveatContext map[string]any
   ExpiresAt     *time.Time
@@ -1677,6 +1875,7 @@ func (folder Folder) ReadPublicGatedUserRelations(ctx context.Context) ([]Folder
     }
     rels = append(rels, FolderPublicGatedUserRelation{
       ID:            User(t.ID),
+      SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
       ExpiresAt:     t.ExpiresAt,
@@ -1696,6 +1895,7 @@ func (folder Folder) ReadPublicGatedUserWildcard(ctx context.Context) (FolderPub
     if t.ID == authz.WildcardID {
       return FolderPublicGatedUserRelation{
         ID:            User(t.ID),
+        SubRelation:   t.SubRelation,
         CaveatName:    t.CaveatName,
         CaveatContext: t.CaveatContext,
         ExpiresAt:     t.ExpiresAt,
@@ -1703,6 +1903,176 @@ func (folder Folder) ReadPublicGatedUserWildcard(ctx context.Context) (FolderPub
     }
   }
   return FolderPublicGatedUserRelation{}, false, nil
+}
+
+type FolderCollabTeamRelation struct {
+  ID            Team
+  SubRelation   string
+  CaveatName    string
+  CaveatContext map[string]any
+  ExpiresAt     *time.Time
+}
+func (r FolderCollabTeamRelation) RelationID() Team { return r.ID }
+
+func (folder Folder) ReadCollabTeamRelations(ctx context.Context) ([]FolderCollabTeamRelation, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+    Type: TypeFolder,
+    ID: authz.ID(folder),
+  }, authz.Relation(FolderCollab), TypeTeam)
+  if err != nil {
+    return nil, err
+  }
+
+  rels := make([]FolderCollabTeamRelation, 0, len(tuples))
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      continue
+    }
+    rels = append(rels, FolderCollabTeamRelation{
+      ID:            Team(t.ID),
+      SubRelation:   t.SubRelation,
+      CaveatName:    t.CaveatName,
+      CaveatContext: t.CaveatContext,
+      ExpiresAt:     t.ExpiresAt,
+    })
+  }
+  return rels, nil
+}
+
+type FolderMixedViewUserRelation struct {
+  ID            User
+  SubRelation   string
+  CaveatName    string
+  CaveatContext map[string]any
+  ExpiresAt     *time.Time
+}
+func (r FolderMixedViewUserRelation) RelationID() User { return r.ID }
+
+func (folder Folder) ReadMixedViewUserRelations(ctx context.Context) ([]FolderMixedViewUserRelation, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+    Type: TypeFolder,
+    ID: authz.ID(folder),
+  }, authz.Relation(FolderMixedView), TypeUser)
+  if err != nil {
+    return nil, err
+  }
+
+  rels := make([]FolderMixedViewUserRelation, 0, len(tuples))
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      continue
+    }
+    rels = append(rels, FolderMixedViewUserRelation{
+      ID:            User(t.ID),
+      SubRelation:   t.SubRelation,
+      CaveatName:    t.CaveatName,
+      CaveatContext: t.CaveatContext,
+      ExpiresAt:     t.ExpiresAt,
+    })
+  }
+  return rels, nil
+}
+
+type FolderMixedViewTeamRelation struct {
+  ID            Team
+  SubRelation   string
+  CaveatName    string
+  CaveatContext map[string]any
+  ExpiresAt     *time.Time
+}
+func (r FolderMixedViewTeamRelation) RelationID() Team { return r.ID }
+
+func (folder Folder) ReadMixedViewTeamRelations(ctx context.Context) ([]FolderMixedViewTeamRelation, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+    Type: TypeFolder,
+    ID: authz.ID(folder),
+  }, authz.Relation(FolderMixedView), TypeTeam)
+  if err != nil {
+    return nil, err
+  }
+
+  rels := make([]FolderMixedViewTeamRelation, 0, len(tuples))
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      continue
+    }
+    rels = append(rels, FolderMixedViewTeamRelation{
+      ID:            Team(t.ID),
+      SubRelation:   t.SubRelation,
+      CaveatName:    t.CaveatName,
+      CaveatContext: t.CaveatContext,
+      ExpiresAt:     t.ExpiresAt,
+    })
+  }
+  return rels, nil
+}
+
+type FolderGatedCollabTeamRelation struct {
+  ID            Team
+  SubRelation   string
+  CaveatName    string
+  CaveatContext map[string]any
+  ExpiresAt     *time.Time
+}
+func (r FolderGatedCollabTeamRelation) RelationID() Team { return r.ID }
+
+func (folder Folder) ReadGatedCollabTeamRelations(ctx context.Context) ([]FolderGatedCollabTeamRelation, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+    Type: TypeFolder,
+    ID: authz.ID(folder),
+  }, authz.Relation(FolderGatedCollab), TypeTeam)
+  if err != nil {
+    return nil, err
+  }
+
+  rels := make([]FolderGatedCollabTeamRelation, 0, len(tuples))
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      continue
+    }
+    rels = append(rels, FolderGatedCollabTeamRelation{
+      ID:            Team(t.ID),
+      SubRelation:   t.SubRelation,
+      CaveatName:    t.CaveatName,
+      CaveatContext: t.CaveatContext,
+      ExpiresAt:     t.ExpiresAt,
+    })
+  }
+  return rels, nil
+}
+
+type FolderTempCollabTeamRelation struct {
+  ID            Team
+  SubRelation   string
+  CaveatName    string
+  CaveatContext map[string]any
+  ExpiresAt     *time.Time
+}
+func (r FolderTempCollabTeamRelation) RelationID() Team { return r.ID }
+
+func (folder Folder) ReadTempCollabTeamRelations(ctx context.Context) ([]FolderTempCollabTeamRelation, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+    Type: TypeFolder,
+    ID: authz.ID(folder),
+  }, authz.Relation(FolderTempCollab), TypeTeam)
+  if err != nil {
+    return nil, err
+  }
+
+  rels := make([]FolderTempCollabTeamRelation, 0, len(tuples))
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      continue
+    }
+    rels = append(rels, FolderTempCollabTeamRelation{
+      ID:            Team(t.ID),
+      SubRelation:   t.SubRelation,
+      CaveatName:    t.CaveatName,
+      CaveatContext: t.CaveatContext,
+      ExpiresAt:     t.ExpiresAt,
+    })
+  }
+  return rels, nil
 }
 
 const FolderBrowse PermissionFolder = "browse"
@@ -3001,6 +3371,167 @@ func LookupPublicGatedCheckFolderResources(ctx context.Context, input CheckFolde
   
   return []Folder{}, nil
 }
+const FolderCollabView PermissionFolder = "collab_view"
+
+type CheckFolderCollabViewInputs struct {
+  TeamAdmin []Team
+}
+
+func (folder Folder) CheckCollabView(ctx context.Context, input CheckFolderCollabViewInputs) (bool, error) {
+  if len(input.TeamAdmin) == 0 && true {
+    return false, authz.ErrNoInput
+  }
+
+  if len(input.TeamAdmin) > 0 {
+    err := authz.GetEngine(ctx).CheckPermissionUserset(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Permission(FolderCollabView), TypeTeam, authz.IDs(input.TeamAdmin), "admin", nil)
+    if err != nil {
+      return false, err
+    }
+  }
+  
+  return true, nil
+}
+
+func LookupCollabViewFolderResources(ctx context.Context, input CheckFolderCollabViewInputs) ([]Folder, error) {
+
+  
+  return []Folder{}, nil
+}
+const FolderMixedBrowse PermissionFolder = "mixed_browse"
+
+type CheckFolderMixedBrowseInputs struct {
+  User []User
+  TeamAdmin []Team
+}
+
+func (folder Folder) CheckMixedBrowse(ctx context.Context, input CheckFolderMixedBrowseInputs) (bool, error) {
+  if len(input.User) == 0 && len(input.TeamAdmin) == 0 && true {
+    return false, authz.ErrNoInput
+  }
+
+  if len(input.User) > 0 {
+    err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Permission(FolderMixedBrowse), TypeUser, authz.IDs(input.User))
+    if err != nil {
+      return false, err
+    }
+  }
+  if len(input.TeamAdmin) > 0 {
+    err := authz.GetEngine(ctx).CheckPermissionUserset(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Permission(FolderMixedBrowse), TypeTeam, authz.IDs(input.TeamAdmin), "admin", nil)
+    if err != nil {
+      return false, err
+    }
+  }
+  
+  return true, nil
+}
+
+func LookupMixedBrowseFolderResources(ctx context.Context, input CheckFolderMixedBrowseInputs) ([]Folder, error) {
+
+  if len(input.User) > 0 {
+    ids, err := authz.GetEngine(ctx).LookupResources(ctx,
+      TypeFolder, authz.Permission(FolderMixedBrowse),
+      TypeUser, authz.IDs(input.User),
+    )
+    if err != nil {
+      return nil, err
+    }
+
+    return authz.FromIDs[Folder](ids), nil
+  }
+  
+  return []Folder{}, nil
+}
+const FolderGatedCollabView PermissionFolder = "gated_collab_view"
+
+type CheckFolderGatedCollabViewInputs struct {
+  TeamAdmin []Team
+  Caveats CheckFolderGatedCollabViewCaveats
+}
+type CheckFolderGatedCollabViewCaveats struct {
+  TenantMatch *TenantMatchArgs
+}
+
+func (folder Folder) CheckGatedCollabView(ctx context.Context, input CheckFolderGatedCollabViewInputs) (bool, error) {
+  if len(input.TeamAdmin) == 0 && true {
+    return false, authz.ErrNoInput
+  }
+
+  var caveatCtx map[string]any
+  if c := input.Caveats.TenantMatch; c != nil {
+    if caveatCtx == nil {
+      caveatCtx = map[string]any{}
+    }
+    if c.Tenant != nil {
+      caveatCtx["tenant"] = *c.Tenant
+    }
+  }
+
+  if len(input.TeamAdmin) > 0 {
+    err := authz.GetEngine(ctx).CheckPermissionUserset(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Permission(FolderGatedCollabView), TypeTeam, authz.IDs(input.TeamAdmin), "admin", caveatCtx)
+    if err != nil {
+      return false, err
+    }
+  }
+  
+  return true, nil
+}
+
+func LookupGatedCollabViewFolderResources(ctx context.Context, input CheckFolderGatedCollabViewInputs) ([]Folder, error) {
+
+  var caveatCtx map[string]any
+  if c := input.Caveats.TenantMatch; c != nil {
+    if caveatCtx == nil {
+      caveatCtx = map[string]any{}
+    }
+    if c.Tenant != nil {
+      caveatCtx["tenant"] = *c.Tenant
+    }
+  }
+
+  
+  return []Folder{}, nil
+}
+const FolderTempCollabView PermissionFolder = "temp_collab_view"
+
+type CheckFolderTempCollabViewInputs struct {
+  TeamAdmin []Team
+}
+
+func (folder Folder) CheckTempCollabView(ctx context.Context, input CheckFolderTempCollabViewInputs) (bool, error) {
+  if len(input.TeamAdmin) == 0 && true {
+    return false, authz.ErrNoInput
+  }
+
+  if len(input.TeamAdmin) > 0 {
+    err := authz.GetEngine(ctx).CheckPermissionUserset(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Permission(FolderTempCollabView), TypeTeam, authz.IDs(input.TeamAdmin), "admin", nil)
+    if err != nil {
+      return false, err
+    }
+  }
+  
+  return true, nil
+}
+
+func LookupTempCollabViewFolderResources(ctx context.Context, input CheckFolderTempCollabViewInputs) ([]Folder, error) {
+
+  
+  return []Folder{}, nil
+}
 
 func (folder Folder) LookupBrowseUserSubjects(ctx context.Context) ([]User, error) {
 
@@ -3840,3 +4371,32 @@ func (folder Folder) LookupPublicGatedCheckUserWildcardSubjects(ctx context.Cont
     authz.Permission(FolderPublicGatedCheck), TypeUser,
   )
 }
+
+
+func (folder Folder) LookupMixedBrowseUserSubjects(ctx context.Context) ([]User, error) {
+
+  ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+    authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    },
+    authz.Permission(FolderMixedBrowse), TypeUser,
+  )
+  if err != nil {
+    return nil, err
+  }
+
+  return authz.FromIDsExcludingWildcard[User](ids), nil
+}
+
+func (folder Folder) LookupMixedBrowseUserWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    },
+    authz.Permission(FolderMixedBrowse), TypeUser,
+  )
+}
+
+

@@ -121,6 +121,7 @@ func (company Company) DeleteEmployeeRelations(ctx context.Context, objects Comp
 
 type CompanyAdminUserRelation struct {
   ID            User
+  SubRelation   string
   CaveatName    string
   CaveatContext map[string]any
   ExpiresAt     *time.Time
@@ -143,6 +144,7 @@ func (company Company) ReadAdminUserRelations(ctx context.Context) ([]CompanyAdm
     }
     rels = append(rels, CompanyAdminUserRelation{
       ID:            User(t.ID),
+      SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
       ExpiresAt:     t.ExpiresAt,
@@ -153,6 +155,7 @@ func (company Company) ReadAdminUserRelations(ctx context.Context) ([]CompanyAdm
 
 type CompanyManagerUserRelation struct {
   ID            User
+  SubRelation   string
   CaveatName    string
   CaveatContext map[string]any
   ExpiresAt     *time.Time
@@ -175,6 +178,7 @@ func (company Company) ReadManagerUserRelations(ctx context.Context) ([]CompanyM
     }
     rels = append(rels, CompanyManagerUserRelation{
       ID:            User(t.ID),
+      SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
       ExpiresAt:     t.ExpiresAt,
@@ -185,6 +189,7 @@ func (company Company) ReadManagerUserRelations(ctx context.Context) ([]CompanyM
 
 type CompanyEmployeeUserRelation struct {
   ID            User
+  SubRelation   string
   CaveatName    string
   CaveatContext map[string]any
   ExpiresAt     *time.Time
@@ -207,6 +212,7 @@ func (company Company) ReadEmployeeUserRelations(ctx context.Context) ([]Company
     }
     rels = append(rels, CompanyEmployeeUserRelation{
       ID:            User(t.ID),
+      SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
       ExpiresAt:     t.ExpiresAt,

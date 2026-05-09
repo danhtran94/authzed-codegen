@@ -63,6 +63,7 @@ func (pricelist Pricelist) DeleteOwnerRelations(ctx context.Context, objects Pri
 
 type PricelistOwnerCompanyRelation struct {
   ID            Company
+  SubRelation   string
   CaveatName    string
   CaveatContext map[string]any
   ExpiresAt     *time.Time
@@ -85,6 +86,7 @@ func (pricelist Pricelist) ReadOwnerCompanyRelations(ctx context.Context) ([]Pri
     }
     rels = append(rels, PricelistOwnerCompanyRelation{
       ID:            Company(t.ID),
+      SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
       ExpiresAt:     t.ExpiresAt,

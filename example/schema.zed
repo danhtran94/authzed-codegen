@@ -151,6 +151,16 @@ definition extsvc/user {}
 definition extsvc/group {}
 definition extsvc/role {}
 
+// AUZ-011 — `extsvc/team` exists so other resources can declare userset
+// references to its admin permission (e.g. `extsvc/team#admin`).
+// Members come via owner/manager relations; admin permission collapses
+// the two for downstream userset usage.
+definition extsvc/team {
+	relation owner: extsvc/user
+	relation manager: extsvc/user
+	permission admin = owner + manager
+}
+
 // AUZ-006 caveat fixture — single-string-param caveat exercising the
 // caveat codegen path: typed param struct generation, Caveat field on
 // Check<Perm>Inputs, and the CheckPermissionWithCaveat call.
@@ -325,6 +335,28 @@ definition extsvc/folder {
 	// with the caveat name and params attached.
 	relation public_gated: extsvc/user:* with extsvc/tenant_match and expiration
 	permission public_gated_check = public_gated
+
+	// AUZ-011 — plain userset reference. Storing `team:t1#admin` as a
+	// member grants membership-by-inheritance: any user reaching t1#admin
+	// (via owner or manager relations) is implicitly a collab.
+	relation collab: extsvc/team#admin
+	permission collab_view = collab
+
+	// AUZ-011 — mixed direct + userset. Caller can grant access either
+	// to a specific user (User field) OR to a team's admin set
+	// (TeamAdmin field). SpiceDB walks the userset chain at Check time.
+	relation mixed_view: extsvc/user | extsvc/team#admin
+	permission mixed_browse = mixed_view
+
+	// AUZ-011 — userset + caveat. The team#admin userset is granted
+	// only when the request-time caveat (tenant=acme) evaluates true.
+	relation gated_collab: extsvc/team#admin with extsvc/tenant_match
+	permission gated_collab_view = gated_collab
+
+	// AUZ-011 — userset + expiration. Per-tuple TTL applies to the
+	// userset reference; SpiceDB filters expired references at Check time.
+	relation temp_collab: extsvc/team#admin with expiration
+	permission temp_collab_view = temp_collab
 }
 
 definition extsvc/document {

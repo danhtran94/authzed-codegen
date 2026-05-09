@@ -55,6 +55,15 @@ type AllowedType struct {
 	// Engine.CreateRelationsWithExpiration. See SPEC-004.
 	IsExpiring bool
 
+	// SubRelation is the sub-relation name when the allowed type is a
+	// userset reference (e.g. `team#admin`). Empty for direct subjects.
+	// Drives codegen routing through Engine.CreateRelationsToUserset and
+	// Engine.CheckPermissionUserset. The disambiguation key extends from
+	// (Namespace, IsWildcard) to (Namespace, IsWildcard, SubRelation) so
+	// schemas declaring `team#admin | team#owner` produce distinct field
+	// names (TeamAdmin, TeamOwner). See SPEC-006.
+	SubRelation string
+
 	// IDFieldName is the Go field name used in the generated <Rel>Objects
 	// struct for the ID slice of this allowed type, and in the Wildcards
 	// sub-struct for the wildcard bool. For non-colliding allowed types
@@ -229,6 +238,97 @@ func detectPermCaveatCollisions(permCaveats map[string][]string, caveatMap map[s
 	return nil
 }
 
+// collectPermUsersets walks each permission's expressions like
+// collectPermCaveats but collects userset AllowedType entries (those
+// with SubRelation != ""). Used by the codegen to emit userset input
+// fields on Check<Perm>Inputs and to route Check calls through
+// CheckPermissionUserset for the rare userset-as-subject case
+// (per SPEC-006). An entry is omitted when the permission has no
+// userset path. Returns map[<defType>/<perm>] → AllowedType slice,
+// deduped by (Namespace, SubRelation).
+func collectPermUsersets(defs []*DefinitionView) map[string][]AllowedType {
+	relIdx := make(map[string]map[string][]AllowedType, len(defs))
+	permIdx := make(map[string]map[string][]PermissionExpr, len(defs))
+	for _, d := range defs {
+		ot := d.ObjectType.String()
+		relIdx[ot] = make(map[string][]AllowedType, len(d.Relations))
+		for _, r := range d.Relations {
+			relIdx[ot][r.Name] = r.AllowedTypes
+		}
+		permIdx[ot] = make(map[string][]PermissionExpr, len(d.Permissions))
+		for _, p := range d.Permissions {
+			permIdx[ot][p.Name] = p.Expressions
+		}
+	}
+
+	out := make(map[string][]AllowedType)
+	for _, d := range defs {
+		ot := d.ObjectType.String()
+		for _, p := range d.Permissions {
+			seen := make(map[string]AllowedType)
+			walkPermUsersets(ot, p.Name, relIdx, permIdx, seen, map[string]bool{})
+			if len(seen) == 0 {
+				continue
+			}
+			distinct := make([]AllowedType, 0, len(seen))
+			for _, at := range seen {
+				distinct = append(distinct, at)
+			}
+			sort.Slice(distinct, func(i, j int) bool {
+				if distinct[i].Namespace != distinct[j].Namespace {
+					return distinct[i].Namespace < distinct[j].Namespace
+				}
+				return distinct[i].SubRelation < distinct[j].SubRelation
+			})
+			out[fmt.Sprintf("%s/%s", ot, p.Name)] = distinct
+		}
+	}
+	return out
+}
+
+func walkPermUsersets(
+	ot, permName string,
+	relIdx map[string]map[string][]AllowedType,
+	permIdx map[string]map[string][]PermissionExpr,
+	out map[string]AllowedType,
+	visited map[string]bool,
+) {
+	key := fmt.Sprintf("%s/%s", ot, permName)
+	if visited[key] {
+		return
+	}
+	visited[key] = true
+	defer delete(visited, key)
+
+	exprs, ok := permIdx[ot][permName]
+	if !ok {
+		return
+	}
+	rels := relIdx[ot]
+	for _, e := range exprs {
+		switch e.Kind {
+		case PermExprIdentifier:
+			if at, ok := rels[e.Ident]; ok {
+				for _, t := range at {
+					if t.SubRelation != "" {
+						out[fmt.Sprintf("%s#%s", t.Namespace, t.SubRelation)] = t
+					}
+				}
+			} else if _, ok := permIdx[ot][e.Ident]; ok {
+				walkPermUsersets(ot, e.Ident, relIdx, permIdx, out, visited)
+			}
+		case PermExprArrow:
+			if at, ok := rels[e.LeftRel]; ok {
+				for _, t := range at {
+					if t.SubRelation != "" {
+						out[fmt.Sprintf("%s#%s", t.Namespace, t.SubRelation)] = t
+					}
+				}
+			}
+		}
+	}
+}
+
 func walkPermCaveats(
 	ot, permName string,
 	relIdx map[string]map[string][]AllowedType,
@@ -363,15 +463,17 @@ func flattenAllowedTypes(ti *core.TypeInformation) ([]AllowedType, error) {
 		}
 		isExpiring := ar.GetRequiredExpiration() != nil
 
+		subRelation := ""
 		if rel := ar.GetRelation(); rel != "" && rel != ellipsisRelation {
-			return nil, fmt.Errorf("sub-relation references are not supported (%s#%s)", ar.GetNamespace(), rel)
+			subRelation = rel
 		}
 
 		types = append(types, AllowedType{
-			Namespace:  ar.GetNamespace(),
-			IsWildcard: ar.GetPublicWildcard() != nil,
-			CaveatName: caveatName,
-			IsExpiring: isExpiring,
+			Namespace:   ar.GetNamespace(),
+			IsWildcard:  ar.GetPublicWildcard() != nil,
+			CaveatName:  caveatName,
+			IsExpiring:  isExpiring,
+			SubRelation: subRelation,
 		})
 	}
 
@@ -390,13 +492,16 @@ func flattenAllowedTypes(ti *core.TypeInformation) ([]AllowedType, error) {
 	// disambiguation is possible.
 	groupIdxs := make(map[string][]int, len(types))
 	for i, t := range types {
-		key := fmt.Sprintf("%s|wildcard=%v", t.Namespace, t.IsWildcard)
+		key := fmt.Sprintf("%s|wildcard=%v|subrelation=%s", t.Namespace, t.IsWildcard, t.SubRelation)
 		groupIdxs[key] = append(groupIdxs[key], i)
 	}
 	for _, idxs := range groupIdxs {
 		if len(idxs) == 1 {
 			t := &types[idxs[0]]
 			t.IDFieldName = utilstr.TypeName(t.Namespace)
+			if t.SubRelation != "" {
+				t.IDFieldName += pascalCaveatName(t.SubRelation)
+			}
 			if t.CaveatName != "" {
 				t.CaveatFieldName = t.IDFieldName
 			}
@@ -418,7 +523,11 @@ func flattenAllowedTypes(ti *core.TypeInformation) ([]AllowedType, error) {
 		}
 		for _, i := range idxs {
 			t := &types[i]
-			disamb := utilstr.TypeName(t.Namespace) + pascalCaveatName(t.CaveatName)
+			disamb := utilstr.TypeName(t.Namespace)
+			if t.SubRelation != "" {
+				disamb += pascalCaveatName(t.SubRelation)
+			}
+			disamb += pascalCaveatName(t.CaveatName)
 			t.IDFieldName = disamb
 			t.CaveatFieldName = disamb
 		}

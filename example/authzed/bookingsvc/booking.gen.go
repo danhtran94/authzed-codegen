@@ -155,6 +155,7 @@ func (booking Booking) DeleteRegionalOwnerRelations(ctx context.Context, objects
 
 type BookingOwnerEmployeeRelation struct {
   ID            Employee
+  SubRelation   string
   CaveatName    string
   CaveatContext map[string]any
   ExpiresAt     *time.Time
@@ -177,6 +178,7 @@ func (booking Booking) ReadOwnerEmployeeRelations(ctx context.Context) ([]Bookin
     }
     rels = append(rels, BookingOwnerEmployeeRelation{
       ID:            Employee(t.ID),
+      SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
       ExpiresAt:     t.ExpiresAt,
@@ -187,6 +189,7 @@ func (booking Booking) ReadOwnerEmployeeRelations(ctx context.Context) ([]Bookin
 
 type BookingCreatorEmployeeRelation struct {
   ID            Employee
+  SubRelation   string
   CaveatName    string
   CaveatContext map[string]any
   ExpiresAt     *time.Time
@@ -209,6 +212,7 @@ func (booking Booking) ReadCreatorEmployeeRelations(ctx context.Context) ([]Book
     }
     rels = append(rels, BookingCreatorEmployeeRelation{
       ID:            Employee(t.ID),
+      SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
       ExpiresAt:     t.ExpiresAt,
@@ -219,6 +223,7 @@ func (booking Booking) ReadCreatorEmployeeRelations(ctx context.Context) ([]Book
 
 type BookingCreatorCustomerRelation struct {
   ID            Customer
+  SubRelation   string
   CaveatName    string
   CaveatContext map[string]any
   ExpiresAt     *time.Time
@@ -241,6 +246,7 @@ func (booking Booking) ReadCreatorCustomerRelations(ctx context.Context) ([]Book
     }
     rels = append(rels, BookingCreatorCustomerRelation{
       ID:            Customer(t.ID),
+      SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
       ExpiresAt:     t.ExpiresAt,
@@ -251,6 +257,7 @@ func (booking Booking) ReadCreatorCustomerRelations(ctx context.Context) ([]Book
 
 type BookingRegionalOwnerEmployeeRelation struct {
   ID            Employee
+  SubRelation   string
   CaveatName    string
   CaveatContext map[string]any
   ExpiresAt     *time.Time
@@ -273,6 +280,7 @@ func (booking Booking) ReadRegionalOwnerEmployeeRelations(ctx context.Context) (
     }
     rels = append(rels, BookingRegionalOwnerEmployeeRelation{
       ID:            Employee(t.ID),
+      SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
       ExpiresAt:     t.ExpiresAt,

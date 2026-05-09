@@ -143,6 +143,7 @@ func (employee Employee) DeleteViewerRelations(ctx context.Context, objects Empl
 
 type EmployeeAccountUserRelation struct {
   ID            User
+  SubRelation   string
   CaveatName    string
   CaveatContext map[string]any
   ExpiresAt     *time.Time
@@ -165,6 +166,7 @@ func (employee Employee) ReadAccountUserRelations(ctx context.Context) ([]Employ
     }
     rels = append(rels, EmployeeAccountUserRelation{
       ID:            User(t.ID),
+      SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
       ExpiresAt:     t.ExpiresAt,
@@ -175,6 +177,7 @@ func (employee Employee) ReadAccountUserRelations(ctx context.Context) ([]Employ
 
 type EmployeeBelongsBrandBrandRelation struct {
   ID            Brand
+  SubRelation   string
   CaveatName    string
   CaveatContext map[string]any
   ExpiresAt     *time.Time
@@ -197,6 +200,7 @@ func (employee Employee) ReadBelongsBrandBrandRelations(ctx context.Context) ([]
     }
     rels = append(rels, EmployeeBelongsBrandBrandRelation{
       ID:            Brand(t.ID),
+      SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
       ExpiresAt:     t.ExpiresAt,
@@ -207,6 +211,7 @@ func (employee Employee) ReadBelongsBrandBrandRelations(ctx context.Context) ([]
 
 type EmployeeViewerUserRelation struct {
   ID            User
+  SubRelation   string
   CaveatName    string
   CaveatContext map[string]any
   ExpiresAt     *time.Time
@@ -229,6 +234,7 @@ func (employee Employee) ReadViewerUserRelations(ctx context.Context) ([]Employe
     }
     rels = append(rels, EmployeeViewerUserRelation{
       ID:            User(t.ID),
+      SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
       ExpiresAt:     t.ExpiresAt,
@@ -248,6 +254,7 @@ func (employee Employee) ReadViewerUserWildcard(ctx context.Context) (EmployeeVi
     if t.ID == authz.WildcardID {
       return EmployeeViewerUserRelation{
         ID:            User(t.ID),
+        SubRelation:   t.SubRelation,
         CaveatName:    t.CaveatName,
         CaveatContext: t.CaveatContext,
         ExpiresAt:     t.ExpiresAt,

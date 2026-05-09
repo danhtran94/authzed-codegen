@@ -64,10 +64,10 @@ func ({{ $var }} {{ $typeName }}) ToList() []{{ $typeName }} {
     if e := objects.Expirations.{{ $relType.IDFieldName }}; e != nil {
       expiresAt = *e
     }
-{{ end }}    err := authz.GetEngine(ctx).{{ if $relType.IsExpiring }}CreateRelationsWithExpiration{{ else if $relType.CaveatName }}CreateRelationsWithCaveat{{ else }}CreateRelations{{ end }}(ctx, authz.Resource{
+{{ end }}    err := authz.GetEngine(ctx).{{ if $relType.SubRelation }}CreateRelationsToUserset{{ else if $relType.IsExpiring }}CreateRelationsWithExpiration{{ else if $relType.CaveatName }}CreateRelationsWithCaveat{{ else }}CreateRelations{{ end }}(ctx, authz.Resource{
       Type: Type{{ $typeName }},
       ID: authz.ID({{ $var }}),
-    }, authz.Relation({{ $typeName }}{{ snakeToPascal $rel.Name }}), Type{{ typeName $relType.Namespace }}, authz.IDs(objects.{{ $relType.IDFieldName }}){{ if $relType.IsExpiring }}, {{ if $relType.CaveatName }}"{{ $relType.CaveatName }}", caveatCtx{{ else }}"", nil{{ end }}, expiresAt{{ else if $relType.CaveatName }}, "{{ $relType.CaveatName }}", caveatCtx{{ end }})
+    }, authz.Relation({{ $typeName }}{{ snakeToPascal $rel.Name }}), Type{{ typeName $relType.Namespace }}, authz.IDs(objects.{{ $relType.IDFieldName }}){{ if $relType.SubRelation }}, "{{ $relType.SubRelation }}", {{ if $relType.CaveatName }}"{{ $relType.CaveatName }}", caveatCtx{{ else }}"", nil{{ end }}, {{ if $relType.IsExpiring }}expiresAt{{ else }}time.Time{}{{ end }}{{ else if $relType.IsExpiring }}, {{ if $relType.CaveatName }}"{{ $relType.CaveatName }}", caveatCtx{{ else }}"", nil{{ end }}, expiresAt{{ else if $relType.CaveatName }}, "{{ $relType.CaveatName }}", caveatCtx{{ end }})
     if err != nil {
       return err
     }
@@ -119,6 +119,7 @@ func ({{ $var }} {{ $typeName }}) Delete{{ snakeToPascal $rel.Name}}Relations(ct
 {{ end }}{{ range $rel := .Relations }}{{ range $idx, $relType := uniqueByNamespace $rel.AllowedTypes }}
 type {{ $typeName }}{{ snakeToPascal $rel.Name }}{{ typeName $relType.Namespace }}Relation struct {
   ID            {{ typeName $relType.Namespace }}
+  SubRelation   string
   CaveatName    string
   CaveatContext map[string]any
   ExpiresAt     *time.Time
@@ -141,6 +142,7 @@ func ({{ $var }} {{ $typeName }}) Read{{ snakeToPascal $rel.Name}}{{ typeName $r
     }
     rels = append(rels, {{ $typeName }}{{ snakeToPascal $rel.Name }}{{ typeName $relType.Namespace }}Relation{
       ID:            {{ typeName $relType.Namespace }}(t.ID),
+      SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
       ExpiresAt:     t.ExpiresAt,
@@ -160,6 +162,7 @@ func ({{ $var }} {{ $typeName }}) Read{{ snakeToPascal $rel.Name}}{{ typeName $r
     if t.ID == authz.WildcardID {
       return {{ $typeName }}{{ snakeToPascal $rel.Name }}{{ typeName $relType.Namespace }}Relation{
         ID:            {{ typeName $relType.Namespace }}(t.ID),
+        SubRelation:   t.SubRelation,
         CaveatName:    t.CaveatName,
         CaveatContext: t.CaveatContext,
         ExpiresAt:     t.ExpiresAt,
@@ -173,6 +176,7 @@ func ({{ $var }} {{ $typeName }}) Read{{ snakeToPascal $rel.Name}}{{ typeName $r
 {{ $inputName := (print "Check" $typeName (snakeToPascal $perm.Name) "Inputs") }}{{ $caveatsTypeName := (print "Check" $typeName (snakeToPascal $perm.Name) "Caveats") }}
 type {{ $inputName }} struct {
 {{ range $inputType := permissionInputTypes $objectType $perm.Name }}  {{ typeName $inputType }} []{{ typeName $inputType }}
+{{ end }}{{ range $u := permissionInputUsersets $objectType $perm.Name }}  {{ typeName $u.Namespace }}{{ pascalCaveat $u.SubRelation }} []{{ typeName $u.Namespace }}
 {{ end }}{{ if hasPermCaveats $objectType $perm.Name }}  Caveats {{ $caveatsTypeName }}
 {{ end }}}
 {{ if hasPermCaveats $objectType $perm.Name }}type {{ $caveatsTypeName }} struct {
@@ -180,7 +184,7 @@ type {{ $inputName }} struct {
 {{ end }}}
 {{ end }}
 func ({{ $var }} {{ $typeName }}) Check{{ snakeToPascal $perm.Name }}(ctx context.Context, input {{ $inputName }}) (bool, error) {
-  if {{ range $idx, $inputType := permissionInputTypes $objectType $perm.Name }}len(input.{{ typeName $inputType }}) == 0 && {{ end }}true {
+  if {{ range $idx, $inputType := permissionInputTypes $objectType $perm.Name }}len(input.{{ typeName $inputType }}) == 0 && {{ end }}{{ range $u := permissionInputUsersets $objectType $perm.Name }}len(input.{{ typeName $u.Namespace }}{{ pascalCaveat $u.SubRelation }}) == 0 && {{ end }}true {
     return false, authz.ErrNoInput
   }
 {{ if hasPermCaveats $objectType $perm.Name }}
@@ -199,6 +203,15 @@ func ({{ $var }} {{ $typeName }}) Check{{ snakeToPascal $perm.Name }}(ctx contex
       Type: Type{{ $typeName }},
       ID: authz.ID({{ $var }}),
     }, authz.Permission({{ $typeName }}{{ snakeToPascal $perm.Name }}), Type{{ typeName $inputType }}, authz.IDs(input.{{ typeName $inputType }}){{ if hasPermCaveats $objectType $perm.Name }}, caveatCtx{{ end }})
+    if err != nil {
+      return false, err
+    }
+  }
+  {{ end }}{{ range $u := permissionInputUsersets $objectType $perm.Name }}if len(input.{{ typeName $u.Namespace }}{{ pascalCaveat $u.SubRelation }}) > 0 {
+    err := authz.GetEngine(ctx).CheckPermissionUserset(ctx, authz.Resource{
+      Type: Type{{ $typeName }},
+      ID: authz.ID({{ $var }}),
+    }, authz.Permission({{ $typeName }}{{ snakeToPascal $perm.Name }}), Type{{ typeName $u.Namespace }}, authz.IDs(input.{{ typeName $u.Namespace }}{{ pascalCaveat $u.SubRelation }}), "{{ $u.SubRelation }}", {{ if hasPermCaveats $objectType $perm.Name }}caveatCtx{{ else }}nil{{ end }})
     if err != nil {
       return false, err
     }

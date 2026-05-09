@@ -18,6 +18,8 @@ const WildcardID ID = "*"
 // SpiceDB relationship row. Subject ID is untyped at this layer;
 // generated code casts it to the typed subject (User, Group, …).
 //
+//   - SubRelation is empty for direct subjects, non-empty when the row
+//     references a userset (e.g. team#admin) per SPEC-006.
 //   - CaveatName is the empty string when no caveat is attached.
 //   - CaveatContext is nil when no caveat is attached or pre-context is empty.
 //   - ExpiresAt is nil when the tuple has no per-tuple TTL. A pointer is used
@@ -25,6 +27,7 @@ const WildcardID ID = "*"
 //     and would be ambiguous with "no expiration set".
 type RelationTuple struct {
 	ID            ID
+	SubRelation   string
 	CaveatName    string
 	CaveatContext map[string]any
 	ExpiresAt     *time.Time
@@ -34,8 +37,10 @@ type Engine interface {
 	CreateRelations(ctx context.Context, to Resource, relation Relation, subject Type, ids []ID) error
 	CreateRelationsWithCaveat(ctx context.Context, to Resource, relation Relation, subject Type, ids []ID, caveatName string, caveatParams map[string]any) error
 	CreateRelationsWithExpiration(ctx context.Context, to Resource, relation Relation, subject Type, ids []ID, caveatName string, caveatParams map[string]any, expiresAt time.Time) error
+	CreateRelationsToUserset(ctx context.Context, to Resource, relation Relation, subject Type, ids []ID, subRelation string, caveatName string, caveatParams map[string]any, expiresAt time.Time) error
 	CheckPermission(ctx context.Context, dest Resource, has Permission, subject Type, audIDs []ID) error
 	CheckPermissionWithCaveat(ctx context.Context, dest Resource, has Permission, subject Type, audIDs []ID, caveatParams map[string]any) error
+	CheckPermissionUserset(ctx context.Context, dest Resource, has Permission, subject Type, audIDs []ID, subRelation string, caveatParams map[string]any) error
 	LookupResources(ctx context.Context, from Type, match Permission, subject Type, byIDs []ID) ([]ID, error)
 	LookupResourcesWithCaveat(ctx context.Context, from Type, match Permission, subject Type, byIDs []ID, caveatParams map[string]any) ([]ID, error)
 	LookupSubjects(ctx context.Context, on Resource, permission Permission, subject Type) ([]ID, error)

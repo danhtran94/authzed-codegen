@@ -49,6 +49,8 @@ func (g *Generator) GenerateObjectSource(name string) error {
 	}
 	g.PermCaveats = permCaveats
 
+	permUsersets := collectPermUsersets(g.Definitions)
+
 	var mapFuncs = template.FuncMap{
 		"upperFirst":    utilstr.UpperFirst,
 		"packageName":   utilstr.PackageName,
@@ -60,6 +62,17 @@ func (g *Generator) GenerateObjectSource(name string) error {
 				return types
 			}
 			return []string{}
+		},
+		"permissionInputUsersets": func(objectType string, perm string) []AllowedType {
+			treename := fmt.Sprintf("%s/%s", objectType, perm)
+			if usersets, ok := permUsersets[treename]; ok {
+				return usersets
+			}
+			return []AllowedType{}
+		},
+		"hasPermUsersets": func(objectType string, perm string) bool {
+			treename := fmt.Sprintf("%s/%s", objectType, perm)
+			return len(permUsersets[treename]) > 0
 		},
 		"anyWildcard": func(types []AllowedType) bool {
 			for _, t := range types {
@@ -364,6 +377,14 @@ func ParseDefinitions(defs []*DefinitionView) DefinitionsByTypes {
 func relationFromView(r *RelationView) Relations {
 	out := make(Relations, 0, len(r.AllowedTypes))
 	for _, t := range r.AllowedTypes {
+		if t.SubRelation != "" {
+			// Userset references are exposed via permissionInputUsersets — they
+			// represent a different subject shape than direct subjects (the
+			// wire stores Team IDs with OptionalRelation set, not Team IDs as
+			// direct subjects). Excluding them here keeps permissionInputTypes
+			// emitting only namespaces that actually accept direct subjects.
+			continue
+		}
 		out = append(out, Relation{
 			Types: []string{t.Namespace},
 			Kind:  "single",

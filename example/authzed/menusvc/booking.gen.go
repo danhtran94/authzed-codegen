@@ -406,6 +406,7 @@ func (booking Booking) DeleteDupTypedRelations(ctx context.Context, objects Book
 
 type BookingOwnerCompanyRelation struct {
   ID            Company
+  SubRelation   string
   CaveatName    string
   CaveatContext map[string]any
   ExpiresAt     *time.Time
@@ -428,6 +429,7 @@ func (booking Booking) ReadOwnerCompanyRelations(ctx context.Context) ([]Booking
     }
     rels = append(rels, BookingOwnerCompanyRelation{
       ID:            Company(t.ID),
+      SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
       ExpiresAt:     t.ExpiresAt,
@@ -438,6 +440,7 @@ func (booking Booking) ReadOwnerCompanyRelations(ctx context.Context) ([]Booking
 
 type BookingCreatorUserRelation struct {
   ID            User
+  SubRelation   string
   CaveatName    string
   CaveatContext map[string]any
   ExpiresAt     *time.Time
@@ -460,6 +463,7 @@ func (booking Booking) ReadCreatorUserRelations(ctx context.Context) ([]BookingC
     }
     rels = append(rels, BookingCreatorUserRelation{
       ID:            User(t.ID),
+      SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
       ExpiresAt:     t.ExpiresAt,
@@ -470,6 +474,7 @@ func (booking Booking) ReadCreatorUserRelations(ctx context.Context) ([]BookingC
 
 type BookingCreatorCustomerRelation struct {
   ID            Customer
+  SubRelation   string
   CaveatName    string
   CaveatContext map[string]any
   ExpiresAt     *time.Time
@@ -492,6 +497,7 @@ func (booking Booking) ReadCreatorCustomerRelations(ctx context.Context) ([]Book
     }
     rels = append(rels, BookingCreatorCustomerRelation{
       ID:            Customer(t.ID),
+      SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
       ExpiresAt:     t.ExpiresAt,
@@ -502,6 +508,7 @@ func (booking Booking) ReadCreatorCustomerRelations(ctx context.Context) ([]Book
 
 type BookingHoursKeeperUserRelation struct {
   ID            User
+  SubRelation   string
   CaveatName    string
   CaveatContext map[string]any
   ExpiresAt     *time.Time
@@ -524,6 +531,7 @@ func (booking Booking) ReadHoursKeeperUserRelations(ctx context.Context) ([]Book
     }
     rels = append(rels, BookingHoursKeeperUserRelation{
       ID:            User(t.ID),
+      SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
       ExpiresAt:     t.ExpiresAt,
@@ -534,6 +542,7 @@ func (booking Booking) ReadHoursKeeperUserRelations(ctx context.Context) ([]Book
 
 type BookingMultiTemporalUserRelation struct {
   ID            User
+  SubRelation   string
   CaveatName    string
   CaveatContext map[string]any
   ExpiresAt     *time.Time
@@ -556,6 +565,7 @@ func (booking Booking) ReadMultiTemporalUserRelations(ctx context.Context) ([]Bo
     }
     rels = append(rels, BookingMultiTemporalUserRelation{
       ID:            User(t.ID),
+      SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
       ExpiresAt:     t.ExpiresAt,
@@ -566,6 +576,7 @@ func (booking Booking) ReadMultiTemporalUserRelations(ctx context.Context) ([]Bo
 
 type BookingMultiTemporalCustomerRelation struct {
   ID            Customer
+  SubRelation   string
   CaveatName    string
   CaveatContext map[string]any
   ExpiresAt     *time.Time
@@ -588,6 +599,7 @@ func (booking Booking) ReadMultiTemporalCustomerRelations(ctx context.Context) (
     }
     rels = append(rels, BookingMultiTemporalCustomerRelation{
       ID:            Customer(t.ID),
+      SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
       ExpiresAt:     t.ExpiresAt,
@@ -598,6 +610,7 @@ func (booking Booking) ReadMultiTemporalCustomerRelations(ctx context.Context) (
 
 type BookingSharedCavUserRelation struct {
   ID            User
+  SubRelation   string
   CaveatName    string
   CaveatContext map[string]any
   ExpiresAt     *time.Time
@@ -620,6 +633,7 @@ func (booking Booking) ReadSharedCavUserRelations(ctx context.Context) ([]Bookin
     }
     rels = append(rels, BookingSharedCavUserRelation{
       ID:            User(t.ID),
+      SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
       ExpiresAt:     t.ExpiresAt,
@@ -630,6 +644,7 @@ func (booking Booking) ReadSharedCavUserRelations(ctx context.Context) ([]Bookin
 
 type BookingSharedCavCustomerRelation struct {
   ID            Customer
+  SubRelation   string
   CaveatName    string
   CaveatContext map[string]any
   ExpiresAt     *time.Time
@@ -652,6 +667,7 @@ func (booking Booking) ReadSharedCavCustomerRelations(ctx context.Context) ([]Bo
     }
     rels = append(rels, BookingSharedCavCustomerRelation{
       ID:            Customer(t.ID),
+      SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
       ExpiresAt:     t.ExpiresAt,
@@ -662,6 +678,7 @@ func (booking Booking) ReadSharedCavCustomerRelations(ctx context.Context) ([]Bo
 
 type BookingDupTypedUserRelation struct {
   ID            User
+  SubRelation   string
   CaveatName    string
   CaveatContext map[string]any
   ExpiresAt     *time.Time
@@ -684,6 +701,7 @@ func (booking Booking) ReadDupTypedUserRelations(ctx context.Context) ([]Booking
     }
     rels = append(rels, BookingDupTypedUserRelation{
       ID:            User(t.ID),
+      SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
       ExpiresAt:     t.ExpiresAt,

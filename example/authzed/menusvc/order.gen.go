@@ -111,6 +111,7 @@ func (order Order) DeleteBelongsCompanyRelations(ctx context.Context, objects Or
 
 type OrderCreatorUserRelation struct {
   ID            User
+  SubRelation   string
   CaveatName    string
   CaveatContext map[string]any
   ExpiresAt     *time.Time
@@ -133,6 +134,7 @@ func (order Order) ReadCreatorUserRelations(ctx context.Context) ([]OrderCreator
     }
     rels = append(rels, OrderCreatorUserRelation{
       ID:            User(t.ID),
+      SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
       ExpiresAt:     t.ExpiresAt,
@@ -143,6 +145,7 @@ func (order Order) ReadCreatorUserRelations(ctx context.Context) ([]OrderCreator
 
 type OrderCreatorCustomerRelation struct {
   ID            Customer
+  SubRelation   string
   CaveatName    string
   CaveatContext map[string]any
   ExpiresAt     *time.Time
@@ -165,6 +168,7 @@ func (order Order) ReadCreatorCustomerRelations(ctx context.Context) ([]OrderCre
     }
     rels = append(rels, OrderCreatorCustomerRelation{
       ID:            Customer(t.ID),
+      SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
       ExpiresAt:     t.ExpiresAt,
@@ -175,6 +179,7 @@ func (order Order) ReadCreatorCustomerRelations(ctx context.Context) ([]OrderCre
 
 type OrderBelongsCompanyCompanyRelation struct {
   ID            Company
+  SubRelation   string
   CaveatName    string
   CaveatContext map[string]any
   ExpiresAt     *time.Time
@@ -197,6 +202,7 @@ func (order Order) ReadBelongsCompanyCompanyRelations(ctx context.Context) ([]Or
     }
     rels = append(rels, OrderBelongsCompanyCompanyRelation{
       ID:            Company(t.ID),
+      SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
       ExpiresAt:     t.ExpiresAt,

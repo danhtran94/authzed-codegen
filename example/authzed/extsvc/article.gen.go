@@ -92,6 +92,7 @@ func (article Article) DeleteParentRelations(ctx context.Context, objects Articl
 
 type ArticleAuthorUserRelation struct {
   ID            User
+  SubRelation   string
   CaveatName    string
   CaveatContext map[string]any
   ExpiresAt     *time.Time
@@ -114,6 +115,7 @@ func (article Article) ReadAuthorUserRelations(ctx context.Context) ([]ArticleAu
     }
     rels = append(rels, ArticleAuthorUserRelation{
       ID:            User(t.ID),
+      SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
       ExpiresAt:     t.ExpiresAt,
@@ -124,6 +126,7 @@ func (article Article) ReadAuthorUserRelations(ctx context.Context) ([]ArticleAu
 
 type ArticleParentFolderRelation struct {
   ID            Folder
+  SubRelation   string
   CaveatName    string
   CaveatContext map[string]any
   ExpiresAt     *time.Time
@@ -146,6 +149,7 @@ func (article Article) ReadParentFolderRelations(ctx context.Context) ([]Article
     }
     rels = append(rels, ArticleParentFolderRelation{
       ID:            Folder(t.ID),
+      SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
       ExpiresAt:     t.ExpiresAt,

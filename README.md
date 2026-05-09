@@ -62,7 +62,7 @@ a complete schema and its generated output.
 | Intersection (`&`), exclusion (`-`)    | ✓                                                                                               |
 | Caveats (`with <caveat>`)              | ✓ — typed `<Pascal>Args` per caveat; nested `Caveats` sub-struct on `<Rel>Objects` and `Check<Perm>Inputs`; multi-caveat-per-permission supported |
 | Expiration (`with expiration`)         | ✓ — per-tuple TTL via `Expirations` sub-struct on `<Rel>Objects`; auto-switches to `OPERATION_TOUCH`; combines with caveats |
-| Sub-relation references (`foo#bar`)    | ✗ rejected at adapt time                                                                        |
+| Sub-relation references (`foo#bar`)    | ✓ — typed userset write field (`<TypeName><PascalSubRel>`) on `<Rel>Objects`; userset Check input field; `SubRelation` on metadata struct |
 
 Parsing delegates to `github.com/authzed/spicedb/pkg/schemadsl/compiler` —
 any schema SpiceDB accepts will parse. The codegen layer is narrower;
@@ -194,6 +194,47 @@ if isWildcard && meta.ExpiresAt != nil {
 ```
 
 See `docs/spec-005-read-with-metadata.md` for the full Engine surface and constraints (no auto-decoded `<Caveat>Args`, slice materialization vs streaming, wildcard split discipline).
+
+## Sub-relation References
+
+Schemas declaring `relation X: Type#SubRelation` grant access via inheritance — anyone reaching `Type#SubRelation` (typically a permission or relation on the target type) is implicitly granted on the resource. The codegen surfaces userset writes as a typed field on `<Rel>Objects`:
+
+```hcl
+definition extsvc/team {
+    relation owner: extsvc/user
+    relation manager: extsvc/user
+    permission admin = owner + manager
+}
+
+definition extsvc/folder {
+    relation collab: extsvc/team#admin
+    permission collab_view = collab
+}
+```
+
+```go
+// Grant team t1's admin set as a collaborator. SpiceDB stores
+// (folder:f1, collab, team:t1#admin) — the wire keeps the team ID
+// as the anchor; user resolution happens at Check time.
+folder.CreateCollabRelations(ctx, extsvc.FolderCollabObjects{
+    TeamAdmin: []extsvc.Team{team},
+})
+```
+
+Common-case Check (does user u1 have access?) — SpiceDB walks the userset chain server-side:
+
+```go
+// u1 must be owner or manager of t1 for this Check to grant.
+ok, _ := folder.CheckCollabView(ctx, extsvc.CheckFolderCollabViewInputs{
+    TeamAdmin: []extsvc.Team{team},  // userset-as-subject input
+})
+```
+
+Permissions reaching userset allowed types expose userset input fields on `Check<Perm>Inputs`. The userset-as-subject Check (rare case) matches the literal userset reference — useful for "does this group itself have permission?" admin/audit tooling. Direct-subject Check (the common case) walks the chain transparently when the schema includes both branches.
+
+Read-side rows surface a `SubRelation` field on the metadata struct — empty for direct subjects, non-empty for userset references. Mixed schemas (`relation viewer: user | team#admin`) produce distinct Read methods per subject type (`ReadViewerUserRelations` and `ReadViewerTeamRelations`); each returns disjoint rows.
+
+See `docs/spec-006-sub-relation-references.md` for the wire-level walkthrough, the rare-case Check semantics (literal-match vs chain-walking), and the deferred Lookup-with-userset-results work.
 
 ## Behavior Notes
 

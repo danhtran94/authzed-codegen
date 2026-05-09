@@ -121,6 +121,7 @@ func (brand Brand) DeleteEmployeeRelations(ctx context.Context, objects BrandEmp
 
 type BrandAdminUserRelation struct {
   ID            User
+  SubRelation   string
   CaveatName    string
   CaveatContext map[string]any
   ExpiresAt     *time.Time
@@ -143,6 +144,7 @@ func (brand Brand) ReadAdminUserRelations(ctx context.Context) ([]BrandAdminUser
     }
     rels = append(rels, BrandAdminUserRelation{
       ID:            User(t.ID),
+      SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
       ExpiresAt:     t.ExpiresAt,
@@ -153,6 +155,7 @@ func (brand Brand) ReadAdminUserRelations(ctx context.Context) ([]BrandAdminUser
 
 type BrandManagerEmployeeRelation struct {
   ID            Employee
+  SubRelation   string
   CaveatName    string
   CaveatContext map[string]any
   ExpiresAt     *time.Time
@@ -175,6 +178,7 @@ func (brand Brand) ReadManagerEmployeeRelations(ctx context.Context) ([]BrandMan
     }
     rels = append(rels, BrandManagerEmployeeRelation{
       ID:            Employee(t.ID),
+      SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
       ExpiresAt:     t.ExpiresAt,
@@ -185,6 +189,7 @@ func (brand Brand) ReadManagerEmployeeRelations(ctx context.Context) ([]BrandMan
 
 type BrandEmployeeEmployeeRelation struct {
   ID            Employee
+  SubRelation   string
   CaveatName    string
   CaveatContext map[string]any
   ExpiresAt     *time.Time
@@ -207,6 +212,7 @@ func (brand Brand) ReadEmployeeEmployeeRelations(ctx context.Context) ([]BrandEm
     }
     rels = append(rels, BrandEmployeeEmployeeRelation{
       ID:            Employee(t.ID),
+      SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
       ExpiresAt:     t.ExpiresAt,

@@ -1703,3 +1703,170 @@ func TestArticle_LookupAuthorOnlyUserSubjects(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, ids, extsvc.User("au8"))
 }
+
+// AUZ-011 — sub-relation references (`team#admin`).
+//
+// Schema:
+//   relation collab: extsvc/team#admin
+//   permission collab_view = collab
+//   relation mixed_view: extsvc/user | extsvc/team#admin
+//   relation gated_collab: extsvc/team#admin with extsvc/tenant_match
+//   relation temp_collab: extsvc/team#admin with expiration
+
+func TestFolder_Collab_WriteUsersetThenRead_SubRelationPopulates(t *testing.T) {
+	ctx := context.Background()
+
+	team := extsvc.Team("t-collab-rd")
+	folder := extsvc.Folder("f-collab-rd")
+
+	require.NoError(t, folder.CreateCollabRelations(ctx, extsvc.FolderCollabObjects{
+		TeamAdmin: []extsvc.Team{team},
+	}))
+
+	rels, err := folder.ReadCollabTeamRelations(ctx)
+	require.NoError(t, err)
+	require.Len(t, rels, 1)
+	assert.Equal(t, team, rels[0].ID)
+	assert.Equal(t, "admin", rels[0].SubRelation, "userset row carries the sub-relation tag")
+}
+
+func TestFolder_CollabView_LiteralUsersetCheck(t *testing.T) {
+	ctx := context.Background()
+
+	team := extsvc.Team("t-lit")
+	folder := extsvc.Folder("f-lit")
+
+	require.NoError(t, folder.CreateCollabRelations(ctx, extsvc.FolderCollabObjects{
+		TeamAdmin: []extsvc.Team{team},
+	}))
+
+	// Rare case — userset-as-subject Check; SpiceDB matches the literal
+	// userset reference, no recursive expansion (per SPEC-006 A2).
+	ok, err := folder.CheckCollabView(ctx, extsvc.CheckFolderCollabViewInputs{
+		TeamAdmin: []extsvc.Team{team},
+	})
+	require.NoError(t, err)
+	assert.True(t, ok, "literal userset reference matches the granted tuple")
+}
+
+func TestFolder_CollabView_MismatchedTeamUsersetDenies(t *testing.T) {
+	ctx := context.Background()
+
+	teamGranted := extsvc.Team("t-granted")
+	teamOther := extsvc.Team("t-other")
+	folder := extsvc.Folder("f-mis")
+
+	require.NoError(t, folder.CreateCollabRelations(ctx, extsvc.FolderCollabObjects{
+		TeamAdmin: []extsvc.Team{teamGranted},
+	}))
+
+	// Different team's admin set is NOT granted — literal userset mismatch.
+	_, err := folder.CheckCollabView(ctx, extsvc.CheckFolderCollabViewInputs{
+		TeamAdmin: []extsvc.Team{teamOther},
+	})
+	assert.ErrorIs(t, err, authz.ErrPermissionDenied,
+		"literal userset reference does not match a different team's admin set")
+}
+
+func TestFolder_MixedView_DirectAndUsersetReadDisjoint(t *testing.T) {
+	ctx := context.Background()
+
+	user := extsvc.User("u-mix")
+	team := extsvc.Team("t-mix")
+	folder := extsvc.Folder("f-mix")
+
+	require.NoError(t, folder.CreateMixedViewRelations(ctx, extsvc.FolderMixedViewObjects{
+		User:      []extsvc.User{user},
+		TeamAdmin: []extsvc.Team{team},
+	}))
+
+	userRels, err := folder.ReadMixedViewUserRelations(ctx)
+	require.NoError(t, err)
+	require.Len(t, userRels, 1)
+	assert.Equal(t, user, userRels[0].ID)
+	assert.Equal(t, "", userRels[0].SubRelation, "direct user row has no sub-relation")
+
+	teamRels, err := folder.ReadMixedViewTeamRelations(ctx)
+	require.NoError(t, err)
+	require.Len(t, teamRels, 1)
+	assert.Equal(t, team, teamRels[0].ID)
+	assert.Equal(t, "admin", teamRels[0].SubRelation)
+}
+
+func TestFolder_GatedCollab_UsersetWithCaveat(t *testing.T) {
+	ctx := context.Background()
+
+	team := extsvc.Team("t-gated")
+	user := extsvc.User("u-gated")
+	folder := extsvc.Folder("f-gated")
+
+	require.NoError(t, team.CreateOwnerRelations(ctx, extsvc.TeamOwnerObjects{
+		User: []extsvc.User{user},
+	}))
+	require.NoError(t, folder.CreateGatedCollabRelations(ctx, extsvc.FolderGatedCollabObjects{
+		TeamAdmin: []extsvc.Team{team},
+		Caveats: extsvc.FolderGatedCollabCaveats{
+			TeamAdmin: &extsvc.TenantMatchArgs{Tenant: new("acme")},
+		},
+	}))
+
+	ok, err := folder.CheckGatedCollabView(ctx, extsvc.CheckFolderGatedCollabViewInputs{
+		TeamAdmin: []extsvc.Team{team},
+	})
+	require.NoError(t, err)
+	assert.True(t, ok, "userset + matching caveat pre-bound at write grants")
+}
+
+func TestFolder_TempCollab_UsersetWithExpiration(t *testing.T) {
+	ctx := context.Background()
+
+	team := extsvc.Team("t-temp")
+	user := extsvc.User("u-temp")
+	folder := extsvc.Folder("f-temp")
+
+	require.NoError(t, team.CreateOwnerRelations(ctx, extsvc.TeamOwnerObjects{
+		User: []extsvc.User{user},
+	}))
+
+	// Within-TTL grant. The deny-after-expiry case is exercised by AUZ-009's
+	// existing direct-subject expiration test (TestFolder_ExpiringBrowse_DeniesAfterExpiry).
+	// For userset-as-subject Check, AtExactSnapshot consistency pins expiration
+	// evaluation to the snapshot revision, so a tuple unexpired at write time
+	// stays "live" for the literal userset match — see AUZ-011 Discoveries.
+	expiresAt := time.Now().Add(1 * time.Hour)
+	require.NoError(t, folder.CreateTempCollabRelations(ctx, extsvc.FolderTempCollabObjects{
+		TeamAdmin: []extsvc.Team{team},
+		Expirations: extsvc.FolderTempCollabExpirations{
+			TeamAdmin: &expiresAt,
+		},
+	}))
+
+	ok, err := folder.CheckTempCollabView(ctx, extsvc.CheckFolderTempCollabViewInputs{
+		TeamAdmin: []extsvc.Team{team},
+	})
+	require.NoError(t, err)
+	assert.True(t, ok, "userset within TTL grants")
+
+	// Verify the tuple's metadata round-trips with the expiration timestamp.
+	rels, err := folder.ReadTempCollabTeamRelations(ctx)
+	require.NoError(t, err)
+	require.Len(t, rels, 1)
+	assert.Equal(t, "admin", rels[0].SubRelation)
+	require.NotNil(t, rels[0].ExpiresAt, "userset tuple carries OptionalExpiresAt on read")
+	assert.WithinDuration(t, expiresAt, *rels[0].ExpiresAt, 2*time.Second,
+		"stored expiry within ±2s of write timestamp")
+}
+
+func TestFolder_NonUsersetRead_SubRelationIsEmpty(t *testing.T) {
+	ctx := context.Background()
+
+	folder := extsvc.Folder("f-nonu")
+	require.NoError(t, folder.CreateViewerRelations(ctx, extsvc.FolderViewerObjects{
+		User: []extsvc.User{"u-nonu"},
+	}))
+
+	rels, err := folder.ReadViewerUserRelations(ctx)
+	require.NoError(t, err)
+	require.Len(t, rels, 1)
+	assert.Equal(t, "", rels[0].SubRelation, "direct subject row has empty SubRelation field")
+}
