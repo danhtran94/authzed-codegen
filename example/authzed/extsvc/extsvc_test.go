@@ -2584,3 +2584,134 @@ func TestFolder_AncestorOrSelf_LookupResources_TreeWalk(t *testing.T) {
 	assert.Contains(t, result.Definite, folderB, "B has A as direct parent")
 	assert.Contains(t, result.Definite, folderC, "C has A as transitive ancestor")
 }
+
+// AUZ-018 — Caveat parameter type expansion (duration / timestamp / ipaddress).
+//
+// Schema:
+//   caveat extsvc/within_window_d(window duration) { window > duration("0s") }
+//   caveat extsvc/before_deadline(deadline timestamp) { deadline > timestamp("2024-01-01T00:00:00Z") }
+//   caveat extsvc/from_subnet(client_ip ipaddress) { client_ip.in_cidr("10.0.0.0/24") }
+//
+// Generated Args structs use *time.Duration / *time.Time / *string;
+// template emits .String() / .Format(time.RFC3339) / *deref at the
+// structpb encoding site.
+
+func TestFolder_DurationCheck_Granted(t *testing.T) {
+	ctx := context.Background()
+	folder := extsvc.Folder("dur-ok")
+	user := extsvc.User("u-dur-ok")
+
+	d := time.Hour
+	require.NoError(t, folder.CreateDurationViewerRelations(ctx, extsvc.FolderDurationViewerObjects{
+		User: []extsvc.User{user},
+		Caveats: extsvc.FolderDurationViewerCaveats{
+			User: &extsvc.WithinWindowDArgs{Window: &d},
+		},
+	}))
+
+	ok, err := folder.CheckDurationCheck(ctx, extsvc.CheckFolderDurationCheckInputs{
+		User: []extsvc.User{user},
+	})
+	require.NoError(t, err)
+	assert.True(t, ok, "duration > 0 → granted")
+}
+
+func TestFolder_DurationCheck_ZeroDuration_Denied(t *testing.T) {
+	ctx := context.Background()
+	folder := extsvc.Folder("dur-no")
+	user := extsvc.User("u-dur-no")
+
+	d := time.Duration(0)
+	require.NoError(t, folder.CreateDurationViewerRelations(ctx, extsvc.FolderDurationViewerObjects{
+		User: []extsvc.User{user},
+		Caveats: extsvc.FolderDurationViewerCaveats{
+			User: &extsvc.WithinWindowDArgs{Window: &d},
+		},
+	}))
+
+	_, err := folder.CheckDurationCheck(ctx, extsvc.CheckFolderDurationCheckInputs{
+		User: []extsvc.User{user},
+	})
+	assert.ErrorIs(t, err, authz.ErrPermissionDenied,
+		"duration == 0s → caveat eval false → denied")
+}
+
+func TestFolder_DeadlineCheck_FutureDeadline_Granted(t *testing.T) {
+	ctx := context.Background()
+	folder := extsvc.Folder("dl-ok")
+	user := extsvc.User("u-dl-ok")
+
+	deadline := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
+	require.NoError(t, folder.CreateDeadlineViewerRelations(ctx, extsvc.FolderDeadlineViewerObjects{
+		User: []extsvc.User{user},
+		Caveats: extsvc.FolderDeadlineViewerCaveats{
+			User: &extsvc.BeforeDeadlineArgs{Deadline: &deadline},
+		},
+	}))
+
+	ok, err := folder.CheckDeadlineCheck(ctx, extsvc.CheckFolderDeadlineCheckInputs{
+		User: []extsvc.User{user},
+	})
+	require.NoError(t, err)
+	assert.True(t, ok, "deadline > 2024-01-01 → granted")
+}
+
+func TestFolder_DeadlineCheck_PastDeadline_Denied(t *testing.T) {
+	ctx := context.Background()
+	folder := extsvc.Folder("dl-no")
+	user := extsvc.User("u-dl-no")
+
+	deadline := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
+	require.NoError(t, folder.CreateDeadlineViewerRelations(ctx, extsvc.FolderDeadlineViewerObjects{
+		User: []extsvc.User{user},
+		Caveats: extsvc.FolderDeadlineViewerCaveats{
+			User: &extsvc.BeforeDeadlineArgs{Deadline: &deadline},
+		},
+	}))
+
+	_, err := folder.CheckDeadlineCheck(ctx, extsvc.CheckFolderDeadlineCheckInputs{
+		User: []extsvc.User{user},
+	})
+	assert.ErrorIs(t, err, authz.ErrPermissionDenied,
+		"deadline before 2024-01-01 → caveat eval false → denied")
+}
+
+func TestFolder_SubnetCheck_InCidr_Granted(t *testing.T) {
+	ctx := context.Background()
+	folder := extsvc.Folder("ip-ok")
+	user := extsvc.User("u-ip-ok")
+
+	ip := "10.0.0.5"
+	require.NoError(t, folder.CreateSubnetViewerRelations(ctx, extsvc.FolderSubnetViewerObjects{
+		User: []extsvc.User{user},
+		Caveats: extsvc.FolderSubnetViewerCaveats{
+			User: &extsvc.FromSubnetArgs{ClientIp: &ip},
+		},
+	}))
+
+	ok, err := folder.CheckSubnetCheck(ctx, extsvc.CheckFolderSubnetCheckInputs{
+		User: []extsvc.User{user},
+	})
+	require.NoError(t, err)
+	assert.True(t, ok, "client_ip in 10.0.0.0/24 → granted")
+}
+
+func TestFolder_SubnetCheck_OutOfCidr_Denied(t *testing.T) {
+	ctx := context.Background()
+	folder := extsvc.Folder("ip-no")
+	user := extsvc.User("u-ip-no")
+
+	ip := "192.168.1.1"
+	require.NoError(t, folder.CreateSubnetViewerRelations(ctx, extsvc.FolderSubnetViewerObjects{
+		User: []extsvc.User{user},
+		Caveats: extsvc.FolderSubnetViewerCaveats{
+			User: &extsvc.FromSubnetArgs{ClientIp: &ip},
+		},
+	}))
+
+	_, err := folder.CheckSubnetCheck(ctx, extsvc.CheckFolderSubnetCheckInputs{
+		User: []extsvc.User{user},
+	})
+	assert.ErrorIs(t, err, authz.ErrPermissionDenied,
+		"client_ip outside 10.0.0.0/24 → in_cidr false → denied")
+}

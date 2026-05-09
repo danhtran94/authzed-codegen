@@ -67,7 +67,7 @@ func ({{ $var }} {{ $typeName }}) ToList() []{{ $typeName }} {
     if c := objects.Caveats.{{ $relType.CaveatFieldName }}; c != nil {
       caveatCtx = map[string]any{}
 {{ range $param := caveatParams $relType.CaveatName }}      if c.{{ snakeToPascal $param.Name }} != nil {
-        caveatCtx["{{ $param.Name }}"] = {{ deref $param.GoType }}c.{{ snakeToPascal $param.Name }}
+        caveatCtx["{{ $param.Name }}"] = {{ caveatValueExpr $param.GoType (printf "c.%s" (snakeToPascal $param.Name)) }}
       }
 {{ end }}    }
 {{ end }}{{ if $relType.IsExpiring }}    var expiresAt time.Time
@@ -87,7 +87,7 @@ func ({{ $var }} {{ $typeName }}) ToList() []{{ $typeName }} {
     if c := objects.Caveats.{{ $relType.CaveatFieldName }}; c != nil {
       caveatCtx = map[string]any{}
 {{ range $param := caveatParams $relType.CaveatName }}      if c.{{ snakeToPascal $param.Name }} != nil {
-        caveatCtx["{{ $param.Name }}"] = {{ deref $param.GoType }}c.{{ snakeToPascal $param.Name }}
+        caveatCtx["{{ $param.Name }}"] = {{ caveatValueExpr $param.GoType (printf "c.%s" (snakeToPascal $param.Name)) }}
       }
 {{ end }}    }
 {{ end }}{{ if $relType.IsExpiring }}    var expiresAt time.Time
@@ -206,7 +206,7 @@ func ({{ $var }} {{ $typeName }}) Check{{ snakeToPascal $perm.Name }}(ctx contex
     }
 {{ end }}
 {{ range $param := caveatParams $caveatName }}    if c.{{ snakeToPascal $param.Name }} != nil {
-      caveatCtx["{{ $param.Name }}"] = {{ deref $param.GoType }}c.{{ snakeToPascal $param.Name }}
+      caveatCtx["{{ $param.Name }}"] = {{ caveatValueExpr $param.GoType (printf "c.%s" (snakeToPascal $param.Name)) }}
     }
 {{ end }}  }
 {{ end }}{{ end }}
@@ -242,7 +242,7 @@ func Lookup{{ snakeToPascal $perm.Name }}{{ $typeName }}Resources(ctx context.Co
     }
 {{ end }}
 {{ range $param := caveatParams $caveatName }}    if c.{{ snakeToPascal $param.Name }} != nil {
-      caveatCtx["{{ $param.Name }}"] = {{ deref $param.GoType }}c.{{ snakeToPascal $param.Name }}
+      caveatCtx["{{ $param.Name }}"] = {{ caveatValueExpr $param.GoType (printf "c.%s" (snakeToPascal $param.Name)) }}
     }
 {{ end }}  }
 {{ end }}{{ end }}
@@ -282,7 +282,7 @@ func Lookup{{ snakeToPascal $perm.Name }}{{ $typeName }}Resources(ctx context.Co
     }
 {{ end }}
 {{ range $param := caveatParams $caveatName }}    if c.{{ snakeToPascal $param.Name }} != nil {
-      caveatCtx["{{ $param.Name }}"] = {{ deref $param.GoType }}c.{{ snakeToPascal $param.Name }}
+      caveatCtx["{{ $param.Name }}"] = {{ caveatValueExpr $param.GoType (printf "c.%s" (snakeToPascal $param.Name)) }}
     }
 {{ end }}  }
 {{ end }}{{ end }}

@@ -209,6 +209,27 @@ caveat extsvc/matrix_check(rows list<list<string>>) {
 	size(rows) > 0
 }
 
+// AUZ-018 — `duration` caveat parameter. Codegen emits *time.Duration;
+// template's caveatValueExpr converts via .String() at the encoding
+// site (e.g. "1h0m0s" — parseable by SpiceDB's time.ParseDuration).
+caveat extsvc/within_window_d(window duration) {
+	window > duration("0s")
+}
+
+// AUZ-018 — `timestamp` caveat parameter. Codegen emits *time.Time;
+// template converts via .Format(time.RFC3339).
+caveat extsvc/before_deadline(deadline timestamp) {
+	deadline > timestamp("2024-01-01T00:00:00Z")
+}
+
+// AUZ-018 — `ipaddress` caveat parameter. Codegen emits *string
+// (avoids forcing a `net` import on every gen file). Caller passes
+// pre-formatted IP string.  CEL exposes ipaddress via the `in_cidr`
+// member function (no `ipaddress()` constructor literal).
+caveat extsvc/from_subnet(client_ip ipaddress) {
+	client_ip.in_cidr("10.0.0.0/24")
+}
+
 definition extsvc/folder {
 	// 3-way type union — exercises adapter walking 3 entries in
 	// AllowedDirectRelations and template emitting 3-arm Objects struct.
@@ -276,6 +297,20 @@ definition extsvc/folder {
 	// AUZ-007 ext — nested list type.
 	relation matrix_viewer: extsvc/user with extsvc/matrix_check
 	permission matrix_check_perm = matrix_viewer
+
+	// AUZ-018 — `duration` caveat. *time.Duration field on Args struct;
+	// template emits c.Window.String() at the encoding site.
+	relation duration_viewer: extsvc/user with extsvc/within_window_d
+	permission duration_check = duration_viewer
+
+	// AUZ-018 — `timestamp` caveat. *time.Time field on Args struct;
+	// template emits c.Deadline.Format(time.RFC3339).
+	relation deadline_viewer: extsvc/user with extsvc/before_deadline
+	permission deadline_check = deadline_viewer
+
+	// AUZ-018 — `ipaddress` caveat. *string field (pre-formatted).
+	relation subnet_viewer: extsvc/user with extsvc/from_subnet
+	permission subnet_check = subnet_viewer
 
 	// AUZ-007 ext — multi-caveat-per-permission. The cap from AUZ-006
 	// (one distinct caveat per permission) is lifted by the

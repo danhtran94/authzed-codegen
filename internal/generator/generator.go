@@ -189,6 +189,25 @@ func (g *Generator) GenerateObjectSource(name string) error {
 			}
 			return ""
 		},
+		// caveatValueExpr returns the Go expression that converts a typed
+		// caveat field at varExpr (e.g. "c.Tenant") to a structpb-compatible
+		// value. Most types just dereference; duration / timestamp need
+		// explicit conversion since SpiceDB wire-encodes both as strings
+		// (parsed server-side via time.ParseDuration / time.Parse(RFC3339)).
+		// Per AUZ-018.
+		"caveatValueExpr": func(goType, varExpr string) string {
+			switch goType {
+			case "*time.Duration":
+				return varExpr + ".String()"
+			case "*time.Time":
+				return varExpr + ".Format(time.RFC3339)"
+			default:
+				if strings.HasPrefix(goType, "*") {
+					return "*" + varExpr
+				}
+				return varExpr
+			}
+		},
 		"uniqueByNamespace": func(types []AllowedType) []AllowedType {
 			seen := map[string]bool{}
 			out := make([]AllowedType, 0, len(types))

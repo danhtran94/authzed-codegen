@@ -4,6 +4,66 @@ All notable changes to this project are documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.13.0] - 2026-05-09
+
+Extends caveat parameter type coverage. SpiceDB's `duration`, `timestamp`, and `ipaddress` types now map to typed Go values on generated `<Caveat>Args` structs instead of falling back to `any`. Caller DX improves significantly for the common time-based caveat patterns (rate limiting, session expiry, deadlines) and IP-based access control.
+
+### Added
+
+- **`caveatTypeToGo` extended** in `internal/generator/adapter.go`:
+  - `duration` → `*time.Duration`
+  - `timestamp` → `*time.Time`
+  - `ipaddress` → `*string` (avoids forcing `net` package import on every generated file; user calls `.String()` once at the call site)
+- **`caveatValueExpr` template helper** — emits the right Go expression for converting typed caveat fields to structpb-compatible values:
+  - `*time.Duration` → `c.Param.String()` (produces "1h0m0s" parseable by `time.ParseDuration`)
+  - `*time.Time` → `c.Param.Format(time.RFC3339)`
+  - other pointer types → existing `*c.Param` deref (unchanged)
+- **3 new caveat fixtures** on `extsvc/`:
+  - `extsvc/within_window_d(window duration)` — duration parameter
+  - `extsvc/before_deadline(deadline timestamp)` — timestamp parameter
+  - `extsvc/from_subnet(client_ip ipaddress)` — ipaddress parameter using CEL's `in_cidr` member function
+- **6 new e2e tests** covering grant/deny pairs for duration, timestamp, and ipaddress caveats.
+
+### Changed
+
+- **5 template sites** in `internal/templates/object.go.tmpl` swapped from `{{ deref $param.GoType }}c.{{ ... }}` to `{{ caveatValueExpr $param.GoType ... }}`. Existing caveat fixtures (string, bool, int, uint, double, bytes, list) regenerate byte-identical — `caveatValueExpr` falls through to the same `*deref` semantic for those types.
+
+### Caller pattern
+
+```go
+// duration caveat:
+window := time.Hour
+folder.CreateDurationViewerRelations(ctx, FolderDurationViewerObjects{
+    User: []User{user},
+    Caveats: FolderDurationViewerCaveats{
+        User: &WithinWindowDArgs{Window: &window},  // typed *time.Duration
+    },
+})
+// timestamp caveat:
+deadline := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
+folder.CreateDeadlineViewerRelations(ctx, FolderDeadlineViewerObjects{
+    User: []User{user},
+    Caveats: FolderDeadlineViewerCaveats{
+        User: &BeforeDeadlineArgs{Deadline: &deadline},  // typed *time.Time
+    },
+})
+```
+
+### Discovered during implementation
+
+CEL doesn't expose an `ipaddress(...)` constructor literal — only the `in_cidr(string)` member function works on IPAddress values. Fixture caveat expression rewritten from `client_ip == ipaddress("10.0.0.1")` to `client_ip.in_cidr("10.0.0.0/24")`. `ipaddress` is a CEL `OpaqueType` registered with that one method; equality / direct comparison against literals isn't supported. Comparison against another IPAddress field is — but for typical "is this IP in our allowed range" use cases, `in_cidr` is the natural pattern.
+
+### Verified
+
+- All 5 e2e packages pass.
+- Codegen idempotent at the new baseline.
+- Existing caveat fixtures (using string/int/bool/etc. types) regenerate byte-identical to v1.12.0.
+
+### Deferred
+
+- `map<K,V>` caveat parameters — still surfaced as `any`. No clean Go mapping (SpiceDB's typed maps support arbitrary key/value types).
+- Permission type annotations (`permission view: user = ...`) — verified during AUZ-017 follow-up that SpiceDB's annotation parser rejects prefixed types; our `RequirePrefixedObjectType()` requirement means annotations conflict with our codegen's input requirements. SpiceDB-side limitation.
+
 ## [1.12.0] - 2026-05-09
 
 Accepts SpiceDB's `_self` schema construct — schemas declared with `use self` at the top can now use the `self` keyword in permission expressions. SpiceDB's `checkSelf` evaluator (per `internal/graph/check.go:598-621`) grants only when the subject is **identity-equal** to the resource (same type, same ID, no sub-relation). Most useful in **recursive permission patterns** for tree-shaped data: `permission ancestor_or_self = self + parent->ancestor_or_self` provides the base case for "X or any X-reachable object via the recursion."

@@ -410,6 +410,21 @@ func caveatTypeToGo(t *core.CaveatTypeReference) string {
 		return "*float64"
 	case "bytes":
 		return "[]byte"
+	case "duration":
+		// SpiceDB wire-encodes as a string parseable by time.ParseDuration
+		// ("1h30m" / "5s"). Codegen emits time.Duration on the typed Args
+		// struct; the template's caveatValueExpr converts to a wire string
+		// via .String() at the encoding site.
+		return "*time.Duration"
+	case "timestamp":
+		// SpiceDB wire-encodes as RFC 3339 string. Codegen emits time.Time;
+		// caveatValueExpr converts via .Format(time.RFC3339).
+		return "*time.Time"
+	case "ipaddress":
+		// Surfaced as *string to avoid forcing a `net` import on every
+		// generated file when ipaddress caveats are rare. Caller calls
+		// .String() on a typed IP value once at the call site.
+		return "*string"
 	case "list":
 		children := t.GetChildTypes()
 		if len(children) != 1 {
@@ -417,6 +432,7 @@ func caveatTypeToGo(t *core.CaveatTypeReference) string {
 		}
 		return "[]" + caveatTypeToGoElem(children[0])
 	default:
+		// Unmapped: map<K,V>, plus any future SpiceDB-side additions.
 		return "any"
 	}
 }

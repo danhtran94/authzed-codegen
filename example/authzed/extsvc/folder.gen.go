@@ -104,6 +104,30 @@ type FolderMatrixViewerObjects struct {
 type FolderMatrixViewerCaveats struct {
   User *MatrixCheckArgs
 }
+const FolderDurationViewer RelationFolder = "duration_viewer"
+type FolderDurationViewerObjects struct {
+  User []User
+  Caveats FolderDurationViewerCaveats
+}
+type FolderDurationViewerCaveats struct {
+  User *WithinWindowDArgs
+}
+const FolderDeadlineViewer RelationFolder = "deadline_viewer"
+type FolderDeadlineViewerObjects struct {
+  User []User
+  Caveats FolderDeadlineViewerCaveats
+}
+type FolderDeadlineViewerCaveats struct {
+  User *BeforeDeadlineArgs
+}
+const FolderSubnetViewer RelationFolder = "subnet_viewer"
+type FolderSubnetViewerObjects struct {
+  User []User
+  Caveats FolderSubnetViewerCaveats
+}
+type FolderSubnetViewerCaveats struct {
+  User *FromSubnetArgs
+}
 const FolderTenantedUser RelationFolder = "tenanted_user"
 type FolderTenantedUserObjects struct {
   User []User
@@ -225,6 +249,14 @@ const FolderParentForSelf RelationFolder = "parent_for_self"
 type FolderParentForSelfObjects struct {
   Folder []Folder
 }
+type BeforeDeadlineArgs struct {
+  Deadline *time.Time
+}
+
+type FromSubnetArgs struct {
+  ClientIp *string
+}
+
 type HasTokenArgs struct {
   Token []byte
 }
@@ -254,6 +286,10 @@ type VersionCheckArgs struct {
 type WithinWindowArgs struct {
   AllowedActions []string
   RequestedAction *string
+}
+
+type WithinWindowDArgs struct {
+  Window *time.Duration
 }
 
 
@@ -537,6 +573,63 @@ func (folder Folder) CreateMatrixViewerRelations(ctx context.Context, objects Fo
       Type: TypeFolder,
       ID: authz.ID(folder),
     }, authz.Relation(FolderMatrixViewer), TypeUser, authz.IDs(objects.User), "extsvc/matrix_check", caveatCtx)
+    if err != nil {
+      return err
+    }
+  }
+  return nil
+}
+func (folder Folder) CreateDurationViewerRelations(ctx context.Context, objects FolderDurationViewerObjects) error {
+  if len(objects.User) > 0 {
+    var caveatCtx map[string]any
+    if c := objects.Caveats.User; c != nil {
+      caveatCtx = map[string]any{}
+      if c.Window != nil {
+        caveatCtx["window"] = c.Window.String()
+      }
+    }
+    err := authz.GetEngine(ctx).CreateRelationsWithCaveat(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Relation(FolderDurationViewer), TypeUser, authz.IDs(objects.User), "extsvc/within_window_d", caveatCtx)
+    if err != nil {
+      return err
+    }
+  }
+  return nil
+}
+func (folder Folder) CreateDeadlineViewerRelations(ctx context.Context, objects FolderDeadlineViewerObjects) error {
+  if len(objects.User) > 0 {
+    var caveatCtx map[string]any
+    if c := objects.Caveats.User; c != nil {
+      caveatCtx = map[string]any{}
+      if c.Deadline != nil {
+        caveatCtx["deadline"] = c.Deadline.Format(time.RFC3339)
+      }
+    }
+    err := authz.GetEngine(ctx).CreateRelationsWithCaveat(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Relation(FolderDeadlineViewer), TypeUser, authz.IDs(objects.User), "extsvc/before_deadline", caveatCtx)
+    if err != nil {
+      return err
+    }
+  }
+  return nil
+}
+func (folder Folder) CreateSubnetViewerRelations(ctx context.Context, objects FolderSubnetViewerObjects) error {
+  if len(objects.User) > 0 {
+    var caveatCtx map[string]any
+    if c := objects.Caveats.User; c != nil {
+      caveatCtx = map[string]any{}
+      if c.ClientIp != nil {
+        caveatCtx["client_ip"] = *c.ClientIp
+      }
+    }
+    err := authz.GetEngine(ctx).CreateRelationsWithCaveat(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Relation(FolderSubnetViewer), TypeUser, authz.IDs(objects.User), "extsvc/from_subnet", caveatCtx)
     if err != nil {
       return err
     }
@@ -1031,6 +1124,45 @@ func (folder Folder) DeleteMatrixViewerRelations(ctx context.Context, objects Fo
       Type: TypeFolder,
       ID: authz.ID(folder),
     }, authz.Relation(FolderMatrixViewer), TypeUser, authz.IDs(objects.User))
+    if err != nil {
+      return err
+    }
+  }
+  return nil
+}
+
+func (folder Folder) DeleteDurationViewerRelations(ctx context.Context, objects FolderDurationViewerObjects) error {
+  if len(objects.User) > 0 {
+    err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Relation(FolderDurationViewer), TypeUser, authz.IDs(objects.User))
+    if err != nil {
+      return err
+    }
+  }
+  return nil
+}
+
+func (folder Folder) DeleteDeadlineViewerRelations(ctx context.Context, objects FolderDeadlineViewerObjects) error {
+  if len(objects.User) > 0 {
+    err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Relation(FolderDeadlineViewer), TypeUser, authz.IDs(objects.User))
+    if err != nil {
+      return err
+    }
+  }
+  return nil
+}
+
+func (folder Folder) DeleteSubnetViewerRelations(ctx context.Context, objects FolderSubnetViewerObjects) error {
+  if len(objects.User) > 0 {
+    err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Relation(FolderSubnetViewer), TypeUser, authz.IDs(objects.User))
     if err != nil {
       return err
     }
@@ -1781,6 +1913,108 @@ func (folder Folder) ReadMatrixViewerUserRelations(ctx context.Context) ([]Folde
       continue
     }
     rels = append(rels, FolderMatrixViewerUserRelation{
+      ID:            User(t.ID),
+      SubRelation:   t.SubRelation,
+      CaveatName:    t.CaveatName,
+      CaveatContext: t.CaveatContext,
+      ExpiresAt:     t.ExpiresAt,
+    })
+  }
+  return rels, nil
+}
+
+type FolderDurationViewerUserRelation struct {
+  ID            User
+  SubRelation   string
+  CaveatName    string
+  CaveatContext map[string]any
+  ExpiresAt     *time.Time
+}
+func (r FolderDurationViewerUserRelation) RelationID() User { return r.ID }
+
+func (folder Folder) ReadDurationViewerUserRelations(ctx context.Context) ([]FolderDurationViewerUserRelation, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+    Type: TypeFolder,
+    ID: authz.ID(folder),
+  }, authz.Relation(FolderDurationViewer), TypeUser)
+  if err != nil {
+    return nil, err
+  }
+
+  rels := make([]FolderDurationViewerUserRelation, 0, len(tuples))
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      continue
+    }
+    rels = append(rels, FolderDurationViewerUserRelation{
+      ID:            User(t.ID),
+      SubRelation:   t.SubRelation,
+      CaveatName:    t.CaveatName,
+      CaveatContext: t.CaveatContext,
+      ExpiresAt:     t.ExpiresAt,
+    })
+  }
+  return rels, nil
+}
+
+type FolderDeadlineViewerUserRelation struct {
+  ID            User
+  SubRelation   string
+  CaveatName    string
+  CaveatContext map[string]any
+  ExpiresAt     *time.Time
+}
+func (r FolderDeadlineViewerUserRelation) RelationID() User { return r.ID }
+
+func (folder Folder) ReadDeadlineViewerUserRelations(ctx context.Context) ([]FolderDeadlineViewerUserRelation, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+    Type: TypeFolder,
+    ID: authz.ID(folder),
+  }, authz.Relation(FolderDeadlineViewer), TypeUser)
+  if err != nil {
+    return nil, err
+  }
+
+  rels := make([]FolderDeadlineViewerUserRelation, 0, len(tuples))
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      continue
+    }
+    rels = append(rels, FolderDeadlineViewerUserRelation{
+      ID:            User(t.ID),
+      SubRelation:   t.SubRelation,
+      CaveatName:    t.CaveatName,
+      CaveatContext: t.CaveatContext,
+      ExpiresAt:     t.ExpiresAt,
+    })
+  }
+  return rels, nil
+}
+
+type FolderSubnetViewerUserRelation struct {
+  ID            User
+  SubRelation   string
+  CaveatName    string
+  CaveatContext map[string]any
+  ExpiresAt     *time.Time
+}
+func (r FolderSubnetViewerUserRelation) RelationID() User { return r.ID }
+
+func (folder Folder) ReadSubnetViewerUserRelations(ctx context.Context) ([]FolderSubnetViewerUserRelation, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+    Type: TypeFolder,
+    ID: authz.ID(folder),
+  }, authz.Relation(FolderSubnetViewer), TypeUser)
+  if err != nil {
+    return nil, err
+  }
+
+  rels := make([]FolderSubnetViewerUserRelation, 0, len(tuples))
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      continue
+    }
+    rels = append(rels, FolderSubnetViewerUserRelation{
       ID:            User(t.ID),
       SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
@@ -3214,6 +3448,225 @@ func LookupMatrixCheckPermFolderResources(ctx context.Context, input CheckFolder
   if len(input.User) > 0 {
     result, err := authz.GetEngine(ctx).LookupResourcesWithCaveat(ctx,
       TypeFolder, authz.Permission(FolderMatrixCheckPerm),
+      TypeUser, authz.IDs(input.User),
+      caveatCtx,
+    )
+    if err != nil {
+      return FolderLookupResult{}, err
+    }
+
+    out := FolderLookupResult{
+      Definite:    authz.FromIDs[Folder](result.Definite),
+      Conditional: make([]FolderConditionalLookupEntry, 0, len(result.Conditional)),
+    }
+    for _, c := range result.Conditional {
+      out.Conditional = append(out.Conditional, FolderConditionalLookupEntry{
+        ID:          Folder(c.ID),
+        MissingKeys: c.MissingKeys,
+      })
+    }
+    return out, nil
+  }
+  
+  return FolderLookupResult{}, nil
+}
+const FolderDurationCheck PermissionFolder = "duration_check"
+
+type CheckFolderDurationCheckInputs struct {
+  User []User
+  Caveats CheckFolderDurationCheckCaveats
+}
+type CheckFolderDurationCheckCaveats struct {
+  WithinWindowD *WithinWindowDArgs
+}
+
+func (folder Folder) CheckDurationCheck(ctx context.Context, input CheckFolderDurationCheckInputs) (bool, error) {
+  if len(input.User) == 0 && true {
+    return false, authz.ErrNoInput
+  }
+
+  var caveatCtx map[string]any
+  if c := input.Caveats.WithinWindowD; c != nil {
+    caveatCtx = map[string]any{}
+
+    if c.Window != nil {
+      caveatCtx["window"] = c.Window.String()
+    }
+  }
+
+  if len(input.User) > 0 {
+    err := authz.GetEngine(ctx).CheckPermissionWithCaveat(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Permission(FolderDurationCheck), TypeUser, authz.IDs(input.User), caveatCtx)
+    if err != nil {
+      return false, err
+    }
+  }
+  
+  return true, nil
+}
+
+func LookupDurationCheckFolderResources(ctx context.Context, input CheckFolderDurationCheckInputs) (FolderLookupResult, error) {
+
+  var caveatCtx map[string]any
+  if c := input.Caveats.WithinWindowD; c != nil {
+    caveatCtx = map[string]any{}
+
+    if c.Window != nil {
+      caveatCtx["window"] = c.Window.String()
+    }
+  }
+
+  if len(input.User) > 0 {
+    result, err := authz.GetEngine(ctx).LookupResourcesWithCaveat(ctx,
+      TypeFolder, authz.Permission(FolderDurationCheck),
+      TypeUser, authz.IDs(input.User),
+      caveatCtx,
+    )
+    if err != nil {
+      return FolderLookupResult{}, err
+    }
+
+    out := FolderLookupResult{
+      Definite:    authz.FromIDs[Folder](result.Definite),
+      Conditional: make([]FolderConditionalLookupEntry, 0, len(result.Conditional)),
+    }
+    for _, c := range result.Conditional {
+      out.Conditional = append(out.Conditional, FolderConditionalLookupEntry{
+        ID:          Folder(c.ID),
+        MissingKeys: c.MissingKeys,
+      })
+    }
+    return out, nil
+  }
+  
+  return FolderLookupResult{}, nil
+}
+const FolderDeadlineCheck PermissionFolder = "deadline_check"
+
+type CheckFolderDeadlineCheckInputs struct {
+  User []User
+  Caveats CheckFolderDeadlineCheckCaveats
+}
+type CheckFolderDeadlineCheckCaveats struct {
+  BeforeDeadline *BeforeDeadlineArgs
+}
+
+func (folder Folder) CheckDeadlineCheck(ctx context.Context, input CheckFolderDeadlineCheckInputs) (bool, error) {
+  if len(input.User) == 0 && true {
+    return false, authz.ErrNoInput
+  }
+
+  var caveatCtx map[string]any
+  if c := input.Caveats.BeforeDeadline; c != nil {
+    caveatCtx = map[string]any{}
+
+    if c.Deadline != nil {
+      caveatCtx["deadline"] = c.Deadline.Format(time.RFC3339)
+    }
+  }
+
+  if len(input.User) > 0 {
+    err := authz.GetEngine(ctx).CheckPermissionWithCaveat(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Permission(FolderDeadlineCheck), TypeUser, authz.IDs(input.User), caveatCtx)
+    if err != nil {
+      return false, err
+    }
+  }
+  
+  return true, nil
+}
+
+func LookupDeadlineCheckFolderResources(ctx context.Context, input CheckFolderDeadlineCheckInputs) (FolderLookupResult, error) {
+
+  var caveatCtx map[string]any
+  if c := input.Caveats.BeforeDeadline; c != nil {
+    caveatCtx = map[string]any{}
+
+    if c.Deadline != nil {
+      caveatCtx["deadline"] = c.Deadline.Format(time.RFC3339)
+    }
+  }
+
+  if len(input.User) > 0 {
+    result, err := authz.GetEngine(ctx).LookupResourcesWithCaveat(ctx,
+      TypeFolder, authz.Permission(FolderDeadlineCheck),
+      TypeUser, authz.IDs(input.User),
+      caveatCtx,
+    )
+    if err != nil {
+      return FolderLookupResult{}, err
+    }
+
+    out := FolderLookupResult{
+      Definite:    authz.FromIDs[Folder](result.Definite),
+      Conditional: make([]FolderConditionalLookupEntry, 0, len(result.Conditional)),
+    }
+    for _, c := range result.Conditional {
+      out.Conditional = append(out.Conditional, FolderConditionalLookupEntry{
+        ID:          Folder(c.ID),
+        MissingKeys: c.MissingKeys,
+      })
+    }
+    return out, nil
+  }
+  
+  return FolderLookupResult{}, nil
+}
+const FolderSubnetCheck PermissionFolder = "subnet_check"
+
+type CheckFolderSubnetCheckInputs struct {
+  User []User
+  Caveats CheckFolderSubnetCheckCaveats
+}
+type CheckFolderSubnetCheckCaveats struct {
+  FromSubnet *FromSubnetArgs
+}
+
+func (folder Folder) CheckSubnetCheck(ctx context.Context, input CheckFolderSubnetCheckInputs) (bool, error) {
+  if len(input.User) == 0 && true {
+    return false, authz.ErrNoInput
+  }
+
+  var caveatCtx map[string]any
+  if c := input.Caveats.FromSubnet; c != nil {
+    caveatCtx = map[string]any{}
+
+    if c.ClientIp != nil {
+      caveatCtx["client_ip"] = *c.ClientIp
+    }
+  }
+
+  if len(input.User) > 0 {
+    err := authz.GetEngine(ctx).CheckPermissionWithCaveat(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Permission(FolderSubnetCheck), TypeUser, authz.IDs(input.User), caveatCtx)
+    if err != nil {
+      return false, err
+    }
+  }
+  
+  return true, nil
+}
+
+func LookupSubnetCheckFolderResources(ctx context.Context, input CheckFolderSubnetCheckInputs) (FolderLookupResult, error) {
+
+  var caveatCtx map[string]any
+  if c := input.Caveats.FromSubnet; c != nil {
+    caveatCtx = map[string]any{}
+
+    if c.ClientIp != nil {
+      caveatCtx["client_ip"] = *c.ClientIp
+    }
+  }
+
+  if len(input.User) > 0 {
+    result, err := authz.GetEngine(ctx).LookupResourcesWithCaveat(ctx,
+      TypeFolder, authz.Permission(FolderSubnetCheck),
       TypeUser, authz.IDs(input.User),
       caveatCtx,
     )
@@ -5183,6 +5636,144 @@ func (folder Folder) LookupMatrixCheckPermUserWildcardSubjects(ctx context.Conte
       ID: authz.ID(folder),
     },
     authz.Permission(FolderMatrixCheckPerm), TypeUser,
+  )
+}
+
+func (folder Folder) LookupDurationCheckUserSubjects(ctx context.Context, caveats CheckFolderDurationCheckCaveats) (UserLookupResult, error) {
+
+  var caveatCtx map[string]any
+  if c := caveats.WithinWindowD; c != nil {
+    caveatCtx = map[string]any{}
+
+    if c.Window != nil {
+      caveatCtx["window"] = c.Window.String()
+    }
+  }
+
+  result, err := authz.GetEngine(ctx).LookupSubjectsWithCaveat(ctx,
+    authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    },
+    authz.Permission(FolderDurationCheck), TypeUser,
+    caveatCtx,
+  )
+  if err != nil {
+    return UserLookupResult{}, err
+  }
+
+  out := UserLookupResult{
+    Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
+    Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
+  }
+  for _, c := range result.Conditional {
+    out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
+      ID:          User(c.ID),
+      MissingKeys: c.MissingKeys,
+    })
+  }
+  return out, nil
+}
+
+func (folder Folder) LookupDurationCheckUserWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    },
+    authz.Permission(FolderDurationCheck), TypeUser,
+  )
+}
+
+func (folder Folder) LookupDeadlineCheckUserSubjects(ctx context.Context, caveats CheckFolderDeadlineCheckCaveats) (UserLookupResult, error) {
+
+  var caveatCtx map[string]any
+  if c := caveats.BeforeDeadline; c != nil {
+    caveatCtx = map[string]any{}
+
+    if c.Deadline != nil {
+      caveatCtx["deadline"] = c.Deadline.Format(time.RFC3339)
+    }
+  }
+
+  result, err := authz.GetEngine(ctx).LookupSubjectsWithCaveat(ctx,
+    authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    },
+    authz.Permission(FolderDeadlineCheck), TypeUser,
+    caveatCtx,
+  )
+  if err != nil {
+    return UserLookupResult{}, err
+  }
+
+  out := UserLookupResult{
+    Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
+    Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
+  }
+  for _, c := range result.Conditional {
+    out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
+      ID:          User(c.ID),
+      MissingKeys: c.MissingKeys,
+    })
+  }
+  return out, nil
+}
+
+func (folder Folder) LookupDeadlineCheckUserWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    },
+    authz.Permission(FolderDeadlineCheck), TypeUser,
+  )
+}
+
+func (folder Folder) LookupSubnetCheckUserSubjects(ctx context.Context, caveats CheckFolderSubnetCheckCaveats) (UserLookupResult, error) {
+
+  var caveatCtx map[string]any
+  if c := caveats.FromSubnet; c != nil {
+    caveatCtx = map[string]any{}
+
+    if c.ClientIp != nil {
+      caveatCtx["client_ip"] = *c.ClientIp
+    }
+  }
+
+  result, err := authz.GetEngine(ctx).LookupSubjectsWithCaveat(ctx,
+    authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    },
+    authz.Permission(FolderSubnetCheck), TypeUser,
+    caveatCtx,
+  )
+  if err != nil {
+    return UserLookupResult{}, err
+  }
+
+  out := UserLookupResult{
+    Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
+    Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
+  }
+  for _, c := range result.Conditional {
+    out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
+      ID:          User(c.ID),
+      MissingKeys: c.MissingKeys,
+    })
+  }
+  return out, nil
+}
+
+func (folder Folder) LookupSubnetCheckUserWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    },
+    authz.Permission(FolderSubnetCheck), TypeUser,
   )
 }
 

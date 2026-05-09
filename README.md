@@ -77,10 +77,27 @@ written. Rationale: `docs/ADR-001-parser-migration.md`.
 Relations and allowed types declared `with <caveat>` generate a typed
 `<CaveatPascal>Args` struct per caveat (one per namespace) plus a
 `Caveats` sub-struct on the relation's `<Rel>Objects` and the
-permission's `Check<Perm>Inputs`. Scalar fields (`*string`, `*int`,
-`*bool`, `*float64`) are pointer-typed so callers can defer individual
-parameters to check time; container fields (`[]string`, `[]byte`, `map`)
-stay direct (nil = unset).
+permission's `Check<Perm>Inputs`.
+
+**Caveat parameter type mapping:**
+
+| SpiceDB type   | Go type                | Notes                                                      |
+|----------------|------------------------|------------------------------------------------------------|
+| `bool`         | `*bool`                | scalar; pointer for deferred binding                       |
+| `string`       | `*string`              | scalar                                                     |
+| `int`          | `*int`                 | scalar                                                     |
+| `uint`         | `*uint`                | scalar                                                     |
+| `double`       | `*float64`             | scalar                                                     |
+| `bytes`        | `[]byte`               | nilable directly                                           |
+| `list<T>`      | `[]T`                  | element type recurses; nested lists supported              |
+| `duration`     | `*time.Duration`       | converted via `.String()` at structpb encoding site        |
+| `timestamp`    | `*time.Time`           | converted via `.Format(time.RFC3339)`                      |
+| `ipaddress`    | `*string`              | caller passes pre-formatted IP string                      |
+| `map<K,V>`     | `any`                  | currently fall-back; no typed Go mapping yet               |
+
+Scalar pointer fields let callers defer individual parameters to check
+time (nil at write, supplied at check). Container types are nilable
+directly.
 
 ```hcl
 caveat extsvc/tenant_match(tenant string) {
