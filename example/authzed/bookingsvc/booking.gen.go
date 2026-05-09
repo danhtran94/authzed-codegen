@@ -6,6 +6,7 @@ import (
   "github.com/danhtran94/authzed-codegen/pkg/authz"
 
   "context"
+  "time"
 )
 
 const TypeBooking authz.Type = "bookingsvc/booking"
@@ -152,8 +153,16 @@ func (booking Booking) DeleteRegionalOwnerRelations(ctx context.Context, objects
   return nil
 }
 
-func (booking Booking) ReadOwnerEmployeeRelations(ctx context.Context) ([]Employee, error) {
-  ids, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+type BookingOwnerEmployeeRelation struct {
+  ID            Employee
+  CaveatName    string
+  CaveatContext map[string]any
+  ExpiresAt     *time.Time
+}
+func (r BookingOwnerEmployeeRelation) RelationID() Employee { return r.ID }
+
+func (booking Booking) ReadOwnerEmployeeRelations(ctx context.Context) ([]BookingOwnerEmployeeRelation, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
     Type: TypeBooking,
     ID: authz.ID(booking),
   }, authz.Relation(BookingOwner), TypeEmployee)
@@ -161,11 +170,31 @@ func (booking Booking) ReadOwnerEmployeeRelations(ctx context.Context) ([]Employ
     return nil, err
   }
 
-  return authz.FromIDsExcludingWildcard[Employee](ids), nil
+  rels := make([]BookingOwnerEmployeeRelation, 0, len(tuples))
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      continue
+    }
+    rels = append(rels, BookingOwnerEmployeeRelation{
+      ID:            Employee(t.ID),
+      CaveatName:    t.CaveatName,
+      CaveatContext: t.CaveatContext,
+      ExpiresAt:     t.ExpiresAt,
+    })
+  }
+  return rels, nil
 }
 
-func (booking Booking) ReadCreatorEmployeeRelations(ctx context.Context) ([]Employee, error) {
-  ids, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+type BookingCreatorEmployeeRelation struct {
+  ID            Employee
+  CaveatName    string
+  CaveatContext map[string]any
+  ExpiresAt     *time.Time
+}
+func (r BookingCreatorEmployeeRelation) RelationID() Employee { return r.ID }
+
+func (booking Booking) ReadCreatorEmployeeRelations(ctx context.Context) ([]BookingCreatorEmployeeRelation, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
     Type: TypeBooking,
     ID: authz.ID(booking),
   }, authz.Relation(BookingCreator), TypeEmployee)
@@ -173,11 +202,31 @@ func (booking Booking) ReadCreatorEmployeeRelations(ctx context.Context) ([]Empl
     return nil, err
   }
 
-  return authz.FromIDsExcludingWildcard[Employee](ids), nil
+  rels := make([]BookingCreatorEmployeeRelation, 0, len(tuples))
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      continue
+    }
+    rels = append(rels, BookingCreatorEmployeeRelation{
+      ID:            Employee(t.ID),
+      CaveatName:    t.CaveatName,
+      CaveatContext: t.CaveatContext,
+      ExpiresAt:     t.ExpiresAt,
+    })
+  }
+  return rels, nil
 }
 
-func (booking Booking) ReadCreatorCustomerRelations(ctx context.Context) ([]Customer, error) {
-  ids, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+type BookingCreatorCustomerRelation struct {
+  ID            Customer
+  CaveatName    string
+  CaveatContext map[string]any
+  ExpiresAt     *time.Time
+}
+func (r BookingCreatorCustomerRelation) RelationID() Customer { return r.ID }
+
+func (booking Booking) ReadCreatorCustomerRelations(ctx context.Context) ([]BookingCreatorCustomerRelation, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
     Type: TypeBooking,
     ID: authz.ID(booking),
   }, authz.Relation(BookingCreator), TypeCustomer)
@@ -185,11 +234,31 @@ func (booking Booking) ReadCreatorCustomerRelations(ctx context.Context) ([]Cust
     return nil, err
   }
 
-  return authz.FromIDsExcludingWildcard[Customer](ids), nil
+  rels := make([]BookingCreatorCustomerRelation, 0, len(tuples))
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      continue
+    }
+    rels = append(rels, BookingCreatorCustomerRelation{
+      ID:            Customer(t.ID),
+      CaveatName:    t.CaveatName,
+      CaveatContext: t.CaveatContext,
+      ExpiresAt:     t.ExpiresAt,
+    })
+  }
+  return rels, nil
 }
 
-func (booking Booking) ReadRegionalOwnerEmployeeRelations(ctx context.Context) ([]Employee, error) {
-  ids, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+type BookingRegionalOwnerEmployeeRelation struct {
+  ID            Employee
+  CaveatName    string
+  CaveatContext map[string]any
+  ExpiresAt     *time.Time
+}
+func (r BookingRegionalOwnerEmployeeRelation) RelationID() Employee { return r.ID }
+
+func (booking Booking) ReadRegionalOwnerEmployeeRelations(ctx context.Context) ([]BookingRegionalOwnerEmployeeRelation, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
     Type: TypeBooking,
     ID: authz.ID(booking),
   }, authz.Relation(BookingRegionalOwner), TypeEmployee)
@@ -197,7 +266,19 @@ func (booking Booking) ReadRegionalOwnerEmployeeRelations(ctx context.Context) (
     return nil, err
   }
 
-  return authz.FromIDsExcludingWildcard[Employee](ids), nil
+  rels := make([]BookingRegionalOwnerEmployeeRelation, 0, len(tuples))
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      continue
+    }
+    rels = append(rels, BookingRegionalOwnerEmployeeRelation{
+      ID:            Employee(t.ID),
+      CaveatName:    t.CaveatName,
+      CaveatContext: t.CaveatContext,
+      ExpiresAt:     t.ExpiresAt,
+    })
+  }
+  return rels, nil
 }
 
 const BookingWrite PermissionBooking = "write"

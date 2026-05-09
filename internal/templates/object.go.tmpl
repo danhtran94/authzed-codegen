@@ -5,7 +5,7 @@ package {{ packageName .ObjectType.Prefix }}
 import (
   "github.com/danhtran94/authzed-codegen/pkg/authz"
 
-  {{ $countRels := len .Relations }}{{ if gt $countRels 0 }}"context"{{ end }}{{ if anyExpiringInRels .Relations }}
+  {{ $countRels := len .Relations }}{{ if gt $countRels 0 }}"context"
   "time"{{ end }}
 )
 {{ $objectType := (print .ObjectType.Prefix "/" .ObjectType.Name) }}{{ $typeName := upperFirst .ObjectType.Name }}
@@ -117,8 +117,16 @@ func ({{ $var }} {{ $typeName }}) Delete{{ snakeToPascal $rel.Name}}Relations(ct
   {{ end }}{{ end }}return nil
 }
 {{ end }}{{ range $rel := .Relations }}{{ range $idx, $relType := uniqueByNamespace $rel.AllowedTypes }}
-func ({{ $var }} {{ $typeName }}) Read{{ snakeToPascal $rel.Name}}{{ typeName $relType.Namespace }}Relations(ctx context.Context) ([]{{ typeName $relType.Namespace }}, error) {
-  ids, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+type {{ $typeName }}{{ snakeToPascal $rel.Name }}{{ typeName $relType.Namespace }}Relation struct {
+  ID            {{ typeName $relType.Namespace }}
+  CaveatName    string
+  CaveatContext map[string]any
+  ExpiresAt     *time.Time
+}
+func (r {{ $typeName }}{{ snakeToPascal $rel.Name }}{{ typeName $relType.Namespace }}Relation) RelationID() {{ typeName $relType.Namespace }} { return r.ID }
+
+func ({{ $var }} {{ $typeName }}) Read{{ snakeToPascal $rel.Name}}{{ typeName $relType.Namespace }}Relations(ctx context.Context) ([]{{ $typeName }}{{ snakeToPascal $rel.Name }}{{ typeName $relType.Namespace }}Relation, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
     Type: Type{{ $typeName }},
     ID: authz.ID({{ $var }}),
   }, authz.Relation({{ $typeName }}{{ snakeToPascal $rel.Name }}), Type{{ typeName $relType.Namespace }})
@@ -126,13 +134,39 @@ func ({{ $var }} {{ $typeName }}) Read{{ snakeToPascal $rel.Name}}{{ typeName $r
     return nil, err
   }
 
-  return authz.FromIDsExcludingWildcard[{{ typeName $relType.Namespace }}](ids), nil
+  rels := make([]{{ $typeName }}{{ snakeToPascal $rel.Name }}{{ typeName $relType.Namespace }}Relation, 0, len(tuples))
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      continue
+    }
+    rels = append(rels, {{ $typeName }}{{ snakeToPascal $rel.Name }}{{ typeName $relType.Namespace }}Relation{
+      ID:            {{ typeName $relType.Namespace }}(t.ID),
+      CaveatName:    t.CaveatName,
+      CaveatContext: t.CaveatContext,
+      ExpiresAt:     t.ExpiresAt,
+    })
+  }
+  return rels, nil
 }
-{{ if $relType.IsWildcard }}func ({{ $var }} {{ $typeName }}) Read{{ snakeToPascal $rel.Name }}{{ typeName $relType.Namespace }}Wildcard(ctx context.Context) (bool, error) {
-  return authz.GetEngine(ctx).HasPublicRelation(ctx, authz.Resource{
+{{ if $relType.IsWildcard }}func ({{ $var }} {{ $typeName }}) Read{{ snakeToPascal $rel.Name }}{{ typeName $relType.Namespace }}Wildcard(ctx context.Context) ({{ $typeName }}{{ snakeToPascal $rel.Name }}{{ typeName $relType.Namespace }}Relation, bool, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
     Type: Type{{ $typeName }},
     ID: authz.ID({{ $var }}),
   }, authz.Relation({{ $typeName }}{{ snakeToPascal $rel.Name }}), Type{{ typeName $relType.Namespace }})
+  if err != nil {
+    return {{ $typeName }}{{ snakeToPascal $rel.Name }}{{ typeName $relType.Namespace }}Relation{}, false, err
+  }
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      return {{ $typeName }}{{ snakeToPascal $rel.Name }}{{ typeName $relType.Namespace }}Relation{
+        ID:            {{ typeName $relType.Namespace }}(t.ID),
+        CaveatName:    t.CaveatName,
+        CaveatContext: t.CaveatContext,
+        ExpiresAt:     t.ExpiresAt,
+      }, true, nil
+    }
+  }
+  return {{ $typeName }}{{ snakeToPascal $rel.Name }}{{ typeName $relType.Namespace }}Relation{}, false, nil
 }
 {{ end }}{{ end }}{{ end }}
 {{ range $perm := .Permissions }}const {{ $typeName }}{{ snakeToPascal $perm.Name }} Permission{{ $typeName }} = "{{ $perm.Name }}"

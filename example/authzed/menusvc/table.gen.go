@@ -6,6 +6,7 @@ import (
   "github.com/danhtran94/authzed-codegen/pkg/authz"
 
   "context"
+  "time"
 )
 
 const TypeTable authz.Type = "menusvc/table"
@@ -60,8 +61,16 @@ func (table Table) DeleteOwnerRelations(ctx context.Context, objects TableOwnerO
   return nil
 }
 
-func (table Table) ReadOwnerCompanyRelations(ctx context.Context) ([]Company, error) {
-  ids, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+type TableOwnerCompanyRelation struct {
+  ID            Company
+  CaveatName    string
+  CaveatContext map[string]any
+  ExpiresAt     *time.Time
+}
+func (r TableOwnerCompanyRelation) RelationID() Company { return r.ID }
+
+func (table Table) ReadOwnerCompanyRelations(ctx context.Context) ([]TableOwnerCompanyRelation, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
     Type: TypeTable,
     ID: authz.ID(table),
   }, authz.Relation(TableOwner), TypeCompany)
@@ -69,7 +78,19 @@ func (table Table) ReadOwnerCompanyRelations(ctx context.Context) ([]Company, er
     return nil, err
   }
 
-  return authz.FromIDsExcludingWildcard[Company](ids), nil
+  rels := make([]TableOwnerCompanyRelation, 0, len(tuples))
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      continue
+    }
+    rels = append(rels, TableOwnerCompanyRelation{
+      ID:            Company(t.ID),
+      CaveatName:    t.CaveatName,
+      CaveatContext: t.CaveatContext,
+      ExpiresAt:     t.ExpiresAt,
+    })
+  }
+  return rels, nil
 }
 
 const TableWrite PermissionTable = "write"

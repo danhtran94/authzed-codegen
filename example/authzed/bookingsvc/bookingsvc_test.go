@@ -161,11 +161,11 @@ func TestBrand_ReadRelations(t *testing.T) {
 
 	admins, err := brand.ReadAdminUserRelations(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, []bookingsvc.User{"t-u4"}, admins)
+	assert.Equal(t, []bookingsvc.User{"t-u4"}, authz.IDsOf(admins))
 
 	managers, err := brand.ReadManagerEmployeeRelations(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, []bookingsvc.Employee{"t-e4"}, managers)
+	assert.Equal(t, []bookingsvc.Employee{"t-e4"}, authz.IDsOf(managers))
 }
 
 // --- Brand: LookupSubjects (manage) ---
@@ -289,7 +289,7 @@ func TestEmployee_ReadViewerUserWildcard(t *testing.T) {
 		Wildcards: bookingsvc.EmployeeViewerWildcards{User: true},
 	}))
 
-	isWildcard, err := em.ReadViewerUserWildcard(ctx)
+	_, isWildcard, err := em.ReadViewerUserWildcard(ctx)
 	require.NoError(t, err)
 	assert.True(t, isWildcard)
 }
@@ -306,7 +306,7 @@ func TestEmployee_ReadAccountUserRelations(t *testing.T) {
 
 	users, err := em.ReadAccountUserRelations(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, []bookingsvc.User{"t-u-read"}, users)
+	assert.Equal(t, []bookingsvc.User{"t-u-read"}, authz.IDsOf(users))
 }
 
 // --- Booking: CheckWrite (cross-def arrows) ---
@@ -395,11 +395,11 @@ func TestBooking_ReadRelations(t *testing.T) {
 
 	owners, err := b.ReadOwnerEmployeeRelations(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, []bookingsvc.Employee{"t-e-read"}, owners)
+	assert.Equal(t, []bookingsvc.Employee{"t-e-read"}, authz.IDsOf(owners))
 
 	creators, err := b.ReadCreatorCustomerRelations(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, []bookingsvc.Customer{"t-c-read"}, creators)
+	assert.Equal(t, []bookingsvc.Customer{"t-c-read"}, authz.IDsOf(creators))
 }
 
 

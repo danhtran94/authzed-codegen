@@ -6,6 +6,7 @@ import (
   "github.com/danhtran94/authzed-codegen/pkg/authz"
 
   "context"
+  "time"
 )
 
 const TypeDocument authz.Type = "extsvc/document"
@@ -108,8 +109,16 @@ func (document Document) DeleteOwnerRelations(ctx context.Context, objects Docum
   return nil
 }
 
-func (document Document) ReadParentFolderRelations(ctx context.Context) ([]Folder, error) {
-  ids, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+type DocumentParentFolderRelation struct {
+  ID            Folder
+  CaveatName    string
+  CaveatContext map[string]any
+  ExpiresAt     *time.Time
+}
+func (r DocumentParentFolderRelation) RelationID() Folder { return r.ID }
+
+func (document Document) ReadParentFolderRelations(ctx context.Context) ([]DocumentParentFolderRelation, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
     Type: TypeDocument,
     ID: authz.ID(document),
   }, authz.Relation(DocumentParent), TypeFolder)
@@ -117,11 +126,31 @@ func (document Document) ReadParentFolderRelations(ctx context.Context) ([]Folde
     return nil, err
   }
 
-  return authz.FromIDsExcludingWildcard[Folder](ids), nil
+  rels := make([]DocumentParentFolderRelation, 0, len(tuples))
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      continue
+    }
+    rels = append(rels, DocumentParentFolderRelation{
+      ID:            Folder(t.ID),
+      CaveatName:    t.CaveatName,
+      CaveatContext: t.CaveatContext,
+      ExpiresAt:     t.ExpiresAt,
+    })
+  }
+  return rels, nil
 }
 
-func (document Document) ReadOwnerUserRelations(ctx context.Context) ([]User, error) {
-  ids, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+type DocumentOwnerUserRelation struct {
+  ID            User
+  CaveatName    string
+  CaveatContext map[string]any
+  ExpiresAt     *time.Time
+}
+func (r DocumentOwnerUserRelation) RelationID() User { return r.ID }
+
+func (document Document) ReadOwnerUserRelations(ctx context.Context) ([]DocumentOwnerUserRelation, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
     Type: TypeDocument,
     ID: authz.ID(document),
   }, authz.Relation(DocumentOwner), TypeUser)
@@ -129,11 +158,31 @@ func (document Document) ReadOwnerUserRelations(ctx context.Context) ([]User, er
     return nil, err
   }
 
-  return authz.FromIDsExcludingWildcard[User](ids), nil
+  rels := make([]DocumentOwnerUserRelation, 0, len(tuples))
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      continue
+    }
+    rels = append(rels, DocumentOwnerUserRelation{
+      ID:            User(t.ID),
+      CaveatName:    t.CaveatName,
+      CaveatContext: t.CaveatContext,
+      ExpiresAt:     t.ExpiresAt,
+    })
+  }
+  return rels, nil
 }
 
-func (document Document) ReadOwnerGroupRelations(ctx context.Context) ([]Group, error) {
-  ids, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+type DocumentOwnerGroupRelation struct {
+  ID            Group
+  CaveatName    string
+  CaveatContext map[string]any
+  ExpiresAt     *time.Time
+}
+func (r DocumentOwnerGroupRelation) RelationID() Group { return r.ID }
+
+func (document Document) ReadOwnerGroupRelations(ctx context.Context) ([]DocumentOwnerGroupRelation, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
     Type: TypeDocument,
     ID: authz.ID(document),
   }, authz.Relation(DocumentOwner), TypeGroup)
@@ -141,7 +190,19 @@ func (document Document) ReadOwnerGroupRelations(ctx context.Context) ([]Group, 
     return nil, err
   }
 
-  return authz.FromIDsExcludingWildcard[Group](ids), nil
+  rels := make([]DocumentOwnerGroupRelation, 0, len(tuples))
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      continue
+    }
+    rels = append(rels, DocumentOwnerGroupRelation{
+      ID:            Group(t.ID),
+      CaveatName:    t.CaveatName,
+      CaveatContext: t.CaveatContext,
+      ExpiresAt:     t.ExpiresAt,
+    })
+  }
+  return rels, nil
 }
 
 const DocumentView PermissionDocument = "view"

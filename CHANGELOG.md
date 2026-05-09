@@ -4,6 +4,80 @@ All notable changes to this project are documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-05-09
+
+Closes the read-side metadata gap left by AUZ-006/007/009 (caveat name, caveat context, and expiration timestamp travel on the wire but were silently dropped by `Read<Rel><Type>Relations`). Replaces the read return type uniformly: every relation now returns `[]<Rel><Type>Relation` carrying ID + metadata. Schemas adopting `with caveat` or `with expiration` later don't change method names — only what populates in the existing struct's nil-able fields.
+
+This is a breaking API change on `Engine.ReadRelations` and on every generated `Read<Rel><Type>Relations` and `Read<Rel><Type>Wildcard` method. The only consumer is this repo so we're staying on minor per active-development convention; external adopters (if any appear) follow the migration recipe below.
+
+### Added
+
+- **`authz.RelationTuple`** — engine-surface type carrying `ID + CaveatName + CaveatContext + ExpiresAt`. Returned by `Engine.ReadRelations`.
+- **Generated `<Rel><Type>Relation` struct** — typed counterpart per `(relation, allowed-type)` pair. Same fields as `RelationTuple` but `ID` is the typed subject (`User`, `Group`, …). Implements `RelationID() T` so generic helpers can project IDs without per-type boilerplate.
+- **`authz.IDsOf[T,R](rels) []T`** — generic ID projector. Caller writes `authz.IDsOf(rels)`; type inference resolves `T` and `R` from the single positional argument. Used by tests and any caller that wants the pre-AUZ-010 simple-IDs shape.
+- **`authz.IDsOfExcludingWildcard[T,R](rels) []R`** — symmetric to the existing `FromIDsExcludingWildcard`; drops tuples where `RelationID() == WildcardID`. Generated `Read<Rel><Type>Relations` filters wildcards before returning.
+- **6 new e2e tests** covering: non-traited tuple → all metadata fields nil/empty; caveated tuple → `CaveatName + CaveatContext` populated; expiring tuple → `ExpiresAt` populated within ±2s; combined caveat+expiration → both populate; wildcard via `Read<Rel><Type>Wildcard` → metadata struct alongside the bool; `IDsOf` round-trip equivalence with the pre-AUZ-010 API.
+
+### Changed
+
+- **BREAKING**: `Engine.ReadRelations` return type from `([]ID, error)` to `([]RelationTuple, error)`. External `Engine` implementers must update.
+- **BREAKING**: every generated `Read<Rel><Type>Relations(ctx) ([]<Type>, error)` becomes `(ctx) ([]<Rel><Type>Relation, error)`.
+- **BREAKING**: every generated `Read<Rel><Type>Wildcard(ctx) (bool, error)` becomes `(ctx) (<Rel><Type>Relation, bool, error)` — the wildcard tuple's metadata surfaces alongside the presence bool.
+- `*spicedb.Engine.ReadRelations` populates caveat and expiration fields from `Relationship.OptionalCaveat` and `Relationship.OptionalExpiresAt` (via `*structpb.Struct.AsMap()` and `*timestamppb.Timestamp.AsTime()`).
+- `*spicedb.Engine.HasPublicRelation` body rewritten to scan tuples for `ID == WildcardID` instead of `slices.Contains(ids, WildcardID)`. Public signature unchanged.
+- Generated `.gen.go` files now always import `"time"` because every metadata struct references `*time.Time`.
+
+### Migration recipe
+
+For tests/callers that consumed `[]<Type>` from `Read<Rel><Type>Relations`:
+
+```go
+// Before:
+users, err := folder.ReadViewerUserRelations(ctx)  // []User
+
+// After (when only IDs are needed):
+rels, err := folder.ReadViewerUserRelations(ctx)   // []FolderViewerUserRelation
+users := authz.IDsOf(rels)                         // []User
+
+// After (when metadata matters):
+rels, err := folder.ReadViewerUserRelations(ctx)
+for _, r := range rels {
+    if r.CaveatName != "" {
+        // surface r.CaveatName, r.CaveatContext to UI
+    }
+    if r.ExpiresAt != nil {
+        // show "expires at <t>" badge
+    }
+}
+```
+
+For wildcard call sites:
+
+```go
+// Before:
+isWildcard, err := folder.ReadGuestUserWildcard(ctx)
+
+// After (when only the bool matters):
+_, isWildcard, err := folder.ReadGuestUserWildcard(ctx)
+
+// After (when wildcard's caveat/expiry matter):
+meta, isWildcard, err := folder.ReadGuestUserWildcard(ctx)
+if isWildcard && meta.ExpiresAt != nil {
+    // public-until-timestamp pattern
+}
+```
+
+### Verified
+
+- All 4 e2e packages pass (`pkg/authz/spicedb`, `example/authzed/{bookingsvc,extsvc,menusvc}`).
+- Codegen idempotent at the new baseline.
+- `go build ./...` + `go vet ./...` clean.
+
+### Deferred
+
+- Iterator API for `ReadRelations`. Currently `[]RelationTuple` materializes the full result; SpiceDB's `ReadRelationships` is server-streamed. Per SPEC-005 A4 — no schema in this codebase has hit memory pressure; revisit if proven wrong.
+- Auto-decoding `CaveatContext` to typed `<Caveat>Args` structs. Caller decodes based on `CaveatName` (one switch per consumer); auto-decoding would force enumeration of all caveats reachable per allowed type, multiplying the generated surface.
+
 ## [1.3.0] - 2026-05-09
 
 Adds `with expiration` support — schemas can now declare per-tuple TTL via SpiceDB's expiration trait, and combined `with <caveat> and expiration` works end-to-end. SpiceDB filters expired tuples server-side from Check / Lookup / Read so the client side requires no awareness of expiry beyond the write call.

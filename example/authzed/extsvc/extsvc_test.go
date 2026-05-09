@@ -140,7 +140,7 @@ func TestFolder_ReadGuestUserWildcard_Set(t *testing.T) {
 		Wildcards: extsvc.FolderGuestWildcards{User: true},
 	}))
 
-	isWildcard, err := f.ReadGuestUserWildcard(ctx)
+	_, isWildcard, err := f.ReadGuestUserWildcard(ctx)
 	require.NoError(t, err)
 	assert.True(t, isWildcard)
 }
@@ -152,7 +152,7 @@ func TestFolder_ReadGuestUserWildcard_Unset(t *testing.T) {
 	// without writing any tuple.
 	f := extsvc.Folder("tf-w-no")
 
-	isWildcard, err := f.ReadGuestUserWildcard(ctx)
+	_, isWildcard, err := f.ReadGuestUserWildcard(ctx)
 	require.NoError(t, err)
 	assert.False(t, isWildcard)
 }
@@ -169,7 +169,7 @@ func TestFolder_ReadViewerUserRelations(t *testing.T) {
 
 	users, err := f.ReadViewerUserRelations(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, []extsvc.User{"tvu3"}, users)
+	assert.Equal(t, []extsvc.User{"tvu3"}, authz.IDsOf(users))
 }
 
 func TestFolder_LookupBrowseUserSubjects(t *testing.T) {
@@ -272,7 +272,7 @@ func TestDocument_ReadParent(t *testing.T) {
 
 	folders, err := doc.ReadParentFolderRelations(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, []extsvc.Folder{"fv4"}, folders)
+	assert.Equal(t, []extsvc.Folder{"fv4"}, authz.IDsOf(folders))
 }
 
 // --- Article: intersection (editor) and exclusion (author_only) ---
@@ -371,7 +371,7 @@ func TestArticle_ReadAuthor(t *testing.T) {
 
 	users, err := art.ReadAuthorUserRelations(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, []extsvc.User{"au5"}, users)
+	assert.Equal(t, []extsvc.User{"au5"}, authz.IDsOf(users))
 }
 
 func TestArticle_ReadParent(t *testing.T) {
@@ -384,7 +384,7 @@ func TestArticle_ReadParent(t *testing.T) {
 
 	folders, err := art.ReadParentFolderRelations(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, []extsvc.Folder{"af4"}, folders)
+	assert.Equal(t, []extsvc.Folder{"af4"}, authz.IDsOf(folders))
 }
 
 func TestArticle_LookupEditorUserSubjects(t *testing.T) {
@@ -1564,6 +1564,131 @@ func TestFolder_PublicGated_WildcardCaveatFailsEvenIfNotExpired(t *testing.T) {
 		},
 	})
 	assert.ErrorIs(t, err, authz.ErrPermissionDenied, "caveat fail on wildcard branch denies regardless of TTL")
+}
+
+// AUZ-010 — Read with metadata. SPEC-005.
+//
+// Verifies the new metadata fields on <Rel><Type>Relation actually populate
+// from the SpiceDB ReadRelationships response — not just compile clean.
+
+func TestFolder_ReadViewerUser_NonTraitedTuple_HasNilMetadata(t *testing.T) {
+	ctx := context.Background()
+
+	f := extsvc.Folder("read-meta-plain")
+	require.NoError(t, f.CreateViewerRelations(ctx, extsvc.FolderViewerObjects{
+		User: []extsvc.User{"u-plain"},
+	}))
+
+	rels, err := f.ReadViewerUserRelations(ctx)
+	require.NoError(t, err)
+	require.Len(t, rels, 1)
+	assert.Equal(t, extsvc.User("u-plain"), rels[0].ID)
+	assert.Equal(t, "", rels[0].CaveatName, "non-traited tuple → empty CaveatName")
+	assert.Nil(t, rels[0].CaveatContext, "non-traited tuple → nil CaveatContext")
+	assert.Nil(t, rels[0].ExpiresAt, "non-traited tuple → nil ExpiresAt")
+}
+
+func TestFolder_ReadTenantedViewerUser_CaveatedTuple_PopulatesCaveatFields(t *testing.T) {
+	ctx := context.Background()
+
+	f := extsvc.Folder("read-meta-cav")
+	require.NoError(t, f.CreateTenantedViewerRelations(ctx, extsvc.FolderTenantedViewerObjects{
+		User: []extsvc.User{"u-cav"},
+		Caveats: extsvc.FolderTenantedViewerCaveats{
+			User: &extsvc.TenantMatchArgs{Tenant: new("acme")},
+		},
+	}))
+
+	rels, err := f.ReadTenantedViewerUserRelations(ctx)
+	require.NoError(t, err)
+	require.Len(t, rels, 1)
+	assert.Equal(t, extsvc.User("u-cav"), rels[0].ID)
+	assert.Equal(t, "extsvc/tenant_match", rels[0].CaveatName, "caveat name surfaces from OptionalCaveat")
+	require.NotNil(t, rels[0].CaveatContext, "pre-context should decode to map")
+	assert.Equal(t, "acme", rels[0].CaveatContext["tenant"], "pre-context value travels through structpb round-trip")
+	assert.Nil(t, rels[0].ExpiresAt)
+}
+
+func TestFolder_ReadExpiringViewerUser_ExpiringTuple_PopulatesExpiresAt(t *testing.T) {
+	ctx := context.Background()
+
+	f := extsvc.Folder("read-meta-exp")
+	expiresAt := time.Now().Add(1 * time.Hour)
+	require.NoError(t, f.CreateExpiringViewerRelations(ctx, extsvc.FolderExpiringViewerObjects{
+		User: []extsvc.User{"u-exp"},
+		Expirations: extsvc.FolderExpiringViewerExpirations{
+			User: &expiresAt,
+		},
+	}))
+
+	rels, err := f.ReadExpiringViewerUserRelations(ctx)
+	require.NoError(t, err)
+	require.Len(t, rels, 1)
+	assert.Equal(t, extsvc.User("u-exp"), rels[0].ID)
+	assert.Equal(t, "", rels[0].CaveatName)
+	require.NotNil(t, rels[0].ExpiresAt, "expiring tuple → ExpiresAt populated")
+	assert.WithinDuration(t, expiresAt, *rels[0].ExpiresAt, 2*time.Second, "stored expiry within ±2s of write timestamp")
+}
+
+func TestFolder_ReadGatedTokenUser_CombinedTrait_PopulatesBoth(t *testing.T) {
+	ctx := context.Background()
+
+	f := extsvc.Folder("read-meta-both")
+	expiresAt := time.Now().Add(1 * time.Hour)
+	require.NoError(t, f.CreateGatedTokenRelations(ctx, extsvc.FolderGatedTokenObjects{
+		User: []extsvc.User{"u-both"},
+		Caveats: extsvc.FolderGatedTokenCaveats{
+			User: &extsvc.TenantMatchArgs{Tenant: new("acme")},
+		},
+		Expirations: extsvc.FolderGatedTokenExpirations{
+			User: &expiresAt,
+		},
+	}))
+
+	rels, err := f.ReadGatedTokenUserRelations(ctx)
+	require.NoError(t, err)
+	require.Len(t, rels, 1)
+	assert.Equal(t, "extsvc/tenant_match", rels[0].CaveatName, "combined trait — caveat name populates")
+	assert.Equal(t, "acme", rels[0].CaveatContext["tenant"], "combined trait — caveat context populates")
+	require.NotNil(t, rels[0].ExpiresAt, "combined trait — ExpiresAt populates")
+	assert.WithinDuration(t, expiresAt, *rels[0].ExpiresAt, 2*time.Second)
+}
+
+func TestFolder_ReadGuardedViewerUserWildcard_PopulatesMetadata(t *testing.T) {
+	ctx := context.Background()
+
+	// Wildcard + caveat — pre-bind tenant=acme at write, then read the wildcard
+	// tuple's metadata.
+	f := extsvc.Folder("read-meta-wild")
+	require.NoError(t, f.CreateGuardedViewerRelations(ctx, extsvc.FolderGuardedViewerObjects{
+		Wildcards: extsvc.FolderGuardedViewerWildcards{User: true},
+		Caveats: extsvc.FolderGuardedViewerCaveats{
+			User: &extsvc.TenantMatchArgs{Tenant: new("acme")},
+		},
+	}))
+
+	meta, present, err := f.ReadGuardedViewerUserWildcard(ctx)
+	require.NoError(t, err)
+	require.True(t, present, "wildcard tuple is present")
+	assert.Equal(t, extsvc.User(authz.WildcardID), meta.ID, "wildcard ID surfaces as the WildcardID sentinel")
+	assert.Equal(t, "extsvc/tenant_match", meta.CaveatName, "wildcard tuple carries caveat metadata")
+	require.NotNil(t, meta.CaveatContext)
+	assert.Equal(t, "acme", meta.CaveatContext["tenant"])
+}
+
+func TestFolder_IDsOf_RoundTripEquivalent(t *testing.T) {
+	ctx := context.Background()
+
+	f := extsvc.Folder("read-meta-ids")
+	require.NoError(t, f.CreateViewerRelations(ctx, extsvc.FolderViewerObjects{
+		User: []extsvc.User{"u-ids-a", "u-ids-b"},
+	}))
+
+	rels, err := f.ReadViewerUserRelations(ctx)
+	require.NoError(t, err)
+	ids := authz.IDsOf(rels)
+	assert.ElementsMatch(t, []extsvc.User{"u-ids-a", "u-ids-b"}, ids,
+		"IDsOf projects the same IDs the pre-AUZ-010 API would have returned")
 }
 
 func TestArticle_LookupAuthorOnlyUserSubjects(t *testing.T) {

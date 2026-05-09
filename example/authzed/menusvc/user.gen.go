@@ -6,6 +6,7 @@ import (
   "github.com/danhtran94/authzed-codegen/pkg/authz"
 
   "context"
+  "time"
 )
 
 const TypeUser authz.Type = "menusvc/user"
@@ -60,8 +61,16 @@ func (user User) DeleteBelongsCompanyRelations(ctx context.Context, objects User
   return nil
 }
 
-func (user User) ReadBelongsCompanyCompanyRelations(ctx context.Context) ([]Company, error) {
-  ids, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+type UserBelongsCompanyCompanyRelation struct {
+  ID            Company
+  CaveatName    string
+  CaveatContext map[string]any
+  ExpiresAt     *time.Time
+}
+func (r UserBelongsCompanyCompanyRelation) RelationID() Company { return r.ID }
+
+func (user User) ReadBelongsCompanyCompanyRelations(ctx context.Context) ([]UserBelongsCompanyCompanyRelation, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
     Type: TypeUser,
     ID: authz.ID(user),
   }, authz.Relation(UserBelongsCompany), TypeCompany)
@@ -69,7 +78,19 @@ func (user User) ReadBelongsCompanyCompanyRelations(ctx context.Context) ([]Comp
     return nil, err
   }
 
-  return authz.FromIDsExcludingWildcard[Company](ids), nil
+  rels := make([]UserBelongsCompanyCompanyRelation, 0, len(tuples))
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      continue
+    }
+    rels = append(rels, UserBelongsCompanyCompanyRelation{
+      ID:            Company(t.ID),
+      CaveatName:    t.CaveatName,
+      CaveatContext: t.CaveatContext,
+      ExpiresAt:     t.ExpiresAt,
+    })
+  }
+  return rels, nil
 }
 
 const UserManage PermissionUser = "manage"

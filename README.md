@@ -160,6 +160,41 @@ folder.CreateExpiringViewerRelations(ctx, extsvc.FolderExpiringViewerObjects{
 
 Combined with caveats — `relation gated: extsvc/user with extsvc/tenant_match and expiration` — both `Caveats` and `Expirations` sub-structs are populated independently. The codegen routes through `CreateRelationsWithExpiration` (auto-switching to `OPERATION_TOUCH` because un-garbage-collected expired tuples may collide on tuple identity). See `docs/spec-004-expiration-codegen.md`.
 
+## Read with Metadata
+
+`Read<Rel><Type>Relations` returns `[]<Rel><Type>Relation` — a typed metadata struct per tuple carrying the subject ID alongside the caveat name, decoded caveat context, and expiration timestamp:
+
+```go
+type FolderTenantedViewerUserRelation struct {
+    ID            extsvc.User
+    CaveatName    string         // "" when no caveat is attached
+    CaveatContext map[string]any // nil when no caveat or empty pre-context
+    ExpiresAt     *time.Time     // nil when no per-tuple TTL
+}
+```
+
+The metadata fields are nil/empty for plain relations; they populate from SpiceDB's `Relationship.OptionalCaveat` and `Relationship.OptionalExpiresAt` for trait-bearing tuples. Use cases — admin/audit UIs that need to surface "user X has access via tenant=acme until 2026-Q4" without bypassing the codegen.
+
+For callers that just want the IDs (matching the pre-v1.4.0 shape):
+
+```go
+rels, _ := folder.ReadViewerUserRelations(ctx)
+users := authz.IDsOf(rels)  // []User
+```
+
+`authz.IDsOf` is a generic helper; type inference resolves the typed slice from the single positional argument.
+
+Wildcard reads return the same metadata struct alongside the presence bool:
+
+```go
+meta, isWildcard, err := folder.ReadGuestUserWildcard(ctx)
+if isWildcard && meta.ExpiresAt != nil {
+    // public-for-everyone-until-timestamp pattern
+}
+```
+
+See `docs/spec-005-read-with-metadata.md` for the full Engine surface and constraints (no auto-decoded `<Caveat>Args`, slice materialization vs streaming, wildcard split discipline).
+
 ## Behavior Notes
 
 - **Permission chains.** `Check<Permission>Inputs` exposes the full set

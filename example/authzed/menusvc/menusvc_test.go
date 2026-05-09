@@ -110,7 +110,7 @@ func TestTable_ReadOwner(t *testing.T) {
 
 	owners, err := tbl.ReadOwnerCompanyRelations(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, []menusvc.Company{comp}, owners)
+	assert.Equal(t, []menusvc.Company{comp}, authz.IDsOf(owners))
 }
 
 // --- Pricelist: owner -> manage on company ---
@@ -220,7 +220,7 @@ func TestUser_ReadBelongsCompany(t *testing.T) {
 
 	companies, err := u.ReadBelongsCompanyCompanyRelations(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, []menusvc.Company{comp}, companies)
+	assert.Equal(t, []menusvc.Company{comp}, authz.IDsOf(companies))
 }
 
 // --- Company: manage / create_booking / create_order ---
@@ -327,15 +327,15 @@ func TestCompany_ReadAllRelations(t *testing.T) {
 
 	admins, err := comp.ReadAdminUserRelations(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, []menusvc.User{"t-tu1rels"}, admins)
+	assert.Equal(t, []menusvc.User{"t-tu1rels"}, authz.IDsOf(admins))
 
 	managers, err := comp.ReadManagerUserRelations(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, []menusvc.User{"t-tu2rels"}, managers)
+	assert.Equal(t, []menusvc.User{"t-tu2rels"}, authz.IDsOf(managers))
 
 	employees, err := comp.ReadEmployeeUserRelations(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, []menusvc.User{"t-te1rels"}, employees)
+	assert.Equal(t, []menusvc.User{"t-te1rels"}, authz.IDsOf(employees))
 }
 
 func TestCompany_LookupManageSubjects(t *testing.T) {
@@ -412,15 +412,15 @@ func TestOrder_ReadRelations(t *testing.T) {
 
 	creators, err := order.ReadCreatorUserRelations(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, []menusvc.User{"t-tu3or"}, creators)
+	assert.Equal(t, []menusvc.User{"t-tu3or"}, authz.IDsOf(creators))
 
 	customers, err := order.ReadCreatorCustomerRelations(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, []menusvc.Customer{"t-tvc1or"}, customers)
+	assert.Equal(t, []menusvc.Customer{"t-tvc1or"}, authz.IDsOf(customers))
 
 	companies, err := order.ReadBelongsCompanyCompanyRelations(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, []menusvc.Company{comp}, companies)
+	assert.Equal(t, []menusvc.Company{comp}, authz.IDsOf(companies))
 }
 
 func TestOrder_LookupWriteUserSubjects(t *testing.T) {
@@ -495,15 +495,15 @@ func TestBooking_ReadRelations(t *testing.T) {
 
 	owners, err := booking.ReadOwnerCompanyRelations(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, []menusvc.Company{comp}, owners)
+	assert.Equal(t, []menusvc.Company{comp}, authz.IDsOf(owners))
 
 	creators, err := booking.ReadCreatorUserRelations(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, []menusvc.User{"t-tu3br"}, creators)
+	assert.Equal(t, []menusvc.User{"t-tu3br"}, authz.IDsOf(creators))
 
 	customers, err := booking.ReadCreatorCustomerRelations(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, []menusvc.Customer{"t-tvc1br"}, customers)
+	assert.Equal(t, []menusvc.Customer{"t-tvc1br"}, authz.IDsOf(customers))
 }
 
 
@@ -725,7 +725,7 @@ func TestBooking_DupTyped_ReadDeduplicatesByNamespace(t *testing.T) {
 	// regardless of which caveat is attached at the wire level.
 	users, err := menusvc.Booking("dt-r").ReadDupTypedUserRelations(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, []menusvc.User{"u-r-h"}, users)
+	assert.Equal(t, []menusvc.User{"u-r-h"}, authz.IDsOf(users))
 }
 
 func TestBooking_HoursCheck_DeniesOutsideHours(t *testing.T) {

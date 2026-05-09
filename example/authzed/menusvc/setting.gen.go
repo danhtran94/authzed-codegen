@@ -6,6 +6,7 @@ import (
   "github.com/danhtran94/authzed-codegen/pkg/authz"
 
   "context"
+  "time"
 )
 
 const TypeSetting authz.Type = "menusvc/setting"
@@ -60,8 +61,16 @@ func (setting Setting) DeleteOwnerRelations(ctx context.Context, objects Setting
   return nil
 }
 
-func (setting Setting) ReadOwnerCompanyRelations(ctx context.Context) ([]Company, error) {
-  ids, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+type SettingOwnerCompanyRelation struct {
+  ID            Company
+  CaveatName    string
+  CaveatContext map[string]any
+  ExpiresAt     *time.Time
+}
+func (r SettingOwnerCompanyRelation) RelationID() Company { return r.ID }
+
+func (setting Setting) ReadOwnerCompanyRelations(ctx context.Context) ([]SettingOwnerCompanyRelation, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
     Type: TypeSetting,
     ID: authz.ID(setting),
   }, authz.Relation(SettingOwner), TypeCompany)
@@ -69,7 +78,19 @@ func (setting Setting) ReadOwnerCompanyRelations(ctx context.Context) ([]Company
     return nil, err
   }
 
-  return authz.FromIDsExcludingWildcard[Company](ids), nil
+  rels := make([]SettingOwnerCompanyRelation, 0, len(tuples))
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      continue
+    }
+    rels = append(rels, SettingOwnerCompanyRelation{
+      ID:            Company(t.ID),
+      CaveatName:    t.CaveatName,
+      CaveatContext: t.CaveatContext,
+      ExpiresAt:     t.ExpiresAt,
+    })
+  }
+  return rels, nil
 }
 
 const SettingWrite PermissionSetting = "write"

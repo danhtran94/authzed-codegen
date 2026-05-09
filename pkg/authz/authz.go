@@ -14,6 +14,22 @@ var ErrPermissionDenied = fmt.Errorf("permission denied")
 // references this constant rather than hardcoding the literal "*".
 const WildcardID ID = "*"
 
+// RelationTuple is the engine-surface representation of a single
+// SpiceDB relationship row. Subject ID is untyped at this layer;
+// generated code casts it to the typed subject (User, Group, …).
+//
+//   - CaveatName is the empty string when no caveat is attached.
+//   - CaveatContext is nil when no caveat is attached or pre-context is empty.
+//   - ExpiresAt is nil when the tuple has no per-tuple TTL. A pointer is used
+//     because the zero time.Time{} is a valid past timestamp (0001-01-01)
+//     and would be ambiguous with "no expiration set".
+type RelationTuple struct {
+	ID            ID
+	CaveatName    string
+	CaveatContext map[string]any
+	ExpiresAt     *time.Time
+}
+
 type Engine interface {
 	CreateRelations(ctx context.Context, to Resource, relation Relation, subject Type, ids []ID) error
 	CreateRelationsWithCaveat(ctx context.Context, to Resource, relation Relation, subject Type, ids []ID, caveatName string, caveatParams map[string]any) error
@@ -24,7 +40,7 @@ type Engine interface {
 	LookupResourcesWithCaveat(ctx context.Context, from Type, match Permission, subject Type, byIDs []ID, caveatParams map[string]any) ([]ID, error)
 	LookupSubjects(ctx context.Context, on Resource, permission Permission, subject Type) ([]ID, error)
 	LookupSubjectsWithCaveat(ctx context.Context, on Resource, permission Permission, subject Type, caveatParams map[string]any) ([]ID, error)
-	ReadRelations(ctx context.Context, from Resource, relation Relation, subject Type) ([]ID, error)
+	ReadRelations(ctx context.Context, from Resource, relation Relation, subject Type) ([]RelationTuple, error)
 	DeleteRelations(ctx context.Context, from Resource, relation Relation, subject Type, ids []ID) error
 	HasPublicRelation(ctx context.Context, on Resource, relation Relation, subject Type) (bool, error)
 	HasPublicSubject(ctx context.Context, on Resource, permission Permission, subject Type) (bool, error)
@@ -94,6 +110,33 @@ func FromIDsExcludingWildcard[T ~string](ids []ID) []T {
 	}
 
 	return result
+}
+
+// IDsOf projects subject IDs from a slice of relation metadata structs.
+// Each generated <Rel><Type>Relation struct exposes RelationID() T so the
+// constraint is satisfied uniformly. Caller writes authz.IDsOf(rels) and
+// type inference resolves T and R from the single positional argument.
+func IDsOf[T ~string, R interface{ RelationID() T }](rels []R) []T {
+	out := make([]T, len(rels))
+	for i, r := range rels {
+		out[i] = r.RelationID()
+	}
+	return out
+}
+
+// IDsOfExcludingWildcard is the read-side equivalent of FromIDsExcludingWildcard.
+// Returns the input slice with any wildcard tuples removed. Generated Read
+// methods filter wildcards before returning a non-wildcard slice — the
+// wildcard tuple is surfaced via the sibling Read<Rel><Type>Wildcard method.
+func IDsOfExcludingWildcard[T ~string, R interface{ RelationID() T }](rels []R) []R {
+	out := make([]R, 0, len(rels))
+	for _, r := range rels {
+		if ID(r.RelationID()) == WildcardID {
+			continue
+		}
+		out = append(out, r)
+	}
+	return out
 }
 
 type StringConvertable interface {

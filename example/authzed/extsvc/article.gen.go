@@ -6,6 +6,7 @@ import (
   "github.com/danhtran94/authzed-codegen/pkg/authz"
 
   "context"
+  "time"
 )
 
 const TypeArticle authz.Type = "extsvc/article"
@@ -89,8 +90,16 @@ func (article Article) DeleteParentRelations(ctx context.Context, objects Articl
   return nil
 }
 
-func (article Article) ReadAuthorUserRelations(ctx context.Context) ([]User, error) {
-  ids, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+type ArticleAuthorUserRelation struct {
+  ID            User
+  CaveatName    string
+  CaveatContext map[string]any
+  ExpiresAt     *time.Time
+}
+func (r ArticleAuthorUserRelation) RelationID() User { return r.ID }
+
+func (article Article) ReadAuthorUserRelations(ctx context.Context) ([]ArticleAuthorUserRelation, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
     Type: TypeArticle,
     ID: authz.ID(article),
   }, authz.Relation(ArticleAuthor), TypeUser)
@@ -98,11 +107,31 @@ func (article Article) ReadAuthorUserRelations(ctx context.Context) ([]User, err
     return nil, err
   }
 
-  return authz.FromIDsExcludingWildcard[User](ids), nil
+  rels := make([]ArticleAuthorUserRelation, 0, len(tuples))
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      continue
+    }
+    rels = append(rels, ArticleAuthorUserRelation{
+      ID:            User(t.ID),
+      CaveatName:    t.CaveatName,
+      CaveatContext: t.CaveatContext,
+      ExpiresAt:     t.ExpiresAt,
+    })
+  }
+  return rels, nil
 }
 
-func (article Article) ReadParentFolderRelations(ctx context.Context) ([]Folder, error) {
-  ids, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+type ArticleParentFolderRelation struct {
+  ID            Folder
+  CaveatName    string
+  CaveatContext map[string]any
+  ExpiresAt     *time.Time
+}
+func (r ArticleParentFolderRelation) RelationID() Folder { return r.ID }
+
+func (article Article) ReadParentFolderRelations(ctx context.Context) ([]ArticleParentFolderRelation, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
     Type: TypeArticle,
     ID: authz.ID(article),
   }, authz.Relation(ArticleParent), TypeFolder)
@@ -110,7 +139,19 @@ func (article Article) ReadParentFolderRelations(ctx context.Context) ([]Folder,
     return nil, err
   }
 
-  return authz.FromIDsExcludingWildcard[Folder](ids), nil
+  rels := make([]ArticleParentFolderRelation, 0, len(tuples))
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      continue
+    }
+    rels = append(rels, ArticleParentFolderRelation{
+      ID:            Folder(t.ID),
+      CaveatName:    t.CaveatName,
+      CaveatContext: t.CaveatContext,
+      ExpiresAt:     t.ExpiresAt,
+    })
+  }
+  return rels, nil
 }
 
 const ArticleEditor PermissionArticle = "editor"

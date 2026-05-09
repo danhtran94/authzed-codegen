@@ -953,8 +953,16 @@ func (folder Folder) DeletePublicGatedRelations(ctx context.Context, objects Fol
   return nil
 }
 
-func (folder Folder) ReadViewerUserRelations(ctx context.Context) ([]User, error) {
-  ids, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+type FolderViewerUserRelation struct {
+  ID            User
+  CaveatName    string
+  CaveatContext map[string]any
+  ExpiresAt     *time.Time
+}
+func (r FolderViewerUserRelation) RelationID() User { return r.ID }
+
+func (folder Folder) ReadViewerUserRelations(ctx context.Context) ([]FolderViewerUserRelation, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
     Type: TypeFolder,
     ID: authz.ID(folder),
   }, authz.Relation(FolderViewer), TypeUser)
@@ -962,11 +970,31 @@ func (folder Folder) ReadViewerUserRelations(ctx context.Context) ([]User, error
     return nil, err
   }
 
-  return authz.FromIDsExcludingWildcard[User](ids), nil
+  rels := make([]FolderViewerUserRelation, 0, len(tuples))
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      continue
+    }
+    rels = append(rels, FolderViewerUserRelation{
+      ID:            User(t.ID),
+      CaveatName:    t.CaveatName,
+      CaveatContext: t.CaveatContext,
+      ExpiresAt:     t.ExpiresAt,
+    })
+  }
+  return rels, nil
 }
 
-func (folder Folder) ReadViewerGroupRelations(ctx context.Context) ([]Group, error) {
-  ids, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+type FolderViewerGroupRelation struct {
+  ID            Group
+  CaveatName    string
+  CaveatContext map[string]any
+  ExpiresAt     *time.Time
+}
+func (r FolderViewerGroupRelation) RelationID() Group { return r.ID }
+
+func (folder Folder) ReadViewerGroupRelations(ctx context.Context) ([]FolderViewerGroupRelation, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
     Type: TypeFolder,
     ID: authz.ID(folder),
   }, authz.Relation(FolderViewer), TypeGroup)
@@ -974,11 +1002,31 @@ func (folder Folder) ReadViewerGroupRelations(ctx context.Context) ([]Group, err
     return nil, err
   }
 
-  return authz.FromIDsExcludingWildcard[Group](ids), nil
+  rels := make([]FolderViewerGroupRelation, 0, len(tuples))
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      continue
+    }
+    rels = append(rels, FolderViewerGroupRelation{
+      ID:            Group(t.ID),
+      CaveatName:    t.CaveatName,
+      CaveatContext: t.CaveatContext,
+      ExpiresAt:     t.ExpiresAt,
+    })
+  }
+  return rels, nil
 }
 
-func (folder Folder) ReadViewerRoleRelations(ctx context.Context) ([]Role, error) {
-  ids, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+type FolderViewerRoleRelation struct {
+  ID            Role
+  CaveatName    string
+  CaveatContext map[string]any
+  ExpiresAt     *time.Time
+}
+func (r FolderViewerRoleRelation) RelationID() Role { return r.ID }
+
+func (folder Folder) ReadViewerRoleRelations(ctx context.Context) ([]FolderViewerRoleRelation, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
     Type: TypeFolder,
     ID: authz.ID(folder),
   }, authz.Relation(FolderViewer), TypeRole)
@@ -986,11 +1034,31 @@ func (folder Folder) ReadViewerRoleRelations(ctx context.Context) ([]Role, error
     return nil, err
   }
 
-  return authz.FromIDsExcludingWildcard[Role](ids), nil
+  rels := make([]FolderViewerRoleRelation, 0, len(tuples))
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      continue
+    }
+    rels = append(rels, FolderViewerRoleRelation{
+      ID:            Role(t.ID),
+      CaveatName:    t.CaveatName,
+      CaveatContext: t.CaveatContext,
+      ExpiresAt:     t.ExpiresAt,
+    })
+  }
+  return rels, nil
 }
 
-func (folder Folder) ReadGuestUserRelations(ctx context.Context) ([]User, error) {
-  ids, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+type FolderGuestUserRelation struct {
+  ID            User
+  CaveatName    string
+  CaveatContext map[string]any
+  ExpiresAt     *time.Time
+}
+func (r FolderGuestUserRelation) RelationID() User { return r.ID }
+
+func (folder Folder) ReadGuestUserRelations(ctx context.Context) ([]FolderGuestUserRelation, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
     Type: TypeFolder,
     ID: authz.ID(folder),
   }, authz.Relation(FolderGuest), TypeUser)
@@ -998,17 +1066,51 @@ func (folder Folder) ReadGuestUserRelations(ctx context.Context) ([]User, error)
     return nil, err
   }
 
-  return authz.FromIDsExcludingWildcard[User](ids), nil
+  rels := make([]FolderGuestUserRelation, 0, len(tuples))
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      continue
+    }
+    rels = append(rels, FolderGuestUserRelation{
+      ID:            User(t.ID),
+      CaveatName:    t.CaveatName,
+      CaveatContext: t.CaveatContext,
+      ExpiresAt:     t.ExpiresAt,
+    })
+  }
+  return rels, nil
 }
-func (folder Folder) ReadGuestUserWildcard(ctx context.Context) (bool, error) {
-  return authz.GetEngine(ctx).HasPublicRelation(ctx, authz.Resource{
+func (folder Folder) ReadGuestUserWildcard(ctx context.Context) (FolderGuestUserRelation, bool, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
     Type: TypeFolder,
     ID: authz.ID(folder),
   }, authz.Relation(FolderGuest), TypeUser)
+  if err != nil {
+    return FolderGuestUserRelation{}, false, err
+  }
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      return FolderGuestUserRelation{
+        ID:            User(t.ID),
+        CaveatName:    t.CaveatName,
+        CaveatContext: t.CaveatContext,
+        ExpiresAt:     t.ExpiresAt,
+      }, true, nil
+    }
+  }
+  return FolderGuestUserRelation{}, false, nil
 }
 
-func (folder Folder) ReadTenantedViewerUserRelations(ctx context.Context) ([]User, error) {
-  ids, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+type FolderTenantedViewerUserRelation struct {
+  ID            User
+  CaveatName    string
+  CaveatContext map[string]any
+  ExpiresAt     *time.Time
+}
+func (r FolderTenantedViewerUserRelation) RelationID() User { return r.ID }
+
+func (folder Folder) ReadTenantedViewerUserRelations(ctx context.Context) ([]FolderTenantedViewerUserRelation, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
     Type: TypeFolder,
     ID: authz.ID(folder),
   }, authz.Relation(FolderTenantedViewer), TypeUser)
@@ -1016,11 +1118,31 @@ func (folder Folder) ReadTenantedViewerUserRelations(ctx context.Context) ([]Use
     return nil, err
   }
 
-  return authz.FromIDsExcludingWildcard[User](ids), nil
+  rels := make([]FolderTenantedViewerUserRelation, 0, len(tuples))
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      continue
+    }
+    rels = append(rels, FolderTenantedViewerUserRelation{
+      ID:            User(t.ID),
+      CaveatName:    t.CaveatName,
+      CaveatContext: t.CaveatContext,
+      ExpiresAt:     t.ExpiresAt,
+    })
+  }
+  return rels, nil
 }
 
-func (folder Folder) ReadGuardedViewerUserRelations(ctx context.Context) ([]User, error) {
-  ids, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+type FolderGuardedViewerUserRelation struct {
+  ID            User
+  CaveatName    string
+  CaveatContext map[string]any
+  ExpiresAt     *time.Time
+}
+func (r FolderGuardedViewerUserRelation) RelationID() User { return r.ID }
+
+func (folder Folder) ReadGuardedViewerUserRelations(ctx context.Context) ([]FolderGuardedViewerUserRelation, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
     Type: TypeFolder,
     ID: authz.ID(folder),
   }, authz.Relation(FolderGuardedViewer), TypeUser)
@@ -1028,17 +1150,51 @@ func (folder Folder) ReadGuardedViewerUserRelations(ctx context.Context) ([]User
     return nil, err
   }
 
-  return authz.FromIDsExcludingWildcard[User](ids), nil
+  rels := make([]FolderGuardedViewerUserRelation, 0, len(tuples))
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      continue
+    }
+    rels = append(rels, FolderGuardedViewerUserRelation{
+      ID:            User(t.ID),
+      CaveatName:    t.CaveatName,
+      CaveatContext: t.CaveatContext,
+      ExpiresAt:     t.ExpiresAt,
+    })
+  }
+  return rels, nil
 }
-func (folder Folder) ReadGuardedViewerUserWildcard(ctx context.Context) (bool, error) {
-  return authz.GetEngine(ctx).HasPublicRelation(ctx, authz.Resource{
+func (folder Folder) ReadGuardedViewerUserWildcard(ctx context.Context) (FolderGuardedViewerUserRelation, bool, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
     Type: TypeFolder,
     ID: authz.ID(folder),
   }, authz.Relation(FolderGuardedViewer), TypeUser)
+  if err != nil {
+    return FolderGuardedViewerUserRelation{}, false, err
+  }
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      return FolderGuardedViewerUserRelation{
+        ID:            User(t.ID),
+        CaveatName:    t.CaveatName,
+        CaveatContext: t.CaveatContext,
+        ExpiresAt:     t.ExpiresAt,
+      }, true, nil
+    }
+  }
+  return FolderGuardedViewerUserRelation{}, false, nil
 }
 
-func (folder Folder) ReadActorUserRelations(ctx context.Context) ([]User, error) {
-  ids, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+type FolderActorUserRelation struct {
+  ID            User
+  CaveatName    string
+  CaveatContext map[string]any
+  ExpiresAt     *time.Time
+}
+func (r FolderActorUserRelation) RelationID() User { return r.ID }
+
+func (folder Folder) ReadActorUserRelations(ctx context.Context) ([]FolderActorUserRelation, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
     Type: TypeFolder,
     ID: authz.ID(folder),
   }, authz.Relation(FolderActor), TypeUser)
@@ -1046,11 +1202,31 @@ func (folder Folder) ReadActorUserRelations(ctx context.Context) ([]User, error)
     return nil, err
   }
 
-  return authz.FromIDsExcludingWildcard[User](ids), nil
+  rels := make([]FolderActorUserRelation, 0, len(tuples))
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      continue
+    }
+    rels = append(rels, FolderActorUserRelation{
+      ID:            User(t.ID),
+      CaveatName:    t.CaveatName,
+      CaveatContext: t.CaveatContext,
+      ExpiresAt:     t.ExpiresAt,
+    })
+  }
+  return rels, nil
 }
 
-func (folder Folder) ReadCollaboratorUserRelations(ctx context.Context) ([]User, error) {
-  ids, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+type FolderCollaboratorUserRelation struct {
+  ID            User
+  CaveatName    string
+  CaveatContext map[string]any
+  ExpiresAt     *time.Time
+}
+func (r FolderCollaboratorUserRelation) RelationID() User { return r.ID }
+
+func (folder Folder) ReadCollaboratorUserRelations(ctx context.Context) ([]FolderCollaboratorUserRelation, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
     Type: TypeFolder,
     ID: authz.ID(folder),
   }, authz.Relation(FolderCollaborator), TypeUser)
@@ -1058,11 +1234,31 @@ func (folder Folder) ReadCollaboratorUserRelations(ctx context.Context) ([]User,
     return nil, err
   }
 
-  return authz.FromIDsExcludingWildcard[User](ids), nil
+  rels := make([]FolderCollaboratorUserRelation, 0, len(tuples))
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      continue
+    }
+    rels = append(rels, FolderCollaboratorUserRelation{
+      ID:            User(t.ID),
+      CaveatName:    t.CaveatName,
+      CaveatContext: t.CaveatContext,
+      ExpiresAt:     t.ExpiresAt,
+    })
+  }
+  return rels, nil
 }
 
-func (folder Folder) ReadCollaboratorGroupRelations(ctx context.Context) ([]Group, error) {
-  ids, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+type FolderCollaboratorGroupRelation struct {
+  ID            Group
+  CaveatName    string
+  CaveatContext map[string]any
+  ExpiresAt     *time.Time
+}
+func (r FolderCollaboratorGroupRelation) RelationID() Group { return r.ID }
+
+func (folder Folder) ReadCollaboratorGroupRelations(ctx context.Context) ([]FolderCollaboratorGroupRelation, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
     Type: TypeFolder,
     ID: authz.ID(folder),
   }, authz.Relation(FolderCollaborator), TypeGroup)
@@ -1070,11 +1266,31 @@ func (folder Folder) ReadCollaboratorGroupRelations(ctx context.Context) ([]Grou
     return nil, err
   }
 
-  return authz.FromIDsExcludingWildcard[Group](ids), nil
+  rels := make([]FolderCollaboratorGroupRelation, 0, len(tuples))
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      continue
+    }
+    rels = append(rels, FolderCollaboratorGroupRelation{
+      ID:            Group(t.ID),
+      CaveatName:    t.CaveatName,
+      CaveatContext: t.CaveatContext,
+      ExpiresAt:     t.ExpiresAt,
+    })
+  }
+  return rels, nil
 }
 
-func (folder Folder) ReadRateLimitedUserRelations(ctx context.Context) ([]User, error) {
-  ids, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+type FolderRateLimitedUserRelation struct {
+  ID            User
+  CaveatName    string
+  CaveatContext map[string]any
+  ExpiresAt     *time.Time
+}
+func (r FolderRateLimitedUserRelation) RelationID() User { return r.ID }
+
+func (folder Folder) ReadRateLimitedUserRelations(ctx context.Context) ([]FolderRateLimitedUserRelation, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
     Type: TypeFolder,
     ID: authz.ID(folder),
   }, authz.Relation(FolderRateLimited), TypeUser)
@@ -1082,11 +1298,31 @@ func (folder Folder) ReadRateLimitedUserRelations(ctx context.Context) ([]User, 
     return nil, err
   }
 
-  return authz.FromIDsExcludingWildcard[User](ids), nil
+  rels := make([]FolderRateLimitedUserRelation, 0, len(tuples))
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      continue
+    }
+    rels = append(rels, FolderRateLimitedUserRelation{
+      ID:            User(t.ID),
+      CaveatName:    t.CaveatName,
+      CaveatContext: t.CaveatContext,
+      ExpiresAt:     t.ExpiresAt,
+    })
+  }
+  return rels, nil
 }
 
-func (folder Folder) ReadScoredViewerUserRelations(ctx context.Context) ([]User, error) {
-  ids, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+type FolderScoredViewerUserRelation struct {
+  ID            User
+  CaveatName    string
+  CaveatContext map[string]any
+  ExpiresAt     *time.Time
+}
+func (r FolderScoredViewerUserRelation) RelationID() User { return r.ID }
+
+func (folder Folder) ReadScoredViewerUserRelations(ctx context.Context) ([]FolderScoredViewerUserRelation, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
     Type: TypeFolder,
     ID: authz.ID(folder),
   }, authz.Relation(FolderScoredViewer), TypeUser)
@@ -1094,11 +1330,31 @@ func (folder Folder) ReadScoredViewerUserRelations(ctx context.Context) ([]User,
     return nil, err
   }
 
-  return authz.FromIDsExcludingWildcard[User](ids), nil
+  rels := make([]FolderScoredViewerUserRelation, 0, len(tuples))
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      continue
+    }
+    rels = append(rels, FolderScoredViewerUserRelation{
+      ID:            User(t.ID),
+      CaveatName:    t.CaveatName,
+      CaveatContext: t.CaveatContext,
+      ExpiresAt:     t.ExpiresAt,
+    })
+  }
+  return rels, nil
 }
 
-func (folder Folder) ReadTokenViewerUserRelations(ctx context.Context) ([]User, error) {
-  ids, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+type FolderTokenViewerUserRelation struct {
+  ID            User
+  CaveatName    string
+  CaveatContext map[string]any
+  ExpiresAt     *time.Time
+}
+func (r FolderTokenViewerUserRelation) RelationID() User { return r.ID }
+
+func (folder Folder) ReadTokenViewerUserRelations(ctx context.Context) ([]FolderTokenViewerUserRelation, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
     Type: TypeFolder,
     ID: authz.ID(folder),
   }, authz.Relation(FolderTokenViewer), TypeUser)
@@ -1106,11 +1362,31 @@ func (folder Folder) ReadTokenViewerUserRelations(ctx context.Context) ([]User, 
     return nil, err
   }
 
-  return authz.FromIDsExcludingWildcard[User](ids), nil
+  rels := make([]FolderTokenViewerUserRelation, 0, len(tuples))
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      continue
+    }
+    rels = append(rels, FolderTokenViewerUserRelation{
+      ID:            User(t.ID),
+      CaveatName:    t.CaveatName,
+      CaveatContext: t.CaveatContext,
+      ExpiresAt:     t.ExpiresAt,
+    })
+  }
+  return rels, nil
 }
 
-func (folder Folder) ReadVersionedViewerUserRelations(ctx context.Context) ([]User, error) {
-  ids, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+type FolderVersionedViewerUserRelation struct {
+  ID            User
+  CaveatName    string
+  CaveatContext map[string]any
+  ExpiresAt     *time.Time
+}
+func (r FolderVersionedViewerUserRelation) RelationID() User { return r.ID }
+
+func (folder Folder) ReadVersionedViewerUserRelations(ctx context.Context) ([]FolderVersionedViewerUserRelation, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
     Type: TypeFolder,
     ID: authz.ID(folder),
   }, authz.Relation(FolderVersionedViewer), TypeUser)
@@ -1118,11 +1394,31 @@ func (folder Folder) ReadVersionedViewerUserRelations(ctx context.Context) ([]Us
     return nil, err
   }
 
-  return authz.FromIDsExcludingWildcard[User](ids), nil
+  rels := make([]FolderVersionedViewerUserRelation, 0, len(tuples))
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      continue
+    }
+    rels = append(rels, FolderVersionedViewerUserRelation{
+      ID:            User(t.ID),
+      CaveatName:    t.CaveatName,
+      CaveatContext: t.CaveatContext,
+      ExpiresAt:     t.ExpiresAt,
+    })
+  }
+  return rels, nil
 }
 
-func (folder Folder) ReadMatrixViewerUserRelations(ctx context.Context) ([]User, error) {
-  ids, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+type FolderMatrixViewerUserRelation struct {
+  ID            User
+  CaveatName    string
+  CaveatContext map[string]any
+  ExpiresAt     *time.Time
+}
+func (r FolderMatrixViewerUserRelation) RelationID() User { return r.ID }
+
+func (folder Folder) ReadMatrixViewerUserRelations(ctx context.Context) ([]FolderMatrixViewerUserRelation, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
     Type: TypeFolder,
     ID: authz.ID(folder),
   }, authz.Relation(FolderMatrixViewer), TypeUser)
@@ -1130,11 +1426,31 @@ func (folder Folder) ReadMatrixViewerUserRelations(ctx context.Context) ([]User,
     return nil, err
   }
 
-  return authz.FromIDsExcludingWildcard[User](ids), nil
+  rels := make([]FolderMatrixViewerUserRelation, 0, len(tuples))
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      continue
+    }
+    rels = append(rels, FolderMatrixViewerUserRelation{
+      ID:            User(t.ID),
+      CaveatName:    t.CaveatName,
+      CaveatContext: t.CaveatContext,
+      ExpiresAt:     t.ExpiresAt,
+    })
+  }
+  return rels, nil
 }
 
-func (folder Folder) ReadTenantedUserUserRelations(ctx context.Context) ([]User, error) {
-  ids, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+type FolderTenantedUserUserRelation struct {
+  ID            User
+  CaveatName    string
+  CaveatContext map[string]any
+  ExpiresAt     *time.Time
+}
+func (r FolderTenantedUserUserRelation) RelationID() User { return r.ID }
+
+func (folder Folder) ReadTenantedUserUserRelations(ctx context.Context) ([]FolderTenantedUserUserRelation, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
     Type: TypeFolder,
     ID: authz.ID(folder),
   }, authz.Relation(FolderTenantedUser), TypeUser)
@@ -1142,11 +1458,31 @@ func (folder Folder) ReadTenantedUserUserRelations(ctx context.Context) ([]User,
     return nil, err
   }
 
-  return authz.FromIDsExcludingWildcard[User](ids), nil
+  rels := make([]FolderTenantedUserUserRelation, 0, len(tuples))
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      continue
+    }
+    rels = append(rels, FolderTenantedUserUserRelation{
+      ID:            User(t.ID),
+      CaveatName:    t.CaveatName,
+      CaveatContext: t.CaveatContext,
+      ExpiresAt:     t.ExpiresAt,
+    })
+  }
+  return rels, nil
 }
 
-func (folder Folder) ReadWindowedUserUserRelations(ctx context.Context) ([]User, error) {
-  ids, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+type FolderWindowedUserUserRelation struct {
+  ID            User
+  CaveatName    string
+  CaveatContext map[string]any
+  ExpiresAt     *time.Time
+}
+func (r FolderWindowedUserUserRelation) RelationID() User { return r.ID }
+
+func (folder Folder) ReadWindowedUserUserRelations(ctx context.Context) ([]FolderWindowedUserUserRelation, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
     Type: TypeFolder,
     ID: authz.ID(folder),
   }, authz.Relation(FolderWindowedUser), TypeUser)
@@ -1154,11 +1490,31 @@ func (folder Folder) ReadWindowedUserUserRelations(ctx context.Context) ([]User,
     return nil, err
   }
 
-  return authz.FromIDsExcludingWildcard[User](ids), nil
+  rels := make([]FolderWindowedUserUserRelation, 0, len(tuples))
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      continue
+    }
+    rels = append(rels, FolderWindowedUserUserRelation{
+      ID:            User(t.ID),
+      CaveatName:    t.CaveatName,
+      CaveatContext: t.CaveatContext,
+      ExpiresAt:     t.ExpiresAt,
+    })
+  }
+  return rels, nil
 }
 
-func (folder Folder) ReadGatedRootFolderRelations(ctx context.Context) ([]Folder, error) {
-  ids, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+type FolderGatedRootFolderRelation struct {
+  ID            Folder
+  CaveatName    string
+  CaveatContext map[string]any
+  ExpiresAt     *time.Time
+}
+func (r FolderGatedRootFolderRelation) RelationID() Folder { return r.ID }
+
+func (folder Folder) ReadGatedRootFolderRelations(ctx context.Context) ([]FolderGatedRootFolderRelation, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
     Type: TypeFolder,
     ID: authz.ID(folder),
   }, authz.Relation(FolderGatedRoot), TypeFolder)
@@ -1166,11 +1522,31 @@ func (folder Folder) ReadGatedRootFolderRelations(ctx context.Context) ([]Folder
     return nil, err
   }
 
-  return authz.FromIDsExcludingWildcard[Folder](ids), nil
+  rels := make([]FolderGatedRootFolderRelation, 0, len(tuples))
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      continue
+    }
+    rels = append(rels, FolderGatedRootFolderRelation{
+      ID:            Folder(t.ID),
+      CaveatName:    t.CaveatName,
+      CaveatContext: t.CaveatContext,
+      ExpiresAt:     t.ExpiresAt,
+    })
+  }
+  return rels, nil
 }
 
-func (folder Folder) ReadExpiringViewerUserRelations(ctx context.Context) ([]User, error) {
-  ids, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+type FolderExpiringViewerUserRelation struct {
+  ID            User
+  CaveatName    string
+  CaveatContext map[string]any
+  ExpiresAt     *time.Time
+}
+func (r FolderExpiringViewerUserRelation) RelationID() User { return r.ID }
+
+func (folder Folder) ReadExpiringViewerUserRelations(ctx context.Context) ([]FolderExpiringViewerUserRelation, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
     Type: TypeFolder,
     ID: authz.ID(folder),
   }, authz.Relation(FolderExpiringViewer), TypeUser)
@@ -1178,11 +1554,31 @@ func (folder Folder) ReadExpiringViewerUserRelations(ctx context.Context) ([]Use
     return nil, err
   }
 
-  return authz.FromIDsExcludingWildcard[User](ids), nil
+  rels := make([]FolderExpiringViewerUserRelation, 0, len(tuples))
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      continue
+    }
+    rels = append(rels, FolderExpiringViewerUserRelation{
+      ID:            User(t.ID),
+      CaveatName:    t.CaveatName,
+      CaveatContext: t.CaveatContext,
+      ExpiresAt:     t.ExpiresAt,
+    })
+  }
+  return rels, nil
 }
 
-func (folder Folder) ReadGatedTokenUserRelations(ctx context.Context) ([]User, error) {
-  ids, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+type FolderGatedTokenUserRelation struct {
+  ID            User
+  CaveatName    string
+  CaveatContext map[string]any
+  ExpiresAt     *time.Time
+}
+func (r FolderGatedTokenUserRelation) RelationID() User { return r.ID }
+
+func (folder Folder) ReadGatedTokenUserRelations(ctx context.Context) ([]FolderGatedTokenUserRelation, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
     Type: TypeFolder,
     ID: authz.ID(folder),
   }, authz.Relation(FolderGatedToken), TypeUser)
@@ -1190,11 +1586,31 @@ func (folder Folder) ReadGatedTokenUserRelations(ctx context.Context) ([]User, e
     return nil, err
   }
 
-  return authz.FromIDsExcludingWildcard[User](ids), nil
+  rels := make([]FolderGatedTokenUserRelation, 0, len(tuples))
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      continue
+    }
+    rels = append(rels, FolderGatedTokenUserRelation{
+      ID:            User(t.ID),
+      CaveatName:    t.CaveatName,
+      CaveatContext: t.CaveatContext,
+      ExpiresAt:     t.ExpiresAt,
+    })
+  }
+  return rels, nil
 }
 
-func (folder Folder) ReadPublicUntilUserRelations(ctx context.Context) ([]User, error) {
-  ids, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+type FolderPublicUntilUserRelation struct {
+  ID            User
+  CaveatName    string
+  CaveatContext map[string]any
+  ExpiresAt     *time.Time
+}
+func (r FolderPublicUntilUserRelation) RelationID() User { return r.ID }
+
+func (folder Folder) ReadPublicUntilUserRelations(ctx context.Context) ([]FolderPublicUntilUserRelation, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
     Type: TypeFolder,
     ID: authz.ID(folder),
   }, authz.Relation(FolderPublicUntil), TypeUser)
@@ -1202,17 +1618,51 @@ func (folder Folder) ReadPublicUntilUserRelations(ctx context.Context) ([]User, 
     return nil, err
   }
 
-  return authz.FromIDsExcludingWildcard[User](ids), nil
+  rels := make([]FolderPublicUntilUserRelation, 0, len(tuples))
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      continue
+    }
+    rels = append(rels, FolderPublicUntilUserRelation{
+      ID:            User(t.ID),
+      CaveatName:    t.CaveatName,
+      CaveatContext: t.CaveatContext,
+      ExpiresAt:     t.ExpiresAt,
+    })
+  }
+  return rels, nil
 }
-func (folder Folder) ReadPublicUntilUserWildcard(ctx context.Context) (bool, error) {
-  return authz.GetEngine(ctx).HasPublicRelation(ctx, authz.Resource{
+func (folder Folder) ReadPublicUntilUserWildcard(ctx context.Context) (FolderPublicUntilUserRelation, bool, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
     Type: TypeFolder,
     ID: authz.ID(folder),
   }, authz.Relation(FolderPublicUntil), TypeUser)
+  if err != nil {
+    return FolderPublicUntilUserRelation{}, false, err
+  }
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      return FolderPublicUntilUserRelation{
+        ID:            User(t.ID),
+        CaveatName:    t.CaveatName,
+        CaveatContext: t.CaveatContext,
+        ExpiresAt:     t.ExpiresAt,
+      }, true, nil
+    }
+  }
+  return FolderPublicUntilUserRelation{}, false, nil
 }
 
-func (folder Folder) ReadPublicGatedUserRelations(ctx context.Context) ([]User, error) {
-  ids, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+type FolderPublicGatedUserRelation struct {
+  ID            User
+  CaveatName    string
+  CaveatContext map[string]any
+  ExpiresAt     *time.Time
+}
+func (r FolderPublicGatedUserRelation) RelationID() User { return r.ID }
+
+func (folder Folder) ReadPublicGatedUserRelations(ctx context.Context) ([]FolderPublicGatedUserRelation, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
     Type: TypeFolder,
     ID: authz.ID(folder),
   }, authz.Relation(FolderPublicGated), TypeUser)
@@ -1220,13 +1670,39 @@ func (folder Folder) ReadPublicGatedUserRelations(ctx context.Context) ([]User, 
     return nil, err
   }
 
-  return authz.FromIDsExcludingWildcard[User](ids), nil
+  rels := make([]FolderPublicGatedUserRelation, 0, len(tuples))
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      continue
+    }
+    rels = append(rels, FolderPublicGatedUserRelation{
+      ID:            User(t.ID),
+      CaveatName:    t.CaveatName,
+      CaveatContext: t.CaveatContext,
+      ExpiresAt:     t.ExpiresAt,
+    })
+  }
+  return rels, nil
 }
-func (folder Folder) ReadPublicGatedUserWildcard(ctx context.Context) (bool, error) {
-  return authz.GetEngine(ctx).HasPublicRelation(ctx, authz.Resource{
+func (folder Folder) ReadPublicGatedUserWildcard(ctx context.Context) (FolderPublicGatedUserRelation, bool, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
     Type: TypeFolder,
     ID: authz.ID(folder),
   }, authz.Relation(FolderPublicGated), TypeUser)
+  if err != nil {
+    return FolderPublicGatedUserRelation{}, false, err
+  }
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      return FolderPublicGatedUserRelation{
+        ID:            User(t.ID),
+        CaveatName:    t.CaveatName,
+        CaveatContext: t.CaveatContext,
+        ExpiresAt:     t.ExpiresAt,
+      }, true, nil
+    }
+  }
+  return FolderPublicGatedUserRelation{}, false, nil
 }
 
 const FolderBrowse PermissionFolder = "browse"

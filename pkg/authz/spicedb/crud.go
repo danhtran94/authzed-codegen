@@ -487,10 +487,10 @@ func (e *Engine) LookupSubjectsWithCaveat(ctx context.Context, on authz.Resource
 	return ids, nil
 }
 
-func (e *Engine) ReadRelations(ctx context.Context, from authz.Resource, relation authz.Relation, subject authz.Type) ([]authz.ID, error) {
+func (e *Engine) ReadRelations(ctx context.Context, from authz.Resource, relation authz.Relation, subject authz.Type) ([]authz.RelationTuple, error) {
 	e.debugLog("Reading relations: from=%v, relation=%v, subject=%v", from, relation, subject)
 	consistency := e.getConsistencySnapshot()
-	ids := []authz.ID{}
+	tuples := []authz.RelationTuple{}
 
 	res, err := e.client.ReadRelationships(ctx, &v1.ReadRelationshipsRequest{
 		Consistency: consistency,
@@ -509,23 +509,42 @@ func (e *Engine) ReadRelations(ctx context.Context, from authz.Resource, relatio
 
 	data, err := res.Recv()
 	for ; err == nil && data != nil; data, err = res.Recv() {
-		e.debugLog("Received data: %+v", data) // Added debug log
-		ids = append(ids, authz.ID(data.Relationship.Subject.Object.ObjectId))
+		e.debugLog("Received data: %+v", data)
+		rel := data.Relationship
+		t := authz.RelationTuple{
+			ID: authz.ID(rel.Subject.Object.ObjectId),
+		}
+		if rel.OptionalCaveat != nil {
+			t.CaveatName = rel.OptionalCaveat.CaveatName
+			if rel.OptionalCaveat.Context != nil {
+				t.CaveatContext = rel.OptionalCaveat.Context.AsMap()
+			}
+		}
+		if rel.OptionalExpiresAt != nil {
+			ts := rel.OptionalExpiresAt.AsTime()
+			t.ExpiresAt = &ts
+		}
+		tuples = append(tuples, t)
 	}
 	if !errors.Is(err, io.EOF) {
 		return nil, err
 	}
 
-	return ids, nil
+	return tuples, nil
 }
 
 func (e *Engine) HasPublicRelation(ctx context.Context, on authz.Resource, relation authz.Relation, subject authz.Type) (bool, error) {
 	e.debugLog("Checking public relation: on=%v, relation=%v, subject=%v", on, relation, subject)
-	ids, err := e.ReadRelations(ctx, on, relation, subject)
+	tuples, err := e.ReadRelations(ctx, on, relation, subject)
 	if err != nil {
 		return false, err
 	}
-	return slices.Contains(ids, authz.WildcardID), nil
+	for _, t := range tuples {
+		if t.ID == authz.WildcardID {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func (e *Engine) HasPublicSubject(ctx context.Context, on authz.Resource, permission authz.Permission, subject authz.Type) (bool, error) {

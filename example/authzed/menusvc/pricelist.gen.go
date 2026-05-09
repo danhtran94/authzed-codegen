@@ -6,6 +6,7 @@ import (
   "github.com/danhtran94/authzed-codegen/pkg/authz"
 
   "context"
+  "time"
 )
 
 const TypePricelist authz.Type = "menusvc/pricelist"
@@ -60,8 +61,16 @@ func (pricelist Pricelist) DeleteOwnerRelations(ctx context.Context, objects Pri
   return nil
 }
 
-func (pricelist Pricelist) ReadOwnerCompanyRelations(ctx context.Context) ([]Company, error) {
-  ids, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+type PricelistOwnerCompanyRelation struct {
+  ID            Company
+  CaveatName    string
+  CaveatContext map[string]any
+  ExpiresAt     *time.Time
+}
+func (r PricelistOwnerCompanyRelation) RelationID() Company { return r.ID }
+
+func (pricelist Pricelist) ReadOwnerCompanyRelations(ctx context.Context) ([]PricelistOwnerCompanyRelation, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
     Type: TypePricelist,
     ID: authz.ID(pricelist),
   }, authz.Relation(PricelistOwner), TypeCompany)
@@ -69,7 +78,19 @@ func (pricelist Pricelist) ReadOwnerCompanyRelations(ctx context.Context) ([]Com
     return nil, err
   }
 
-  return authz.FromIDsExcludingWildcard[Company](ids), nil
+  rels := make([]PricelistOwnerCompanyRelation, 0, len(tuples))
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      continue
+    }
+    rels = append(rels, PricelistOwnerCompanyRelation{
+      ID:            Company(t.ID),
+      CaveatName:    t.CaveatName,
+      CaveatContext: t.CaveatContext,
+      ExpiresAt:     t.ExpiresAt,
+    })
+  }
+  return rels, nil
 }
 
 const PricelistWrite PermissionPricelist = "write"

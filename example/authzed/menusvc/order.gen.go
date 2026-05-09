@@ -6,6 +6,7 @@ import (
   "github.com/danhtran94/authzed-codegen/pkg/authz"
 
   "context"
+  "time"
 )
 
 const TypeOrder authz.Type = "menusvc/order"
@@ -108,8 +109,16 @@ func (order Order) DeleteBelongsCompanyRelations(ctx context.Context, objects Or
   return nil
 }
 
-func (order Order) ReadCreatorUserRelations(ctx context.Context) ([]User, error) {
-  ids, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+type OrderCreatorUserRelation struct {
+  ID            User
+  CaveatName    string
+  CaveatContext map[string]any
+  ExpiresAt     *time.Time
+}
+func (r OrderCreatorUserRelation) RelationID() User { return r.ID }
+
+func (order Order) ReadCreatorUserRelations(ctx context.Context) ([]OrderCreatorUserRelation, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
     Type: TypeOrder,
     ID: authz.ID(order),
   }, authz.Relation(OrderCreator), TypeUser)
@@ -117,11 +126,31 @@ func (order Order) ReadCreatorUserRelations(ctx context.Context) ([]User, error)
     return nil, err
   }
 
-  return authz.FromIDsExcludingWildcard[User](ids), nil
+  rels := make([]OrderCreatorUserRelation, 0, len(tuples))
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      continue
+    }
+    rels = append(rels, OrderCreatorUserRelation{
+      ID:            User(t.ID),
+      CaveatName:    t.CaveatName,
+      CaveatContext: t.CaveatContext,
+      ExpiresAt:     t.ExpiresAt,
+    })
+  }
+  return rels, nil
 }
 
-func (order Order) ReadCreatorCustomerRelations(ctx context.Context) ([]Customer, error) {
-  ids, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+type OrderCreatorCustomerRelation struct {
+  ID            Customer
+  CaveatName    string
+  CaveatContext map[string]any
+  ExpiresAt     *time.Time
+}
+func (r OrderCreatorCustomerRelation) RelationID() Customer { return r.ID }
+
+func (order Order) ReadCreatorCustomerRelations(ctx context.Context) ([]OrderCreatorCustomerRelation, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
     Type: TypeOrder,
     ID: authz.ID(order),
   }, authz.Relation(OrderCreator), TypeCustomer)
@@ -129,11 +158,31 @@ func (order Order) ReadCreatorCustomerRelations(ctx context.Context) ([]Customer
     return nil, err
   }
 
-  return authz.FromIDsExcludingWildcard[Customer](ids), nil
+  rels := make([]OrderCreatorCustomerRelation, 0, len(tuples))
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      continue
+    }
+    rels = append(rels, OrderCreatorCustomerRelation{
+      ID:            Customer(t.ID),
+      CaveatName:    t.CaveatName,
+      CaveatContext: t.CaveatContext,
+      ExpiresAt:     t.ExpiresAt,
+    })
+  }
+  return rels, nil
 }
 
-func (order Order) ReadBelongsCompanyCompanyRelations(ctx context.Context) ([]Company, error) {
-  ids, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+type OrderBelongsCompanyCompanyRelation struct {
+  ID            Company
+  CaveatName    string
+  CaveatContext map[string]any
+  ExpiresAt     *time.Time
+}
+func (r OrderBelongsCompanyCompanyRelation) RelationID() Company { return r.ID }
+
+func (order Order) ReadBelongsCompanyCompanyRelations(ctx context.Context) ([]OrderBelongsCompanyCompanyRelation, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
     Type: TypeOrder,
     ID: authz.ID(order),
   }, authz.Relation(OrderBelongsCompany), TypeCompany)
@@ -141,7 +190,19 @@ func (order Order) ReadBelongsCompanyCompanyRelations(ctx context.Context) ([]Co
     return nil, err
   }
 
-  return authz.FromIDsExcludingWildcard[Company](ids), nil
+  rels := make([]OrderBelongsCompanyCompanyRelation, 0, len(tuples))
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      continue
+    }
+    rels = append(rels, OrderBelongsCompanyCompanyRelation{
+      ID:            Company(t.ID),
+      CaveatName:    t.CaveatName,
+      CaveatContext: t.CaveatContext,
+      ExpiresAt:     t.ExpiresAt,
+    })
+  }
+  return rels, nil
 }
 
 const OrderWrite PermissionOrder = "write"

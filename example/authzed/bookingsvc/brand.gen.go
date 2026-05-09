@@ -6,6 +6,7 @@ import (
   "github.com/danhtran94/authzed-codegen/pkg/authz"
 
   "context"
+  "time"
 )
 
 const TypeBrand authz.Type = "bookingsvc/brand"
@@ -118,8 +119,16 @@ func (brand Brand) DeleteEmployeeRelations(ctx context.Context, objects BrandEmp
   return nil
 }
 
-func (brand Brand) ReadAdminUserRelations(ctx context.Context) ([]User, error) {
-  ids, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+type BrandAdminUserRelation struct {
+  ID            User
+  CaveatName    string
+  CaveatContext map[string]any
+  ExpiresAt     *time.Time
+}
+func (r BrandAdminUserRelation) RelationID() User { return r.ID }
+
+func (brand Brand) ReadAdminUserRelations(ctx context.Context) ([]BrandAdminUserRelation, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
     Type: TypeBrand,
     ID: authz.ID(brand),
   }, authz.Relation(BrandAdmin), TypeUser)
@@ -127,11 +136,31 @@ func (brand Brand) ReadAdminUserRelations(ctx context.Context) ([]User, error) {
     return nil, err
   }
 
-  return authz.FromIDsExcludingWildcard[User](ids), nil
+  rels := make([]BrandAdminUserRelation, 0, len(tuples))
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      continue
+    }
+    rels = append(rels, BrandAdminUserRelation{
+      ID:            User(t.ID),
+      CaveatName:    t.CaveatName,
+      CaveatContext: t.CaveatContext,
+      ExpiresAt:     t.ExpiresAt,
+    })
+  }
+  return rels, nil
 }
 
-func (brand Brand) ReadManagerEmployeeRelations(ctx context.Context) ([]Employee, error) {
-  ids, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+type BrandManagerEmployeeRelation struct {
+  ID            Employee
+  CaveatName    string
+  CaveatContext map[string]any
+  ExpiresAt     *time.Time
+}
+func (r BrandManagerEmployeeRelation) RelationID() Employee { return r.ID }
+
+func (brand Brand) ReadManagerEmployeeRelations(ctx context.Context) ([]BrandManagerEmployeeRelation, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
     Type: TypeBrand,
     ID: authz.ID(brand),
   }, authz.Relation(BrandManager), TypeEmployee)
@@ -139,11 +168,31 @@ func (brand Brand) ReadManagerEmployeeRelations(ctx context.Context) ([]Employee
     return nil, err
   }
 
-  return authz.FromIDsExcludingWildcard[Employee](ids), nil
+  rels := make([]BrandManagerEmployeeRelation, 0, len(tuples))
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      continue
+    }
+    rels = append(rels, BrandManagerEmployeeRelation{
+      ID:            Employee(t.ID),
+      CaveatName:    t.CaveatName,
+      CaveatContext: t.CaveatContext,
+      ExpiresAt:     t.ExpiresAt,
+    })
+  }
+  return rels, nil
 }
 
-func (brand Brand) ReadEmployeeEmployeeRelations(ctx context.Context) ([]Employee, error) {
-  ids, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+type BrandEmployeeEmployeeRelation struct {
+  ID            Employee
+  CaveatName    string
+  CaveatContext map[string]any
+  ExpiresAt     *time.Time
+}
+func (r BrandEmployeeEmployeeRelation) RelationID() Employee { return r.ID }
+
+func (brand Brand) ReadEmployeeEmployeeRelations(ctx context.Context) ([]BrandEmployeeEmployeeRelation, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
     Type: TypeBrand,
     ID: authz.ID(brand),
   }, authz.Relation(BrandEmployee), TypeEmployee)
@@ -151,7 +200,19 @@ func (brand Brand) ReadEmployeeEmployeeRelations(ctx context.Context) ([]Employe
     return nil, err
   }
 
-  return authz.FromIDsExcludingWildcard[Employee](ids), nil
+  rels := make([]BrandEmployeeEmployeeRelation, 0, len(tuples))
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      continue
+    }
+    rels = append(rels, BrandEmployeeEmployeeRelation{
+      ID:            Employee(t.ID),
+      CaveatName:    t.CaveatName,
+      CaveatContext: t.CaveatContext,
+      ExpiresAt:     t.ExpiresAt,
+    })
+  }
+  return rels, nil
 }
 
 const BrandManage PermissionBrand = "manage"
