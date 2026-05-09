@@ -6,3 +6,6 @@ import (
 
 //go:embed object.go.tmpl
 var ObjectTemplate []byte
+
+//go:embed schema.go.tmpl
+var SchemaTemplate []byte

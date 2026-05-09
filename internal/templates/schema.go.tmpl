@@ -1,0 +1,132 @@
+{{- /* gotype: github.com/danhtran94/authzed-codegen/internal/generator.SchemaView */ -}}
+package {{ .PackageName }}
+
+import (
+  "context"
+  "fmt"
+
+  v1 "github.com/authzed/authzed-go/proto/authzed/api/v1"
+  "github.com/danhtran94/authzed-codegen/pkg/authz"
+)
+
+// SchemaText is the canonical schema this binary's codegen was built from.
+// Use VerifySchema(ctx) at startup to compare against the deployed schema
+// in SpiceDB and decide whether to fail-fast on drift.
+const SchemaText = {{ .QuotedSchemaText }}
+
+// SchemaDigest is sha256(SchemaText). Cheap pre-flight equality check;
+// DiffSchema gives the rich diff when digests don't match.
+const SchemaDigest = "sha256:{{ .SchemaDigest }}"
+
+// VerifySchema compares SchemaText against the deployed schema in SpiceDB
+// and returns a typed SchemaDrift partitioning the diffs into severity
+// buckets. Caller decides how to react — typically hard-fail at startup
+// when drift.IsBreaking() is true.
+//
+// Uses the engine registered via authz.SetDefaultEngine.
+func VerifySchema(ctx context.Context) (authz.SchemaDrift, error) {
+  diffs, err := authz.GetEngine(ctx).DiffSchema(ctx, SchemaText)
+  if err != nil {
+    return authz.SchemaDrift{}, fmt.Errorf("verify schema: %w", err)
+  }
+  return bucketDrift(diffs), nil
+}
+
+// bucketDrift partitions SpiceDB's typed diffs into severity buckets from
+// the binary's perspective. SpiceDB returns diffs as "operations to apply
+// to deployed to reach the comparison schema":
+//   - *_Added: thing is in comparison (baseline) but missing from deployed
+//     → BREAKING (binary expects it, deployed doesn't have it)
+//   - *_Removed: thing is in deployed but not in comparison (baseline)
+//     → ADDITIVE (deployed is ahead, binary doesn't reference it)
+//   - *_Changed (expr/type): semantic change → BREAKING
+//   - *_DocCommentChanged: cosmetic only → SAFE
+//
+// The SchemaDrift API exposes from-binary's-perspective:
+//   Added    = deployed has extras (additive, safe)
+//   Removed  = baseline has things deployed lacks (breaking)
+//   Changed  = semantic divergence (breaking)
+//   Cosmetic = doc-only changes (safe)
+func bucketDrift(diffs []*v1.ReflectionSchemaDiff) authz.SchemaDrift {
+  var out authz.SchemaDrift
+  for _, d := range diffs {
+    entry := authz.DriftEntry{Description: describeDrift(d), Raw: d}
+    switch d.GetDiff().(type) {
+    // SpiceDB's *_Removed = deployed has extras the baseline doesn't know
+    // about → safe additive drift.
+    case *v1.ReflectionSchemaDiff_DefinitionRemoved,
+      *v1.ReflectionSchemaDiff_RelationRemoved,
+      *v1.ReflectionSchemaDiff_PermissionRemoved,
+      *v1.ReflectionSchemaDiff_RelationSubjectTypeRemoved,
+      *v1.ReflectionSchemaDiff_CaveatRemoved,
+      *v1.ReflectionSchemaDiff_CaveatParameterRemoved:
+      out.Added = append(out.Added, entry)
+    // SpiceDB's *_Added = baseline has things deployed lacks → breaking.
+    case *v1.ReflectionSchemaDiff_DefinitionAdded,
+      *v1.ReflectionSchemaDiff_RelationAdded,
+      *v1.ReflectionSchemaDiff_PermissionAdded,
+      *v1.ReflectionSchemaDiff_RelationSubjectTypeAdded,
+      *v1.ReflectionSchemaDiff_CaveatAdded,
+      *v1.ReflectionSchemaDiff_CaveatParameterAdded:
+      out.Removed = append(out.Removed, entry)
+    case *v1.ReflectionSchemaDiff_PermissionExprChanged,
+      *v1.ReflectionSchemaDiff_CaveatExprChanged,
+      *v1.ReflectionSchemaDiff_CaveatParameterTypeChanged:
+      out.Changed = append(out.Changed, entry)
+    case *v1.ReflectionSchemaDiff_DefinitionDocCommentChanged,
+      *v1.ReflectionSchemaDiff_RelationDocCommentChanged,
+      *v1.ReflectionSchemaDiff_PermissionDocCommentChanged,
+      *v1.ReflectionSchemaDiff_CaveatDocCommentChanged:
+      out.Cosmetic = append(out.Cosmetic, entry)
+    }
+  }
+  return out
+}
+
+// describeDrift formats a human-readable line for a single diff.
+// Phrasing is from the binary's perspective:
+//   - SpiceDB *_Added → baseline expects but deployed lacks ("missing from deployed")
+//   - SpiceDB *_Removed → deployed has extra ("extra in deployed")
+func describeDrift(d *v1.ReflectionSchemaDiff) string {
+  switch v := d.GetDiff().(type) {
+  case *v1.ReflectionSchemaDiff_DefinitionAdded:
+    return fmt.Sprintf("definition %q expected by baseline but missing from deployed", v.DefinitionAdded.GetName())
+  case *v1.ReflectionSchemaDiff_DefinitionRemoved:
+    return fmt.Sprintf("definition %q present in deployed but not in baseline (extra)", v.DefinitionRemoved.GetName())
+  case *v1.ReflectionSchemaDiff_DefinitionDocCommentChanged:
+    return fmt.Sprintf("definition %q doc comment changed", v.DefinitionDocCommentChanged.GetName())
+  case *v1.ReflectionSchemaDiff_RelationAdded:
+    return fmt.Sprintf("relation %s#%s expected by baseline but missing from deployed", v.RelationAdded.GetParentDefinitionName(), v.RelationAdded.GetName())
+  case *v1.ReflectionSchemaDiff_RelationRemoved:
+    return fmt.Sprintf("relation %s#%s present in deployed but not in baseline (extra)", v.RelationRemoved.GetParentDefinitionName(), v.RelationRemoved.GetName())
+  case *v1.ReflectionSchemaDiff_RelationDocCommentChanged:
+    return fmt.Sprintf("relation %s#%s doc comment changed", v.RelationDocCommentChanged.GetParentDefinitionName(), v.RelationDocCommentChanged.GetName())
+  case *v1.ReflectionSchemaDiff_RelationSubjectTypeAdded:
+    return "relation subject type expected by baseline but missing from deployed"
+  case *v1.ReflectionSchemaDiff_RelationSubjectTypeRemoved:
+    return "relation subject type present in deployed but not in baseline (extra)"
+  case *v1.ReflectionSchemaDiff_PermissionAdded:
+    return fmt.Sprintf("permission %s#%s expected by baseline but missing from deployed", v.PermissionAdded.GetParentDefinitionName(), v.PermissionAdded.GetName())
+  case *v1.ReflectionSchemaDiff_PermissionRemoved:
+    return fmt.Sprintf("permission %s#%s present in deployed but not in baseline (extra)", v.PermissionRemoved.GetParentDefinitionName(), v.PermissionRemoved.GetName())
+  case *v1.ReflectionSchemaDiff_PermissionDocCommentChanged:
+    return fmt.Sprintf("permission %s#%s doc comment changed", v.PermissionDocCommentChanged.GetParentDefinitionName(), v.PermissionDocCommentChanged.GetName())
+  case *v1.ReflectionSchemaDiff_PermissionExprChanged:
+    return fmt.Sprintf("permission %s#%s expression changed", v.PermissionExprChanged.GetParentDefinitionName(), v.PermissionExprChanged.GetName())
+  case *v1.ReflectionSchemaDiff_CaveatAdded:
+    return fmt.Sprintf("caveat %q expected by baseline but missing from deployed", v.CaveatAdded.GetName())
+  case *v1.ReflectionSchemaDiff_CaveatRemoved:
+    return fmt.Sprintf("caveat %q present in deployed but not in baseline (extra)", v.CaveatRemoved.GetName())
+  case *v1.ReflectionSchemaDiff_CaveatDocCommentChanged:
+    return fmt.Sprintf("caveat %q doc comment changed", v.CaveatDocCommentChanged.GetName())
+  case *v1.ReflectionSchemaDiff_CaveatExprChanged:
+    return fmt.Sprintf("caveat %q expression changed", v.CaveatExprChanged.GetName())
+  case *v1.ReflectionSchemaDiff_CaveatParameterAdded:
+    return "caveat parameter expected by baseline but missing from deployed"
+  case *v1.ReflectionSchemaDiff_CaveatParameterRemoved:
+    return "caveat parameter present in deployed but not in baseline (extra)"
+  case *v1.ReflectionSchemaDiff_CaveatParameterTypeChanged:
+    return "caveat parameter type changed"
+  }
+  return "unknown drift"
+}

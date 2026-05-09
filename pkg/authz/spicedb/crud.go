@@ -689,6 +689,26 @@ func (e *Engine) HasPublicRelation(ctx context.Context, on authz.Resource, relat
 	return false, nil
 }
 
+// DiffSchema calls SpiceDB's SchemaService.DiffSchema RPC with the
+// caller-supplied comparisonSchema (typically the codegen baseline
+// SchemaText constant). Server-side normalised comparison; returns the
+// raw typed diffs for the codegen helper to bucket. Empty slice when
+// schemas match.
+//
+// Schema service has its own consistency model (always reads the latest
+// schema); the engine's read-side consistency override (AUZ-014) is
+// intentionally NOT applied here.
+func (e *Engine) DiffSchema(ctx context.Context, comparisonSchema string) ([]*v1.ReflectionSchemaDiff, error) {
+	e.debugLog("Diffing schema: comparison_schema length=%d", len(comparisonSchema))
+	res, err := e.client.DiffSchema(ctx, &v1.DiffSchemaRequest{
+		ComparisonSchema: comparisonSchema,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return res.GetDiffs(), nil
+}
+
 func (e *Engine) HasPublicSubject(ctx context.Context, on authz.Resource, permission authz.Permission, subject authz.Type) (bool, error) {
 	e.debugLog("Checking public subject: on=%v, permission=%v, subject=%v", on, permission, subject)
 	result, err := e.LookupSubjects(ctx, on, permission, subject)

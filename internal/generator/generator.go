@@ -2,9 +2,12 @@ package generator
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"text/template"
 
@@ -32,6 +35,54 @@ func NewGenerator(caveatMap map[string][]ParamSpec, definitions []*DefinitionVie
 
 func (g *Generator) AddObjectTemplate(name, template string) {
 	g.ObjectTemplates[name] = template
+}
+
+// SchemaView is the data passed to schema.go.tmpl. Package name is derived
+// from the output dir's last segment; QuotedSchemaText is the source `.zed`
+// bytes encoded as a valid Go string literal via strconv.Quote (handles
+// embedded backticks in comments per AUZ-015 Discoveries — SPEC-010 A7
+// "no backticks" hypothesis was wrong); SchemaDigest is sha256 hex of the
+// raw bytes (not the quoted form, so digests are stable across encoding).
+type SchemaView struct {
+	PackageName      string
+	QuotedSchemaText string
+	SchemaDigest     string
+}
+
+// GenerateSchemaSource writes <OutputPath>/schema.gen.go from the given
+// schema template, embedding the source schema bytes verbatim and a
+// sha256 digest. The package name is derived from the last path segment
+// of OutputPath via utilstr.PackageName.
+//
+// Per SPEC-010 — single top-level file per codegen run; package alongside
+// the per-namespace generated subpackages.
+func (g *Generator) GenerateSchemaSource(tmplStr string, schemaBytes []byte) error {
+	if err := os.MkdirAll(g.OutputPath, os.ModePerm); err != nil {
+		return err
+	}
+
+	digest := sha256.Sum256(schemaBytes)
+	view := SchemaView{
+		PackageName:      utilstr.PackageName(filepath.Base(g.OutputPath)),
+		QuotedSchemaText: strconv.Quote(string(schemaBytes)),
+		SchemaDigest:     fmt.Sprintf("%x", digest),
+	}
+
+	tmpl, err := template.New("schema").Parse(tmplStr)
+	if err != nil {
+		return err
+	}
+
+	buf := bytes.Buffer{}
+	if _, err := buf.WriteString(SOURCE_HEADER); err != nil {
+		return err
+	}
+	if err := tmpl.Execute(&buf, view); err != nil {
+		return err
+	}
+
+	filePath := fmt.Sprintf("%s/schema.gen.go", g.OutputPath)
+	return os.WriteFile(filePath, buf.Bytes(), os.ModePerm)
 }
 
 func (g *Generator) GenerateObjectSource(name string) error {

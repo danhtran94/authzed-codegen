@@ -4,6 +4,72 @@ All notable changes to this project are documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.0] - 2026-05-09
+
+Adds runtime detection of mismatch between the codegen baseline schema and the schema currently deployed in SpiceDB. Closes a class of silent production bugs: binary built against schema v1 calling SpiceDB running schema v2 → mis-permission everything with no error path. The codegen now emits a top-level `<output-dir>/schema.gen.go` containing the source `.zed` bytes verbatim plus `VerifySchema(ctx)` helper that calls SpiceDB's `DiffSchema` RPC, server-side normalises, and partitions the typed diffs into severity buckets. Caller hard-fails at startup on `IsBreaking()`.
+
+### Added
+
+- **`authz.SchemaDrift`** — runtime drift report with `Added`, `Removed`, `Changed`, `Cosmetic` `[]DriftEntry` slices, plus `IsBreaking()` / `IsClean()` predicates.
+- **`authz.DriftEntry`** — single drift row carrying `Description string` (human-readable) and `Raw *v1.ReflectionSchemaDiff` (typed wire payload for fine-grained handling).
+- **`Engine.DiffSchema(ctx, comparisonSchema)`** — new interface method calling SpiceDB's `SchemaService.DiffSchema` RPC.
+- **`*spicedb.Engine.DiffSchema`** — single-call implementation; consistency override intentionally not applied (schema service has its own consistency model).
+- **Generated `<output-dir>/schema.gen.go`** — new top-level file. Package name derived from the output dir's last segment (e.g. `--output example/authzed` → `package authzed`). Contains:
+  - `SchemaText` — verbatim source bytes (escaped via `strconv.Quote` for safety; backticks in schema comments are common)
+  - `SchemaDigest` — sha256 of the source bytes for cheap pre-flight equality
+  - `VerifySchema(ctx)` — calls the engine, buckets diffs, returns `SchemaDrift`
+  - `bucketDrift` / `describeDrift` — internal helpers
+- **4 new e2e tests** in `example/authzed/schema_test.go` covering clean state, additive drift, breaking drift, cosmetic drift. Each test boots a fresh SpiceDB sandbox to avoid cross-test schema contamination.
+
+### Changed
+
+- **CLI** (`cmd/authzed-codegen/main.go`) emits one additional file per run at `<output>/schema.gen.go`. No new flags.
+- **Generator** (`internal/generator/generator.go`) gains `GenerateSchemaSource(tmplStr, schemaBytes)` method.
+
+### Caller pattern (startup hook)
+
+```go
+import authzed "github.com/danhtran94/authzed-codegen/example/authzed"
+
+func main() {
+    engine := spicedb.NewEngine(client, 3*time.Second)
+    authz.SetDefaultEngine(engine)
+
+    drift, err := authzed.VerifySchema(ctx)
+    if err != nil {
+        log.Fatalf("schema verification failed: %v", err)
+    }
+    if drift.IsBreaking() {
+        log.Fatalf("schema drift: %d removed, %d changed — refusing to start",
+            len(drift.Removed), len(drift.Changed))
+    }
+    if !drift.IsClean() {
+        log.Warnf("schema is ahead of binary: %d added, %d cosmetic",
+            len(drift.Added), len(drift.Cosmetic))
+    }
+    // ... continue with normal startup ...
+}
+```
+
+### Discovery during implementation
+
+SpiceDB's `DiffSchema` returns diffs from the *comparison schema's perspective* — operations needed to apply to the deployed schema to reach the comparison. So `*_Added` means "comparison has it, deployed lacks it" (BREAKING from binary's perspective) and `*_Removed` means "deployed has it, comparison lacks it" (ADDITIVE). The bucketing in `bucketDrift` inverts these to match the SchemaDrift API's caller-friendly semantics (`Added` = safe additive drift, `Removed` = breaking).
+
+SPEC-010 A7 hypothesis was wrong — `example/schema.zed` does contain backticks (in inline-code comments like `` `with expiration` ``). Resolved by encoding the schema via `strconv.Quote` instead of a raw string literal.
+
+### Verified
+
+- All 5 e2e packages pass (added new `example/authzed` package).
+- Codegen idempotent at the new baseline.
+- Per-namespace `.gen.go` files byte-identical to v1.8.0 (additive change only).
+- `go build ./...` + `go vet ./...` clean.
+
+### Deferred
+
+- **Auto-invoke at engine init** — drift policy is opinionated (fail-fast vs log-and-continue). Caller-driven by design.
+- **CLI verify mode** (`authzed-codegen --verify`) — out of scope for v1.9; the runtime helper is the primitive. Future tool.
+- **Conditional wildcards** (carried from v1.7) — `HasPublicSubject` and `Lookup<Perm><Type>WildcardSubjects` check `result.Definite` only.
+
 ## [1.8.0] - 2026-05-09
 
 Adds caller-controlled consistency mode selection on read-side methods. The `*spicedb.Engine` previously hardcoded a time-based policy (`AtExactSnapshot` post-write, `MinimumLatency` otherwise) — fine for read-your-own-writes but not for security-sensitive checks where stale reads are unacceptable. Callers now opt into `ConsistencyFullyConsistent` via `authz.WithConsistency(ctx, mode)`; the override flows through every Check / Lookup / Read method via context. **Zero codegen template change** — ctx is already plumbed through every generated method.

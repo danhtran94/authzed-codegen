@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	v1 "github.com/authzed/authzed-go/proto/authzed/api/v1"
 )
 
 var ErrNoInput = fmt.Errorf("no input")
@@ -45,6 +47,42 @@ func (e *ConditionalPermissionError) Is(target error) bool {
 // (relation granted to all subjects of a given type). The codegen
 // references this constant rather than hardcoding the literal "*".
 const WildcardID ID = "*"
+
+// SchemaDrift is the result of comparing the codegen-baseline schema
+// against the currently deployed schema in SpiceDB. Buckets the raw
+// ReflectionSchemaDiff entries by severity:
+//
+//   - Added/Cosmetic are safe (deployed schema is ahead or just doc changes)
+//   - Removed/Changed are breaking (deployed schema lacks something the
+//     binary depends on, or evaluates differently)
+//
+// Use IsBreaking() at startup to decide fail-fast vs log-and-continue.
+type SchemaDrift struct {
+	Added    []DriftEntry
+	Removed  []DriftEntry
+	Changed  []DriftEntry
+	Cosmetic []DriftEntry
+}
+
+// IsBreaking reports whether any breaking drift exists (Removed or Changed
+// entries). Caller typically hard-fails at startup when this is true.
+func (d SchemaDrift) IsBreaking() bool {
+	return len(d.Removed) > 0 || len(d.Changed) > 0
+}
+
+// IsClean reports whether the deployed schema matches the codegen baseline
+// exactly across all four buckets.
+func (d SchemaDrift) IsClean() bool {
+	return len(d.Added)+len(d.Removed)+len(d.Changed)+len(d.Cosmetic) == 0
+}
+
+// DriftEntry is one row of drift. Description is human-readable for logs;
+// Raw exposes the typed wire-level diff for callers needing programmatic
+// access to specific oneof variants (e.g. PermissionExprChanged.Old / .New).
+type DriftEntry struct {
+	Description string
+	Raw         *v1.ReflectionSchemaDiff
+}
 
 // ConsistencyMode controls how strongly read-side methods (Check, Lookup,
 // Read) observe writes when evaluating against SpiceDB. Set per-call via
@@ -151,6 +189,7 @@ type Engine interface {
 	DeleteRelations(ctx context.Context, from Resource, relation Relation, subject Type, ids []ID) error
 	HasPublicRelation(ctx context.Context, on Resource, relation Relation, subject Type) (bool, error)
 	HasPublicSubject(ctx context.Context, on Resource, permission Permission, subject Type) (bool, error)
+	DiffSchema(ctx context.Context, comparisonSchema string) ([]*v1.ReflectionSchemaDiff, error)
 }
 
 var DefaultEngine Engine = nil

@@ -296,6 +296,35 @@ The override is per-call via context. Caller scopes it at the request boundary; 
 
 Token-based modes (`AtLeastAsFresh`, `AtExactSnapshot` with caller-supplied tokens) are deferred — the engine already uses `AtExactSnapshot` internally for read-your-own-writes. See `docs/spec-009-consistency-mode-opt-in.md`.
 
+## Schema Drift Detection
+
+The codegen captures the source `.zed` bytes verbatim and emits `<output-dir>/schema.gen.go` with `SchemaText`, `SchemaDigest`, and a `VerifySchema(ctx)` helper. At startup, callers compare the binary's baseline against the deployed schema in SpiceDB and decide whether to proceed:
+
+```go
+import authzed "github.com/danhtran94/authzed-codegen/example/authzed"
+
+drift, err := authzed.VerifySchema(ctx)
+if err != nil {
+    log.Fatalf("schema verification failed: %v", err)
+}
+if drift.IsBreaking() {
+    log.Fatalf("schema drift: %d removed, %d changed", len(drift.Removed), len(drift.Changed))
+}
+if !drift.IsClean() {
+    log.Warnf("schema is ahead: %d added, %d cosmetic", len(drift.Added), len(drift.Cosmetic))
+}
+```
+
+`SchemaDrift` partitions the typed diffs into four severity buckets:
+- **Added** — deployed schema has things baseline doesn't (additive, safe)
+- **Removed** — baseline expects things deployed lacks (breaking)
+- **Changed** — semantic divergence in permission / caveat expressions or caveat parameter types (breaking)
+- **Cosmetic** — doc comment changes only (safe)
+
+`DriftEntry.Raw` exposes the typed `*v1.ReflectionSchemaDiff` for callers needing fine-grained handling. The package name of the generated file derives from the output dir's last segment (e.g. `--output example/authzed` → `package authzed`).
+
+Server-side normalisation happens in SpiceDB's `DiffSchema` RPC — whitespace, comment formatting, and ordering don't false-positive. See `docs/spec-010-schema-drift-detection.md`.
+
 ## Behavior Notes
 
 - **Permission chains.** `Check<Permission>Inputs` exposes the full set

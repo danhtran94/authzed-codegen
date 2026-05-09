@@ -55,4 +55,8 @@ func main() {
 	if err := g.GenerateObjectSource("[object]"); err != nil {
 		panic(err)
 	}
+
+	if err := g.GenerateSchemaSource(string(templates.SchemaTemplate), schemaBytes); err != nil {
+		panic(err)
+	}
 }
