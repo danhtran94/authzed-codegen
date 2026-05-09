@@ -289,3 +289,21 @@ func TestLowerSetOperationChild_FunctionedTUSeAll_MapsToPermExprArrow(t *testing
 	assert.Equal(t, "parent", got.LeftRel)
 	assert.Equal(t, "view", got.RightPerm)
 }
+
+// AUZ-017 — `_self` schema construct (`use self`).
+
+func TestLowerSetOperationChild_XSelf_MapsToPermExprSelf(t *testing.T) {
+	// `permission p = self` — codegen accepts and maps to PermExprSelf
+	// kind. No payload (LeftRel / RightPerm / Ident all empty).
+	child := &core.SetOperation_Child{
+		ChildType: &core.SetOperation_Child_XSelf{
+			XSelf: &core.SetOperation_Child_Self{},
+		},
+	}
+	got, err := lowerSetOperationChild("p", child)
+	require.NoError(t, err)
+	assert.Equal(t, PermExprSelf, got.Kind)
+	assert.Empty(t, got.LeftRel)
+	assert.Empty(t, got.RightPerm)
+	assert.Empty(t, got.Ident)
+}

@@ -336,7 +336,15 @@ func (d DefinitionsByTypes) resolveTransitive(defType, perm string, visited map[
 		return cached, nil
 	}
 	if visited[key] {
-		return nil, fmt.Errorf("cycle detected at %s", key)
+		// Recursive permission expressions (e.g. `permission ancestor_or_self
+		// = self + parent->ancestor_or_self`) are legitimate when the
+		// recursion has a base case via `_self`. The recursive call adds no
+		// new input types beyond what the outer call already collects from
+		// the non-recursive legs (self contributes OwnType directly), so
+		// returning an empty set on revisit is correct — the outer call's
+		// dedup merges everything. SpiceDB's evaluator handles recursion
+		// server-side with cycle detection at Check time.
+		return []string{}, nil
 	}
 	visited[key] = true
 	defer delete(visited, key)
@@ -488,6 +496,18 @@ func resolvePermissionExpressionTypes(exprs []PermissionExpr, args ResolveArgs) 
 					})
 				}
 			}
+
+		case PermExprSelf:
+			// `_self` adds the OWN type as a possible input subject — the
+			// resource itself acting as a subject (per SpiceDB's checkSelf
+			// identity-match semantic). Kind: "single" lands the type
+			// directly via resolveTransitive's else branch (no recursion).
+			// See SPEC-012.
+			permissions = append(permissions, Permission{
+				Types: []string{args.ObjectType},
+				Kind:  "single",
+				Value: "self",
+			})
 		}
 	}
 

@@ -2480,3 +2480,107 @@ func TestFolder_MixedAll_Combination_AllPathGrants(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, ok, "mixed expression: .all() side grants when every parent contributes browse, even with no direct_member")
 }
+
+// AUZ-017 — `_self` schema construct. Recursive permission with self
+// as the base case for tree walks.
+//
+// Schema:
+//   relation parent_for_self: extsvc/folder
+//   permission ancestor_or_self = self + parent_for_self->ancestor_or_self
+//
+// SpiceDB's checkSelf evaluator (per internal/graph/check.go:598-621)
+// grants only when the subject is identity-equal to the resource:
+// same type, same ID, no sub-relation. The recursive walk uses self
+// as the base case; the arrow leg recurses up the parent chain.
+
+func TestFolder_AncestorOrSelf_IdentityMatch_Granted(t *testing.T) {
+	ctx := context.Background()
+	folder := extsvc.Folder("self-id-1")
+
+	// Identity match: same folder as both receiver and input.
+	ok, err := folder.CheckAncestorOrSelf(ctx, extsvc.CheckFolderAncestorOrSelfInputs{
+		Folder: []extsvc.Folder{folder},
+	})
+	require.NoError(t, err)
+	assert.True(t, ok, "self leg grants when subject == resource (identity match)")
+}
+
+func TestFolder_AncestorOrSelf_IdentityMismatch_NoChain_Denied(t *testing.T) {
+	ctx := context.Background()
+	folderA := extsvc.Folder("self-mis-A")
+	folderB := extsvc.Folder("self-mis-B")
+	// folderB has no parent_for_self chain; folderA is unrelated.
+	_, err := folderB.CheckAncestorOrSelf(ctx, extsvc.CheckFolderAncestorOrSelfInputs{
+		Folder: []extsvc.Folder{folderA},
+	})
+	assert.ErrorIs(t, err, authz.ErrPermissionDenied,
+		"different folder, no parent chain → self leg denies, recursive arrow leg denies")
+}
+
+func TestFolder_AncestorOrSelf_RecursiveAncestorWalk_3Level_Granted(t *testing.T) {
+	ctx := context.Background()
+	folderA := extsvc.Folder("self-walk-A") // top
+	folderB := extsvc.Folder("self-walk-B") // middle
+	folderC := extsvc.Folder("self-walk-C") // leaf
+
+	// Build chain: C.parent = B, B.parent = A
+	require.NoError(t, folderB.CreateParentForSelfRelations(ctx, extsvc.FolderParentForSelfObjects{
+		Folder: []extsvc.Folder{folderA},
+	}))
+	require.NoError(t, folderC.CreateParentForSelfRelations(ctx, extsvc.FolderParentForSelfObjects{
+		Folder: []extsvc.Folder{folderB},
+	}))
+
+	// Question: is A an ancestor of C?
+	// Recursive walk: C.ancestor_or_self → C.parent (B) → B.ancestor_or_self
+	//                                          → B.parent (A) → A.ancestor_or_self
+	//                                                                → self (subject == A) ✓
+	ok, err := folderC.CheckAncestorOrSelf(ctx, extsvc.CheckFolderAncestorOrSelfInputs{
+		Folder: []extsvc.Folder{folderA},
+	})
+	require.NoError(t, err)
+	assert.True(t, ok, "3-level recursive walk: A is ancestor of C via B")
+}
+
+func TestFolder_AncestorOrSelf_RecursiveWalk_OutsideChain_Denied(t *testing.T) {
+	ctx := context.Background()
+	folderA := extsvc.Folder("self-out-A")
+	folderB := extsvc.Folder("self-out-B")
+	folderX := extsvc.Folder("self-out-X") // not in chain
+
+	require.NoError(t, folderB.CreateParentForSelfRelations(ctx, extsvc.FolderParentForSelfObjects{
+		Folder: []extsvc.Folder{folderA},
+	}))
+
+	// Is X an ancestor of B? No — X is not in the chain.
+	_, err := folderB.CheckAncestorOrSelf(ctx, extsvc.CheckFolderAncestorOrSelfInputs{
+		Folder: []extsvc.Folder{folderX},
+	})
+	assert.ErrorIs(t, err, authz.ErrPermissionDenied,
+		"folder outside the parent chain → recursive walk doesn't reach it")
+}
+
+func TestFolder_AncestorOrSelf_LookupResources_TreeWalk(t *testing.T) {
+	ctx := context.Background()
+	folderA := extsvc.Folder("self-lk-A") // top
+	folderB := extsvc.Folder("self-lk-B") // middle
+	folderC := extsvc.Folder("self-lk-C") // leaf
+
+	require.NoError(t, folderB.CreateParentForSelfRelations(ctx, extsvc.FolderParentForSelfObjects{
+		Folder: []extsvc.Folder{folderA},
+	}))
+	require.NoError(t, folderC.CreateParentForSelfRelations(ctx, extsvc.FolderParentForSelfObjects{
+		Folder: []extsvc.Folder{folderB},
+	}))
+
+	// LookupResources with subject=A: which folders have A in their
+	// ancestor_or_self chain? Should return A (self), B (direct child),
+	// C (transitive descendant).
+	result, err := extsvc.LookupAncestorOrSelfFolderResources(ctx, extsvc.CheckFolderAncestorOrSelfInputs{
+		Folder: []extsvc.Folder{folderA},
+	})
+	require.NoError(t, err)
+	assert.Contains(t, result.Definite, folderA, "self: A is its own ancestor")
+	assert.Contains(t, result.Definite, folderB, "B has A as direct parent")
+	assert.Contains(t, result.Definite, folderC, "C has A as transitive ancestor")
+}

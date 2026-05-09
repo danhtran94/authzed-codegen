@@ -15,6 +15,14 @@ const (
 	PermExprArrow        = "arrow"      // existing
 	PermExprIntersection = "&"          // NEW
 	PermExprExclusion    = "-"          // NEW
+	// PermExprSelf marks a `_self` child in a permission expression.
+	// SpiceDB's `checkSelf` evaluator grants only when the subject is
+	// identity-equal to the resource (same type, same ID, no
+	// sub-relation). Most useful in recursive permission patterns:
+	//   permission ancestor_or_self = self + parent->ancestor_or_self
+	// where `self` provides the base case for "X or any X-reachable
+	// object via the recursion." See SPEC-012.
+	PermExprSelf = "self"
 )
 
 // ellipsisRelation is the SpiceDB compiler's marker for a plain reference
@@ -582,28 +590,37 @@ func lowerUsersetRewrite(permName string, rw *core.UsersetRewrite) ([]Permission
 }
 
 func lowerSetOperationChild(permName string, c *core.SetOperation_Child) (PermissionExpr, error) {
-	switch {
-	case c.GetComputedUserset() != nil:
+	// Use type assertion on ChildType rather than Get* accessors. SpiceDB's
+	// namespace builder emits the empty-marker wrappers (XSelf / XThis / XNil)
+	// with NIL inner fields (e.g. &SetOperation_Child_XSelf{} with no Self
+	// inside) — so c.GetXSelf() returns nil even when the wrapper is the
+	// active oneof variant. Type assertion is the reliable detection path.
+	switch ct := c.GetChildType().(type) {
+	case *core.SetOperation_Child_ComputedUserset:
 		return PermissionExpr{
 			Kind:  PermExprIdentifier,
-			Ident: c.GetComputedUserset().GetRelation(),
+			Ident: ct.ComputedUserset.GetRelation(),
 		}, nil
-	case c.GetTupleToUserset() != nil:
-		ttu := c.GetTupleToUserset()
+	case *core.SetOperation_Child_TupleToUserset:
+		ttu := ct.TupleToUserset
 		return PermissionExpr{
 			Kind:      PermExprArrow,
 			LeftRel:   ttu.GetTupleset().GetRelation(),
 			RightPerm: ttu.GetComputedUserset().GetRelation(),
 		}, nil
-	case c.GetXThis() != nil:
+	case *core.SetOperation_Child_XThis:
 		return PermissionExpr{}, fmt.Errorf("permission %q: legacy _this child is not supported", permName)
-	case c.GetXNil() != nil:
+	case *core.SetOperation_Child_XNil:
 		return PermissionExpr{}, fmt.Errorf("permission %q: nil child is not supported", permName)
-	case c.GetXSelf() != nil:
-		return PermissionExpr{}, fmt.Errorf("permission %q: self child is not supported", permName)
-	case c.GetUsersetRewrite() != nil:
-		rw := c.GetUsersetRewrite()
-		exprs, err := lowerUsersetRewrite(permName, rw)
+	case *core.SetOperation_Child_XSelf:
+		// `_self` carries no payload — kind alone identifies the construct.
+		// Per SPEC-012 — SpiceDB's checkSelf evaluator handles identity
+		// match server-side; codegen propagates the OwnType into the
+		// permission's input types via the resolver case in
+		// resolvePermissionExpressionTypes.
+		return PermissionExpr{Kind: PermExprSelf}, nil
+	case *core.SetOperation_Child_UsersetRewrite:
+		exprs, err := lowerUsersetRewrite(permName, ct.UsersetRewrite)
 		if err != nil {
 			return PermissionExpr{}, err
 		}
@@ -611,7 +628,7 @@ func lowerSetOperationChild(permName string, c *core.SetOperation_Child) (Permis
 			return exprs[0], nil
 		}
 		return PermissionExpr{}, fmt.Errorf("permission %q: userset rewrite child produced no expressions", permName)
-	case c.GetFunctionedTupleToUserset() != nil:
+	case *core.SetOperation_Child_FunctionedTupleToUserset:
 		// Functioned arrows (`parent.any(view)` / `parent.all(view)`) are
 		// the post-v1.40 wire format for arrows with explicit aggregation
 		// functions. The function value (FUNCTION_ANY = union, FUNCTION_ALL
@@ -620,13 +637,13 @@ func lowerSetOperationChild(permName string, c *core.SetOperation_Child) (Permis
 		// identically to regular TupleToUserset; downstream consumers
 		// (perm tree resolver, walkPermCaveats, walkPermUsersets, template
 		// arrow walker) key on PermExprArrow + LeftRel/RightPerm.
-		fttu := c.GetFunctionedTupleToUserset()
+		fttu := ct.FunctionedTupleToUserset
 		return PermissionExpr{
 			Kind:      PermExprArrow,
 			LeftRel:   fttu.GetTupleset().GetRelation(),
 			RightPerm: fttu.GetComputedUserset().GetRelation(),
 		}, nil
 	default:
-		return PermissionExpr{}, fmt.Errorf("permission %q: unknown rewrite child type", permName)
+		return PermissionExpr{}, fmt.Errorf("permission %q: unknown rewrite child type %T", permName, ct)
 	}
 }

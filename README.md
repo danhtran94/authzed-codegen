@@ -64,7 +64,8 @@ a complete schema and its generated output.
 | Expiration (`with expiration`)         | ✓ — per-tuple TTL via `Expirations` sub-struct on `<Rel>Objects`; auto-switches to `OPERATION_TOUCH`; combines with caveats |
 | Sub-relation references (`foo#bar`)    | ✓ — typed userset write field (`<TypeName><PascalSubRel>`) on `<Rel>Objects`; userset Check input field; `SubRelation` on metadata struct |
 | Functioned arrows (`.any()` / `.all()`) | ✓ — server-side function semantic; `.all()` enforces strict-intersection across parent rows (dual-control / multi-approver patterns) |
-| `_this`, `_self`, `with self`           | ✗ rejected at adapt time (rare; revisit if a real schema needs them)                            |
+| `_self` (`use self`)                    | ✓ — identity-match base case for recursive permissions (`permission ancestor_or_self = self + parent->ancestor_or_self`) — tree-walk patterns |
+| `_this`, `_nil`, `with self`            | ✗ rejected at adapt time (rare; revisit if a real schema needs them)                            |
 
 Parsing delegates to `github.com/authzed/spicedb/pkg/schemadsl/compiler` —
 any schema SpiceDB accepts will parse. The codegen layer is narrower;

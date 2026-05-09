@@ -1,5 +1,6 @@
 // AUZ-009 — opt-in directive required by SpiceDB for any `with expiration` usage in this schema.
 use expiration
+use self
 
 // AUZ-007 ext — caveat in bookingsvc namespace. String param.
 caveat bookingsvc/region_match(region string) {
@@ -384,6 +385,16 @@ definition extsvc/folder {
 	// engine method.
 	relation direct_member: extsvc/user
 	permission mixed_all = direct_member + all_parent.all(browse)
+
+	// AUZ-017 — `_self` schema construct. Recursive permission with
+	// self as the base case: `ancestor_or_self` grants when the input
+	// folder IS this folder (self leg) OR the input folder is an
+	// ancestor reachable through `parent_for_self` (recursive arrow leg).
+	// Used for tree-shaped data where you need the "or just me" base
+	// case. SpiceDB's checkSelf evaluator enforces identity match
+	// (same type, same ID, no sub-relation).
+	relation parent_for_self: extsvc/folder
+	permission ancestor_or_self = self + parent_for_self->ancestor_or_self
 }
 
 definition extsvc/document {

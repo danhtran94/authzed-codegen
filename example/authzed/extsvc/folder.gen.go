@@ -221,6 +221,10 @@ const FolderDirectMember RelationFolder = "direct_member"
 type FolderDirectMemberObjects struct {
   User []User
 }
+const FolderParentForSelf RelationFolder = "parent_for_self"
+type FolderParentForSelfObjects struct {
+  Folder []Folder
+}
 type HasTokenArgs struct {
   Token []byte
 }
@@ -833,6 +837,18 @@ func (folder Folder) CreateDirectMemberRelations(ctx context.Context, objects Fo
   }
   return nil
 }
+func (folder Folder) CreateParentForSelfRelations(ctx context.Context, objects FolderParentForSelfObjects) error {
+  if len(objects.Folder) > 0 {
+    err := authz.GetEngine(ctx).CreateRelations(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Relation(FolderParentForSelf), TypeFolder, authz.IDs(objects.Folder))
+    if err != nil {
+      return err
+    }
+  }
+  return nil
+}
 
 func (folder Folder) DeleteViewerRelations(ctx context.Context, objects FolderViewerObjects) error {
   if len(objects.User) > 0 {
@@ -1237,6 +1253,19 @@ func (folder Folder) DeleteDirectMemberRelations(ctx context.Context, objects Fo
       Type: TypeFolder,
       ID: authz.ID(folder),
     }, authz.Relation(FolderDirectMember), TypeUser, authz.IDs(objects.User))
+    if err != nil {
+      return err
+    }
+  }
+  return nil
+}
+
+func (folder Folder) DeleteParentForSelfRelations(ctx context.Context, objects FolderParentForSelfObjects) error {
+  if len(objects.Folder) > 0 {
+    err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Relation(FolderParentForSelf), TypeFolder, authz.IDs(objects.Folder))
     if err != nil {
       return err
     }
@@ -2339,6 +2368,40 @@ func (folder Folder) ReadDirectMemberUserRelations(ctx context.Context) ([]Folde
     }
     rels = append(rels, FolderDirectMemberUserRelation{
       ID:            User(t.ID),
+      SubRelation:   t.SubRelation,
+      CaveatName:    t.CaveatName,
+      CaveatContext: t.CaveatContext,
+      ExpiresAt:     t.ExpiresAt,
+    })
+  }
+  return rels, nil
+}
+
+type FolderParentForSelfFolderRelation struct {
+  ID            Folder
+  SubRelation   string
+  CaveatName    string
+  CaveatContext map[string]any
+  ExpiresAt     *time.Time
+}
+func (r FolderParentForSelfFolderRelation) RelationID() Folder { return r.ID }
+
+func (folder Folder) ReadParentForSelfFolderRelations(ctx context.Context) ([]FolderParentForSelfFolderRelation, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+    Type: TypeFolder,
+    ID: authz.ID(folder),
+  }, authz.Relation(FolderParentForSelf), TypeFolder)
+  if err != nil {
+    return nil, err
+  }
+
+  rels := make([]FolderParentForSelfFolderRelation, 0, len(tuples))
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      continue
+    }
+    rels = append(rels, FolderParentForSelfFolderRelation{
+      ID:            Folder(t.ID),
       SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
@@ -4492,6 +4555,56 @@ func LookupMixedAllFolderResources(ctx context.Context, input CheckFolderMixedAl
   
   return FolderLookupResult{}, nil
 }
+const FolderAncestorOrSelf PermissionFolder = "ancestor_or_self"
+
+type CheckFolderAncestorOrSelfInputs struct {
+  Folder []Folder
+}
+
+func (folder Folder) CheckAncestorOrSelf(ctx context.Context, input CheckFolderAncestorOrSelfInputs) (bool, error) {
+  if len(input.Folder) == 0 && true {
+    return false, authz.ErrNoInput
+  }
+
+  if len(input.Folder) > 0 {
+    err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Permission(FolderAncestorOrSelf), TypeFolder, authz.IDs(input.Folder))
+    if err != nil {
+      return false, err
+    }
+  }
+  
+  return true, nil
+}
+
+func LookupAncestorOrSelfFolderResources(ctx context.Context, input CheckFolderAncestorOrSelfInputs) (FolderLookupResult, error) {
+
+  if len(input.Folder) > 0 {
+    result, err := authz.GetEngine(ctx).LookupResources(ctx,
+      TypeFolder, authz.Permission(FolderAncestorOrSelf),
+      TypeFolder, authz.IDs(input.Folder),
+    )
+    if err != nil {
+      return FolderLookupResult{}, err
+    }
+
+    out := FolderLookupResult{
+      Definite:    authz.FromIDs[Folder](result.Definite),
+      Conditional: make([]FolderConditionalLookupEntry, 0, len(result.Conditional)),
+    }
+    for _, c := range result.Conditional {
+      out.Conditional = append(out.Conditional, FolderConditionalLookupEntry{
+        ID:          Folder(c.ID),
+        MissingKeys: c.MissingKeys,
+      })
+    }
+    return out, nil
+  }
+  
+  return FolderLookupResult{}, nil
+}
 
 func (folder Folder) LookupBrowseUserSubjects(ctx context.Context) (UserLookupResult, error) {
 
@@ -6037,5 +6150,41 @@ func (folder Folder) LookupMixedAllRoleWildcardSubjects(ctx context.Context) (bo
       ID: authz.ID(folder),
     },
     authz.Permission(FolderMixedAll), TypeRole,
+  )
+}
+
+func (folder Folder) LookupAncestorOrSelfFolderSubjects(ctx context.Context) (FolderLookupResult, error) {
+
+  result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+    authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    },
+    authz.Permission(FolderAncestorOrSelf), TypeFolder,
+  )
+  if err != nil {
+    return FolderLookupResult{}, err
+  }
+
+  out := FolderLookupResult{
+    Definite:    authz.FromIDsExcludingWildcard[Folder](result.Definite),
+    Conditional: make([]FolderConditionalLookupEntry, 0, len(result.Conditional)),
+  }
+  for _, c := range result.Conditional {
+    out.Conditional = append(out.Conditional, FolderConditionalLookupEntry{
+      ID:          Folder(c.ID),
+      MissingKeys: c.MissingKeys,
+    })
+  }
+  return out, nil
+}
+
+func (folder Folder) LookupAncestorOrSelfFolderWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    },
+    authz.Permission(FolderAncestorOrSelf), TypeFolder,
   )
 }

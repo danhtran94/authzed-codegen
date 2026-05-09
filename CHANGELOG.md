@@ -4,6 +4,65 @@ All notable changes to this project are documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.12.0] - 2026-05-09
+
+Accepts SpiceDB's `_self` schema construct — schemas declared with `use self` at the top can now use the `self` keyword in permission expressions. SpiceDB's `checkSelf` evaluator (per `internal/graph/check.go:598-621`) grants only when the subject is **identity-equal** to the resource (same type, same ID, no sub-relation). Most useful in **recursive permission patterns** for tree-shaped data: `permission ancestor_or_self = self + parent->ancestor_or_self` provides the base case for "X or any X-reachable object via the recursion."
+
+After this release, the codegen accepts every commonly-used SpiceDB schema construct. Only the deprecated `_this` and the rare compiler-internal `_nil` remain rejected.
+
+### Added
+
+- **`PermExprSelf` constant** in `internal/generator/adapter.go` parallel to `PermExprIdentifier` / `PermExprArrow` — empty payload; kind alone identifies the construct.
+- **Tree resolver case** in `resolvePermissionExpressionTypes` propagating the OwnType into self-reaching permissions. Generated `Check<Perm>Inputs` for self-reaching permissions automatically gains `<ResourceType> []<ResourceType>` field via existing `permissionInputTypes` iteration — zero template change.
+- **Schema fixture** on `extsvc/folder`: `use self` directive at the top + `relation parent_for_self: extsvc/folder` + `permission ancestor_or_self = self + parent_for_self->ancestor_or_self`.
+- **Adapter unit test** verifying `XSelf` maps to `PermExprSelf` with empty payload.
+- **5 e2e tests** covering identity match, identity mismatch, 3-level recursive ancestor walk, outside-chain deny, LookupResources tree walk (returns input folder + all descendants).
+
+### Changed
+
+- **`lowerSetOperationChild` refactored** to use type assertion on `c.GetChildType()` instead of `c.Get*() != nil` accessors. Required because SpiceDB's `namespace.Self()` / `namespace.This()` / `namespace.Nil()` factories construct empty-marker oneof variants with NIL inner fields — `c.GetXSelf()` returns nil even when the wrapper is the active oneof variant. Type assertion is the reliable detection path.
+- **Cycle detection in `resolveTransitive` relaxed** to allow recursive permission expressions (the canonical `_self` use case). Returns empty types on revisit; the dedup in the outer call combines correctly.
+- **README Schema Support table** — `_self` graduates to ✓; remaining rejected constructs are now `_this`, `_nil`, and `with self` (functioned tuple-to-userset's `with self` form, distinct from the `_self` keyword).
+
+### Use cases for `_self`
+
+- **Tree containment** — `permission ancestor_or_self = self + parent->ancestor_or_self` (folder/document hierarchies)
+- **Reflexive permissions** — `permission self_check = self` (sentinel pattern)
+- **Self-ownership in graphs** — `permission referential_integrity = self + linked->is_canonical`
+
+The recursive-permission pattern is the most valuable: without `_self`, you can't express "X or any X-reachable object via the recursion" cleanly — schema authors had to require callers to add the starting resource manually.
+
+### Verified
+
+- All 5 e2e packages pass.
+- Codegen idempotent at the new baseline.
+- `go build ./...` + `go vet ./...` clean.
+- Per-namespace `.gen.go` files unchanged for definitions without `_self` usage.
+
+### Discovered during implementation
+
+**SpiceDB's `namespace.Self()` factory emits empty-marker oneof variants with NIL inner fields.** The constructor pattern is:
+
+```go
+func Self() *core.SetOperation_Child {
+    return &core.SetOperation_Child{
+        ChildType: &core.SetOperation_Child_XSelf{},  // wrapper present, inner XSelf field NIL
+    }
+}
+```
+
+Same for `This()` and `Nil()`. The Go proto-generated `c.GetXSelf()` accessor returns the inner field, which is nil → `c.GetXSelf() != nil` evaluates false even when the wrapper IS the active oneof variant. Initial implementation used `Get*` accessors and silently fell through to default ("unknown rewrite child type") for legitimate `_self` schemas.
+
+Fix: switched the entire `lowerSetOperationChild` switch to type assertion on `c.GetChildType().(type)`. The functioned-TTU and other content-bearing cases work either way, but the empty-marker cases REQUIRE type assertion. Refactoring to type assertion is more idiomatic for proto oneofs in Go.
+
+**Cycle detection was overly strict.** The original `resolveTransitive` rejected ANY recursive permission with "cycle detected." But recursive permissions are precisely the canonical `_self` use case (`permission p = self + parent->p`). Relaxed cycle detection to return empty types on revisit; the outer call's dedup merges everything correctly. SpiceDB's evaluator handles the recursion server-side with cycle detection at Check time.
+
+### Deferred
+
+- `_this` — fully deprecated upstream; permanent rejection.
+- `_nil` graceful skip — internal compiler artifact; users don't write it.
+- Functioned `with self` arrow form (`parent.any(view).self`) — distinct from the `_self` keyword; rare specialised pattern.
+
 ## [1.11.0] - 2026-05-09
 
 Accepts SpiceDB's functioned tuple-to-userset syntax — schemas using `.any(view)` or `.all(view)` arrow function syntax now compile. `.any()` is semantically equivalent to a regular arrow `parent->view`; `.all()` is the genuinely-new strict-intersection semantic ("subject must reach the inner permission via EVERY parent row, not just any one") used in dual-control / multi-approver / cross-region patterns.
