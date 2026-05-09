@@ -23,6 +23,16 @@ type ArticleParentObjects struct {
 }
 
 type Article authz.ID
+
+type ArticleLookupResult struct {
+  Definite    []Article
+  Conditional []ArticleConditionalLookupEntry
+}
+type ArticleConditionalLookupEntry struct {
+  ID          Article
+  MissingKeys []string
+}
+
 func ArticleStringer(id authz.StringConvertable) Article {
   return Article(id.String())
 }
@@ -202,43 +212,73 @@ func (article Article) CheckEditor(ctx context.Context, input CheckArticleEditor
   return true, nil
 }
 
-func LookupEditorArticleResources(ctx context.Context, input CheckArticleEditorInputs) ([]Article, error) {
+func LookupEditorArticleResources(ctx context.Context, input CheckArticleEditorInputs) (ArticleLookupResult, error) {
 
   if len(input.User) > 0 {
-    ids, err := authz.GetEngine(ctx).LookupResources(ctx,
+    result, err := authz.GetEngine(ctx).LookupResources(ctx,
       TypeArticle, authz.Permission(ArticleEditor),
       TypeUser, authz.IDs(input.User),
     )
     if err != nil {
-      return nil, err
+      return ArticleLookupResult{}, err
     }
 
-    return authz.FromIDs[Article](ids), nil
+    out := ArticleLookupResult{
+      Definite:    authz.FromIDs[Article](result.Definite),
+      Conditional: make([]ArticleConditionalLookupEntry, 0, len(result.Conditional)),
+    }
+    for _, c := range result.Conditional {
+      out.Conditional = append(out.Conditional, ArticleConditionalLookupEntry{
+        ID:          Article(c.ID),
+        MissingKeys: c.MissingKeys,
+      })
+    }
+    return out, nil
   }
   if len(input.Group) > 0 {
-    ids, err := authz.GetEngine(ctx).LookupResources(ctx,
+    result, err := authz.GetEngine(ctx).LookupResources(ctx,
       TypeArticle, authz.Permission(ArticleEditor),
       TypeGroup, authz.IDs(input.Group),
     )
     if err != nil {
-      return nil, err
+      return ArticleLookupResult{}, err
     }
 
-    return authz.FromIDs[Article](ids), nil
+    out := ArticleLookupResult{
+      Definite:    authz.FromIDs[Article](result.Definite),
+      Conditional: make([]ArticleConditionalLookupEntry, 0, len(result.Conditional)),
+    }
+    for _, c := range result.Conditional {
+      out.Conditional = append(out.Conditional, ArticleConditionalLookupEntry{
+        ID:          Article(c.ID),
+        MissingKeys: c.MissingKeys,
+      })
+    }
+    return out, nil
   }
   if len(input.Role) > 0 {
-    ids, err := authz.GetEngine(ctx).LookupResources(ctx,
+    result, err := authz.GetEngine(ctx).LookupResources(ctx,
       TypeArticle, authz.Permission(ArticleEditor),
       TypeRole, authz.IDs(input.Role),
     )
     if err != nil {
-      return nil, err
+      return ArticleLookupResult{}, err
     }
 
-    return authz.FromIDs[Article](ids), nil
+    out := ArticleLookupResult{
+      Definite:    authz.FromIDs[Article](result.Definite),
+      Conditional: make([]ArticleConditionalLookupEntry, 0, len(result.Conditional)),
+    }
+    for _, c := range result.Conditional {
+      out.Conditional = append(out.Conditional, ArticleConditionalLookupEntry{
+        ID:          Article(c.ID),
+        MissingKeys: c.MissingKeys,
+      })
+    }
+    return out, nil
   }
   
-  return []Article{}, nil
+  return ArticleLookupResult{}, nil
 }
 const ArticleAuthorOnly PermissionArticle = "author_only"
 
@@ -284,48 +324,78 @@ func (article Article) CheckAuthorOnly(ctx context.Context, input CheckArticleAu
   return true, nil
 }
 
-func LookupAuthorOnlyArticleResources(ctx context.Context, input CheckArticleAuthorOnlyInputs) ([]Article, error) {
+func LookupAuthorOnlyArticleResources(ctx context.Context, input CheckArticleAuthorOnlyInputs) (ArticleLookupResult, error) {
 
   if len(input.User) > 0 {
-    ids, err := authz.GetEngine(ctx).LookupResources(ctx,
+    result, err := authz.GetEngine(ctx).LookupResources(ctx,
       TypeArticle, authz.Permission(ArticleAuthorOnly),
       TypeUser, authz.IDs(input.User),
     )
     if err != nil {
-      return nil, err
+      return ArticleLookupResult{}, err
     }
 
-    return authz.FromIDs[Article](ids), nil
+    out := ArticleLookupResult{
+      Definite:    authz.FromIDs[Article](result.Definite),
+      Conditional: make([]ArticleConditionalLookupEntry, 0, len(result.Conditional)),
+    }
+    for _, c := range result.Conditional {
+      out.Conditional = append(out.Conditional, ArticleConditionalLookupEntry{
+        ID:          Article(c.ID),
+        MissingKeys: c.MissingKeys,
+      })
+    }
+    return out, nil
   }
   if len(input.Group) > 0 {
-    ids, err := authz.GetEngine(ctx).LookupResources(ctx,
+    result, err := authz.GetEngine(ctx).LookupResources(ctx,
       TypeArticle, authz.Permission(ArticleAuthorOnly),
       TypeGroup, authz.IDs(input.Group),
     )
     if err != nil {
-      return nil, err
+      return ArticleLookupResult{}, err
     }
 
-    return authz.FromIDs[Article](ids), nil
+    out := ArticleLookupResult{
+      Definite:    authz.FromIDs[Article](result.Definite),
+      Conditional: make([]ArticleConditionalLookupEntry, 0, len(result.Conditional)),
+    }
+    for _, c := range result.Conditional {
+      out.Conditional = append(out.Conditional, ArticleConditionalLookupEntry{
+        ID:          Article(c.ID),
+        MissingKeys: c.MissingKeys,
+      })
+    }
+    return out, nil
   }
   if len(input.Role) > 0 {
-    ids, err := authz.GetEngine(ctx).LookupResources(ctx,
+    result, err := authz.GetEngine(ctx).LookupResources(ctx,
       TypeArticle, authz.Permission(ArticleAuthorOnly),
       TypeRole, authz.IDs(input.Role),
     )
     if err != nil {
-      return nil, err
+      return ArticleLookupResult{}, err
     }
 
-    return authz.FromIDs[Article](ids), nil
+    out := ArticleLookupResult{
+      Definite:    authz.FromIDs[Article](result.Definite),
+      Conditional: make([]ArticleConditionalLookupEntry, 0, len(result.Conditional)),
+    }
+    for _, c := range result.Conditional {
+      out.Conditional = append(out.Conditional, ArticleConditionalLookupEntry{
+        ID:          Article(c.ID),
+        MissingKeys: c.MissingKeys,
+      })
+    }
+    return out, nil
   }
   
-  return []Article{}, nil
+  return ArticleLookupResult{}, nil
 }
 
-func (article Article) LookupEditorUserSubjects(ctx context.Context) ([]User, error) {
+func (article Article) LookupEditorUserSubjects(ctx context.Context) (UserLookupResult, error) {
 
-  ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+  result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeArticle,
       ID: authz.ID(article),
@@ -333,10 +403,20 @@ func (article Article) LookupEditorUserSubjects(ctx context.Context) ([]User, er
     authz.Permission(ArticleEditor), TypeUser,
   )
   if err != nil {
-    return nil, err
+    return UserLookupResult{}, err
   }
 
-  return authz.FromIDsExcludingWildcard[User](ids), nil
+  out := UserLookupResult{
+    Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
+    Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
+  }
+  for _, c := range result.Conditional {
+    out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
+      ID:          User(c.ID),
+      MissingKeys: c.MissingKeys,
+    })
+  }
+  return out, nil
 }
 
 func (article Article) LookupEditorUserWildcardSubjects(ctx context.Context) (bool, error) {
@@ -348,9 +428,9 @@ func (article Article) LookupEditorUserWildcardSubjects(ctx context.Context) (bo
     authz.Permission(ArticleEditor), TypeUser,
   )
 }
-func (article Article) LookupEditorGroupSubjects(ctx context.Context) ([]Group, error) {
+func (article Article) LookupEditorGroupSubjects(ctx context.Context) (GroupLookupResult, error) {
 
-  ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+  result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeArticle,
       ID: authz.ID(article),
@@ -358,10 +438,20 @@ func (article Article) LookupEditorGroupSubjects(ctx context.Context) ([]Group, 
     authz.Permission(ArticleEditor), TypeGroup,
   )
   if err != nil {
-    return nil, err
+    return GroupLookupResult{}, err
   }
 
-  return authz.FromIDsExcludingWildcard[Group](ids), nil
+  out := GroupLookupResult{
+    Definite:    authz.FromIDsExcludingWildcard[Group](result.Definite),
+    Conditional: make([]GroupConditionalLookupEntry, 0, len(result.Conditional)),
+  }
+  for _, c := range result.Conditional {
+    out.Conditional = append(out.Conditional, GroupConditionalLookupEntry{
+      ID:          Group(c.ID),
+      MissingKeys: c.MissingKeys,
+    })
+  }
+  return out, nil
 }
 
 func (article Article) LookupEditorGroupWildcardSubjects(ctx context.Context) (bool, error) {
@@ -373,9 +463,9 @@ func (article Article) LookupEditorGroupWildcardSubjects(ctx context.Context) (b
     authz.Permission(ArticleEditor), TypeGroup,
   )
 }
-func (article Article) LookupEditorRoleSubjects(ctx context.Context) ([]Role, error) {
+func (article Article) LookupEditorRoleSubjects(ctx context.Context) (RoleLookupResult, error) {
 
-  ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+  result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeArticle,
       ID: authz.ID(article),
@@ -383,10 +473,20 @@ func (article Article) LookupEditorRoleSubjects(ctx context.Context) ([]Role, er
     authz.Permission(ArticleEditor), TypeRole,
   )
   if err != nil {
-    return nil, err
+    return RoleLookupResult{}, err
   }
 
-  return authz.FromIDsExcludingWildcard[Role](ids), nil
+  out := RoleLookupResult{
+    Definite:    authz.FromIDsExcludingWildcard[Role](result.Definite),
+    Conditional: make([]RoleConditionalLookupEntry, 0, len(result.Conditional)),
+  }
+  for _, c := range result.Conditional {
+    out.Conditional = append(out.Conditional, RoleConditionalLookupEntry{
+      ID:          Role(c.ID),
+      MissingKeys: c.MissingKeys,
+    })
+  }
+  return out, nil
 }
 
 func (article Article) LookupEditorRoleWildcardSubjects(ctx context.Context) (bool, error) {
@@ -399,9 +499,9 @@ func (article Article) LookupEditorRoleWildcardSubjects(ctx context.Context) (bo
   )
 }
 
-func (article Article) LookupAuthorOnlyUserSubjects(ctx context.Context) ([]User, error) {
+func (article Article) LookupAuthorOnlyUserSubjects(ctx context.Context) (UserLookupResult, error) {
 
-  ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+  result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeArticle,
       ID: authz.ID(article),
@@ -409,10 +509,20 @@ func (article Article) LookupAuthorOnlyUserSubjects(ctx context.Context) ([]User
     authz.Permission(ArticleAuthorOnly), TypeUser,
   )
   if err != nil {
-    return nil, err
+    return UserLookupResult{}, err
   }
 
-  return authz.FromIDsExcludingWildcard[User](ids), nil
+  out := UserLookupResult{
+    Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
+    Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
+  }
+  for _, c := range result.Conditional {
+    out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
+      ID:          User(c.ID),
+      MissingKeys: c.MissingKeys,
+    })
+  }
+  return out, nil
 }
 
 func (article Article) LookupAuthorOnlyUserWildcardSubjects(ctx context.Context) (bool, error) {
@@ -424,9 +534,9 @@ func (article Article) LookupAuthorOnlyUserWildcardSubjects(ctx context.Context)
     authz.Permission(ArticleAuthorOnly), TypeUser,
   )
 }
-func (article Article) LookupAuthorOnlyGroupSubjects(ctx context.Context) ([]Group, error) {
+func (article Article) LookupAuthorOnlyGroupSubjects(ctx context.Context) (GroupLookupResult, error) {
 
-  ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+  result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeArticle,
       ID: authz.ID(article),
@@ -434,10 +544,20 @@ func (article Article) LookupAuthorOnlyGroupSubjects(ctx context.Context) ([]Gro
     authz.Permission(ArticleAuthorOnly), TypeGroup,
   )
   if err != nil {
-    return nil, err
+    return GroupLookupResult{}, err
   }
 
-  return authz.FromIDsExcludingWildcard[Group](ids), nil
+  out := GroupLookupResult{
+    Definite:    authz.FromIDsExcludingWildcard[Group](result.Definite),
+    Conditional: make([]GroupConditionalLookupEntry, 0, len(result.Conditional)),
+  }
+  for _, c := range result.Conditional {
+    out.Conditional = append(out.Conditional, GroupConditionalLookupEntry{
+      ID:          Group(c.ID),
+      MissingKeys: c.MissingKeys,
+    })
+  }
+  return out, nil
 }
 
 func (article Article) LookupAuthorOnlyGroupWildcardSubjects(ctx context.Context) (bool, error) {
@@ -449,9 +569,9 @@ func (article Article) LookupAuthorOnlyGroupWildcardSubjects(ctx context.Context
     authz.Permission(ArticleAuthorOnly), TypeGroup,
   )
 }
-func (article Article) LookupAuthorOnlyRoleSubjects(ctx context.Context) ([]Role, error) {
+func (article Article) LookupAuthorOnlyRoleSubjects(ctx context.Context) (RoleLookupResult, error) {
 
-  ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+  result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeArticle,
       ID: authz.ID(article),
@@ -459,10 +579,20 @@ func (article Article) LookupAuthorOnlyRoleSubjects(ctx context.Context) ([]Role
     authz.Permission(ArticleAuthorOnly), TypeRole,
   )
   if err != nil {
-    return nil, err
+    return RoleLookupResult{}, err
   }
 
-  return authz.FromIDsExcludingWildcard[Role](ids), nil
+  out := RoleLookupResult{
+    Definite:    authz.FromIDsExcludingWildcard[Role](result.Definite),
+    Conditional: make([]RoleConditionalLookupEntry, 0, len(result.Conditional)),
+  }
+  for _, c := range result.Conditional {
+    out.Conditional = append(out.Conditional, RoleConditionalLookupEntry{
+      ID:          Role(c.ID),
+      MissingKeys: c.MissingKeys,
+    })
+  }
+  return out, nil
 }
 
 func (article Article) LookupAuthorOnlyRoleWildcardSubjects(ctx context.Context) (bool, error) {

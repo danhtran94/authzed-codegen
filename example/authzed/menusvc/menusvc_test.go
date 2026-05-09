@@ -351,8 +351,8 @@ func TestCompany_LookupManageSubjects(t *testing.T) {
 
 	subjects, err := comp.LookupManageUserSubjects(ctx)
 	require.NoError(t, err)
-	assert.Contains(t, subjects, menusvc.User("t-tu1lu"))
-	assert.Contains(t, subjects, menusvc.User("t-tu2lu"))
+	assert.Contains(t, subjects.Definite, menusvc.User("t-tu1lu"))
+	assert.Contains(t, subjects.Definite, menusvc.User("t-tu2lu"))
 }
 
 // --- Order: union creator + belongs_company -> write ---
@@ -441,7 +441,7 @@ func TestOrder_LookupWriteUserSubjects(t *testing.T) {
 
 	subjects, err := order.LookupWriteUserSubjects(ctx)
 	require.NoError(t, err)
-	assert.Contains(t, subjects, menusvc.User("t-tu3luo"))
+	assert.Contains(t, subjects.Definite, menusvc.User("t-tu3luo"))
 }
 
 // --- Booking: owner + creator -> write (cross-package: company.create_booking) ---

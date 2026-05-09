@@ -14,6 +14,16 @@ type PermissionUser authz.Permission
 
 
 type User authz.ID
+
+type UserLookupResult struct {
+  Definite    []User
+  Conditional []UserConditionalLookupEntry
+}
+type UserConditionalLookupEntry struct {
+  ID          User
+  MissingKeys []string
+}
+
 func UserStringer(id authz.StringConvertable) User {
   return User(id.String())
 }

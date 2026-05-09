@@ -46,6 +46,30 @@ func (e *ConditionalPermissionError) Is(target error) bool {
 // references this constant rather than hardcoding the literal "*".
 const WildcardID ID = "*"
 
+// LookupResult is the return value of every Engine.Lookup* method.
+// Definite holds resource/subject IDs the caller has confirmed access to.
+// Conditional holds entries that would be granted IF the caller supplies
+// the named missing keys; treating these as confirmed is unsafe — callers
+// fetch the missing context and retry the Check, or filter Conditional out
+// entirely when only definite grants matter.
+//
+// Both slices are explicitly initialised to empty (not nil) by the engine
+// impl so callers can range over either field unconditionally.
+type LookupResult struct {
+	Definite    []ID
+	Conditional []LookupConditionalEntry
+}
+
+// LookupConditionalEntry surfaces SpiceDB's PartialCaveatInfo for a single
+// conditional Lookup row. MissingKeys is the caveat parameter names from
+// PartialCaveatInfo.MissingRequiredContext — directly off the wire. May be
+// empty when SpiceDB returns CONDITIONAL without a specific recovery hint
+// (CEL evaluator returned indeterminate for an ambiguous expression).
+type LookupConditionalEntry struct {
+	ID          ID
+	MissingKeys []string
+}
+
 // RelationTuple is the engine-surface representation of a single
 // SpiceDB relationship row. Subject ID is untyped at this layer;
 // generated code casts it to the typed subject (User, Group, …).
@@ -73,10 +97,10 @@ type Engine interface {
 	CheckPermission(ctx context.Context, dest Resource, has Permission, subject Type, audIDs []ID) error
 	CheckPermissionWithCaveat(ctx context.Context, dest Resource, has Permission, subject Type, audIDs []ID, caveatParams map[string]any) error
 	CheckPermissionUserset(ctx context.Context, dest Resource, has Permission, subject Type, audIDs []ID, subRelation string, caveatParams map[string]any) error
-	LookupResources(ctx context.Context, from Type, match Permission, subject Type, byIDs []ID) ([]ID, error)
-	LookupResourcesWithCaveat(ctx context.Context, from Type, match Permission, subject Type, byIDs []ID, caveatParams map[string]any) ([]ID, error)
-	LookupSubjects(ctx context.Context, on Resource, permission Permission, subject Type) ([]ID, error)
-	LookupSubjectsWithCaveat(ctx context.Context, on Resource, permission Permission, subject Type, caveatParams map[string]any) ([]ID, error)
+	LookupResources(ctx context.Context, from Type, match Permission, subject Type, byIDs []ID) (LookupResult, error)
+	LookupResourcesWithCaveat(ctx context.Context, from Type, match Permission, subject Type, byIDs []ID, caveatParams map[string]any) (LookupResult, error)
+	LookupSubjects(ctx context.Context, on Resource, permission Permission, subject Type) (LookupResult, error)
+	LookupSubjectsWithCaveat(ctx context.Context, on Resource, permission Permission, subject Type, caveatParams map[string]any) (LookupResult, error)
 	ReadRelations(ctx context.Context, from Resource, relation Relation, subject Type) ([]RelationTuple, error)
 	DeleteRelations(ctx context.Context, from Resource, relation Relation, subject Type, ids []ID) error
 	HasPublicRelation(ctx context.Context, on Resource, relation Relation, subject Type) (bool, error)

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"reflect"
-	"slices"
 	"time"
 
 	"github.com/danhtran94/authzed-codegen/pkg/authz"
@@ -454,20 +453,23 @@ func (e *Engine) CheckPermission(ctx context.Context, dest authz.Resource, has a
 	return nil
 }
 
-func (e *Engine) LookupResources(ctx context.Context, from authz.Type, match authz.Permission, subject authz.Type, byIDs []authz.ID) ([]authz.ID, error) {
+func (e *Engine) LookupResources(ctx context.Context, from authz.Type, match authz.Permission, subject authz.Type, byIDs []authz.ID) (authz.LookupResult, error) {
 	return e.LookupResourcesWithCaveat(ctx, from, match, subject, byIDs, nil)
 }
 
-func (e *Engine) LookupResourcesWithCaveat(ctx context.Context, from authz.Type, match authz.Permission, subject authz.Type, byIDs []authz.ID, caveatParams map[string]any) ([]authz.ID, error) {
+func (e *Engine) LookupResourcesWithCaveat(ctx context.Context, from authz.Type, match authz.Permission, subject authz.Type, byIDs []authz.ID, caveatParams map[string]any) (authz.LookupResult, error) {
 	e.debugLog("Looking up resources: from=%v, match=%v, subject=%v, byIDs=%v, caveatParams=%v", from, match, subject, byIDs, caveatParams)
 	consistency := e.getConsistencySnapshot()
 
 	caveatCtx, err := serializeCaveatMap(caveatParams)
 	if err != nil {
-		return nil, fmt.Errorf("serialize caveat params: %w", err)
+		return authz.LookupResult{}, fmt.Errorf("serialize caveat params: %w", err)
 	}
 
-	ids := []authz.ID{}
+	result := authz.LookupResult{
+		Definite:    []authz.ID{},
+		Conditional: []authz.LookupConditionalEntry{},
+	}
 	for _, id := range byIDs {
 		res, err := e.client.LookupResources(ctx, &v1.LookupResourcesRequest{
 			Consistency:        consistency,
@@ -482,40 +484,49 @@ func (e *Engine) LookupResourcesWithCaveat(ctx context.Context, from authz.Type,
 			Context: caveatCtx,
 		})
 		if err != nil {
-			return nil, err
+			return authz.LookupResult{}, err
 		}
 
 		data, err := res.Recv()
 		for ; err == nil && data != nil; data, err = res.Recv() {
 			e.debugLog("Received data: %+v", data)
-			// Skip CONDITIONAL_PERMISSION — caller treats those as deny,
-			// matching errorIfDenied's collapse on Check. Definite grants
-			// only.
-			if data.Permissionship != v1.LookupPermissionship_LOOKUP_PERMISSIONSHIP_HAS_PERMISSION {
-				continue
+			switch data.Permissionship {
+			case v1.LookupPermissionship_LOOKUP_PERMISSIONSHIP_HAS_PERMISSION:
+				result.Definite = append(result.Definite, authz.ID(data.ResourceObjectId))
+
+			case v1.LookupPermissionship_LOOKUP_PERMISSIONSHIP_CONDITIONAL_PERMISSION:
+				var missing []string
+				if pci := data.PartialCaveatInfo; pci != nil {
+					missing = pci.MissingRequiredContext
+				}
+				result.Conditional = append(result.Conditional, authz.LookupConditionalEntry{
+					ID:          authz.ID(data.ResourceObjectId),
+					MissingKeys: missing,
+				})
+				// LOOKUP_PERMISSIONSHIP_UNSPECIFIED is dropped — it's a wire
+				// placeholder for protocol-version mismatches, not a valid grant.
 			}
-			ids = append(ids, authz.ID(data.ResourceObjectId))
 		}
 
 		if !errors.Is(err, io.EOF) {
-			return nil, err
+			return authz.LookupResult{}, err
 		}
 	}
 
-	return ids, nil
+	return result, nil
 }
 
-func (e *Engine) LookupSubjects(ctx context.Context, on authz.Resource, permission authz.Permission, subject authz.Type) ([]authz.ID, error) {
+func (e *Engine) LookupSubjects(ctx context.Context, on authz.Resource, permission authz.Permission, subject authz.Type) (authz.LookupResult, error) {
 	return e.LookupSubjectsWithCaveat(ctx, on, permission, subject, nil)
 }
 
-func (e *Engine) LookupSubjectsWithCaveat(ctx context.Context, on authz.Resource, permission authz.Permission, subject authz.Type, caveatParams map[string]any) ([]authz.ID, error) {
+func (e *Engine) LookupSubjectsWithCaveat(ctx context.Context, on authz.Resource, permission authz.Permission, subject authz.Type, caveatParams map[string]any) (authz.LookupResult, error) {
 	e.debugLog("Looking up subjects: on=%v, permission=%v, subject=%v, caveatParams=%v", on, permission, subject, caveatParams)
 	consistency := e.getConsistencySnapshot()
 
 	caveatCtx, err := serializeCaveatMap(caveatParams)
 	if err != nil {
-		return nil, fmt.Errorf("serialize caveat params: %w", err)
+		return authz.LookupResult{}, fmt.Errorf("serialize caveat params: %w", err)
 	}
 
 	res, err := e.client.LookupSubjects(ctx, &v1.LookupSubjectsRequest{
@@ -529,26 +540,42 @@ func (e *Engine) LookupSubjectsWithCaveat(ctx context.Context, on authz.Resource
 		Context:           caveatCtx,
 	})
 	if err != nil {
-		return nil, err
+		return authz.LookupResult{}, err
 	}
 
-	ids := []authz.ID{}
+	result := authz.LookupResult{
+		Definite:    []authz.ID{},
+		Conditional: []authz.LookupConditionalEntry{},
+	}
 	data, err := res.Recv()
 	for ; err == nil && data != nil; data, err = res.Recv() {
 		e.debugLog("Received data: %+v", data)
-		// Filter on Subject.Permissionship — `Permissionship` (top-level
-		// of LookupSubjectsResponse) is deprecated per the proto in
-		// favor of `Subject.Permissionship`. Definite grants only.
-		if data.Subject == nil || data.Subject.Permissionship != v1.LookupPermissionship_LOOKUP_PERMISSIONSHIP_HAS_PERMISSION {
+		// Read from data.Subject — top-level Permissionship is deprecated
+		// per the proto in favor of Subject.Permissionship.
+		if data.Subject == nil {
 			continue
 		}
-		ids = append(ids, authz.ID(data.Subject.SubjectObjectId))
+		switch data.Subject.Permissionship {
+		case v1.LookupPermissionship_LOOKUP_PERMISSIONSHIP_HAS_PERMISSION:
+			result.Definite = append(result.Definite, authz.ID(data.Subject.SubjectObjectId))
+
+		case v1.LookupPermissionship_LOOKUP_PERMISSIONSHIP_CONDITIONAL_PERMISSION:
+			var missing []string
+			if pci := data.Subject.PartialCaveatInfo; pci != nil {
+				missing = pci.MissingRequiredContext
+			}
+			result.Conditional = append(result.Conditional, authz.LookupConditionalEntry{
+				ID:          authz.ID(data.Subject.SubjectObjectId),
+				MissingKeys: missing,
+			})
+			// LOOKUP_PERMISSIONSHIP_UNSPECIFIED dropped silently.
+		}
 	}
 	if !errors.Is(err, io.EOF) {
-		return nil, err
+		return authz.LookupResult{}, err
 	}
 
-	return ids, nil
+	return result, nil
 }
 
 // CheckPermissionUserset answers the rare userset-as-subject question — "does the
@@ -656,11 +683,16 @@ func (e *Engine) HasPublicRelation(ctx context.Context, on authz.Resource, relat
 
 func (e *Engine) HasPublicSubject(ctx context.Context, on authz.Resource, permission authz.Permission, subject authz.Type) (bool, error) {
 	e.debugLog("Checking public subject: on=%v, permission=%v, subject=%v", on, permission, subject)
-	ids, err := e.LookupSubjects(ctx, on, permission, subject)
+	result, err := e.LookupSubjects(ctx, on, permission, subject)
 	if err != nil {
 		return false, err
 	}
-	return slices.Contains(ids, authz.WildcardID), nil
+	for _, id := range result.Definite {
+		if id == authz.WildcardID {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func errorIfDenied(res *v1.CheckPermissionResponse, err error) error {

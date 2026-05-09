@@ -24,6 +24,16 @@ type OrderBelongsCompanyObjects struct {
 }
 
 type Order authz.ID
+
+type OrderLookupResult struct {
+  Definite    []Order
+  Conditional []OrderConditionalLookupEntry
+}
+type OrderConditionalLookupEntry struct {
+  ID          Order
+  MissingKeys []string
+}
+
 func OrderStringer(id authz.StringConvertable) Order {
   return Order(id.String())
 }
@@ -245,37 +255,57 @@ func (order Order) CheckWrite(ctx context.Context, input CheckOrderWriteInputs) 
   return true, nil
 }
 
-func LookupWriteOrderResources(ctx context.Context, input CheckOrderWriteInputs) ([]Order, error) {
+func LookupWriteOrderResources(ctx context.Context, input CheckOrderWriteInputs) (OrderLookupResult, error) {
 
   if len(input.User) > 0 {
-    ids, err := authz.GetEngine(ctx).LookupResources(ctx,
+    result, err := authz.GetEngine(ctx).LookupResources(ctx,
       TypeOrder, authz.Permission(OrderWrite),
       TypeUser, authz.IDs(input.User),
     )
     if err != nil {
-      return nil, err
+      return OrderLookupResult{}, err
     }
 
-    return authz.FromIDs[Order](ids), nil
+    out := OrderLookupResult{
+      Definite:    authz.FromIDs[Order](result.Definite),
+      Conditional: make([]OrderConditionalLookupEntry, 0, len(result.Conditional)),
+    }
+    for _, c := range result.Conditional {
+      out.Conditional = append(out.Conditional, OrderConditionalLookupEntry{
+        ID:          Order(c.ID),
+        MissingKeys: c.MissingKeys,
+      })
+    }
+    return out, nil
   }
   if len(input.Customer) > 0 {
-    ids, err := authz.GetEngine(ctx).LookupResources(ctx,
+    result, err := authz.GetEngine(ctx).LookupResources(ctx,
       TypeOrder, authz.Permission(OrderWrite),
       TypeCustomer, authz.IDs(input.Customer),
     )
     if err != nil {
-      return nil, err
+      return OrderLookupResult{}, err
     }
 
-    return authz.FromIDs[Order](ids), nil
+    out := OrderLookupResult{
+      Definite:    authz.FromIDs[Order](result.Definite),
+      Conditional: make([]OrderConditionalLookupEntry, 0, len(result.Conditional)),
+    }
+    for _, c := range result.Conditional {
+      out.Conditional = append(out.Conditional, OrderConditionalLookupEntry{
+        ID:          Order(c.ID),
+        MissingKeys: c.MissingKeys,
+      })
+    }
+    return out, nil
   }
   
-  return []Order{}, nil
+  return OrderLookupResult{}, nil
 }
 
-func (order Order) LookupWriteUserSubjects(ctx context.Context) ([]User, error) {
+func (order Order) LookupWriteUserSubjects(ctx context.Context) (UserLookupResult, error) {
 
-  ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+  result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeOrder,
       ID: authz.ID(order),
@@ -283,10 +313,20 @@ func (order Order) LookupWriteUserSubjects(ctx context.Context) ([]User, error) 
     authz.Permission(OrderWrite), TypeUser,
   )
   if err != nil {
-    return nil, err
+    return UserLookupResult{}, err
   }
 
-  return authz.FromIDsExcludingWildcard[User](ids), nil
+  out := UserLookupResult{
+    Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
+    Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
+  }
+  for _, c := range result.Conditional {
+    out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
+      ID:          User(c.ID),
+      MissingKeys: c.MissingKeys,
+    })
+  }
+  return out, nil
 }
 
 func (order Order) LookupWriteUserWildcardSubjects(ctx context.Context) (bool, error) {
@@ -298,9 +338,9 @@ func (order Order) LookupWriteUserWildcardSubjects(ctx context.Context) (bool, e
     authz.Permission(OrderWrite), TypeUser,
   )
 }
-func (order Order) LookupWriteCustomerSubjects(ctx context.Context) ([]Customer, error) {
+func (order Order) LookupWriteCustomerSubjects(ctx context.Context) (CustomerLookupResult, error) {
 
-  ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+  result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeOrder,
       ID: authz.ID(order),
@@ -308,10 +348,20 @@ func (order Order) LookupWriteCustomerSubjects(ctx context.Context) ([]Customer,
     authz.Permission(OrderWrite), TypeCustomer,
   )
   if err != nil {
-    return nil, err
+    return CustomerLookupResult{}, err
   }
 
-  return authz.FromIDsExcludingWildcard[Customer](ids), nil
+  out := CustomerLookupResult{
+    Definite:    authz.FromIDsExcludingWildcard[Customer](result.Definite),
+    Conditional: make([]CustomerConditionalLookupEntry, 0, len(result.Conditional)),
+  }
+  for _, c := range result.Conditional {
+    out.Conditional = append(out.Conditional, CustomerConditionalLookupEntry{
+      ID:          Customer(c.ID),
+      MissingKeys: c.MissingKeys,
+    })
+  }
+  return out, nil
 }
 
 func (order Order) LookupWriteCustomerWildcardSubjects(ctx context.Context) (bool, error) {

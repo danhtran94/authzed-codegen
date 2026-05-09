@@ -14,6 +14,16 @@ type PermissionRole authz.Permission
 
 
 type Role authz.ID
+
+type RoleLookupResult struct {
+  Definite    []Role
+  Conditional []RoleConditionalLookupEntry
+}
+type RoleConditionalLookupEntry struct {
+  ID          Role
+  MissingKeys []string
+}
+
 func RoleStringer(id authz.StringConvertable) Role {
   return Role(id.String())
 }

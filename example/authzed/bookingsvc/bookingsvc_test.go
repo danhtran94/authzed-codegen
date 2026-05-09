@@ -183,11 +183,11 @@ func TestBrand_LookupManageSubjects(t *testing.T) {
 
 	users, err := brand.LookupManageUserSubjects(ctx)
 	require.NoError(t, err)
-	assert.Contains(t, users, bookingsvc.User("t-u5"))
+	assert.Contains(t, users.Definite, bookingsvc.User("t-u5"))
 
 	employees, err := brand.LookupManageEmployeeSubjects(ctx)
 	require.NoError(t, err)
-	assert.Contains(t, employees, bookingsvc.Employee("t-e5"))
+	assert.Contains(t, employees.Definite, bookingsvc.Employee("t-e5"))
 }
 
 // --- Employee: CheckManage (self-ref + cross-def arrow) ---

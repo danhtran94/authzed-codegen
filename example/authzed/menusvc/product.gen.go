@@ -14,6 +14,16 @@ type PermissionProduct authz.Permission
 
 
 type Product authz.ID
+
+type ProductLookupResult struct {
+  Definite    []Product
+  Conditional []ProductConditionalLookupEntry
+}
+type ProductConditionalLookupEntry struct {
+  ID          Product
+  MissingKeys []string
+}
+
 func ProductStringer(id authz.StringConvertable) Product {
   return Product(id.String())
 }

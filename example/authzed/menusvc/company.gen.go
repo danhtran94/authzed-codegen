@@ -27,6 +27,16 @@ type CompanyEmployeeObjects struct {
 }
 
 type Company authz.ID
+
+type CompanyLookupResult struct {
+  Definite    []Company
+  Conditional []CompanyConditionalLookupEntry
+}
+type CompanyConditionalLookupEntry struct {
+  ID          Company
+  MissingKeys []string
+}
+
 func CompanyStringer(id authz.StringConvertable) Company {
   return Company(id.String())
 }
@@ -245,21 +255,31 @@ func (company Company) CheckManage(ctx context.Context, input CheckCompanyManage
   return true, nil
 }
 
-func LookupManageCompanyResources(ctx context.Context, input CheckCompanyManageInputs) ([]Company, error) {
+func LookupManageCompanyResources(ctx context.Context, input CheckCompanyManageInputs) (CompanyLookupResult, error) {
 
   if len(input.User) > 0 {
-    ids, err := authz.GetEngine(ctx).LookupResources(ctx,
+    result, err := authz.GetEngine(ctx).LookupResources(ctx,
       TypeCompany, authz.Permission(CompanyManage),
       TypeUser, authz.IDs(input.User),
     )
     if err != nil {
-      return nil, err
+      return CompanyLookupResult{}, err
     }
 
-    return authz.FromIDs[Company](ids), nil
+    out := CompanyLookupResult{
+      Definite:    authz.FromIDs[Company](result.Definite),
+      Conditional: make([]CompanyConditionalLookupEntry, 0, len(result.Conditional)),
+    }
+    for _, c := range result.Conditional {
+      out.Conditional = append(out.Conditional, CompanyConditionalLookupEntry{
+        ID:          Company(c.ID),
+        MissingKeys: c.MissingKeys,
+      })
+    }
+    return out, nil
   }
   
-  return []Company{}, nil
+  return CompanyLookupResult{}, nil
 }
 const CompanyCreateBooking PermissionCompany = "create_booking"
 
@@ -285,21 +305,31 @@ func (company Company) CheckCreateBooking(ctx context.Context, input CheckCompan
   return true, nil
 }
 
-func LookupCreateBookingCompanyResources(ctx context.Context, input CheckCompanyCreateBookingInputs) ([]Company, error) {
+func LookupCreateBookingCompanyResources(ctx context.Context, input CheckCompanyCreateBookingInputs) (CompanyLookupResult, error) {
 
   if len(input.User) > 0 {
-    ids, err := authz.GetEngine(ctx).LookupResources(ctx,
+    result, err := authz.GetEngine(ctx).LookupResources(ctx,
       TypeCompany, authz.Permission(CompanyCreateBooking),
       TypeUser, authz.IDs(input.User),
     )
     if err != nil {
-      return nil, err
+      return CompanyLookupResult{}, err
     }
 
-    return authz.FromIDs[Company](ids), nil
+    out := CompanyLookupResult{
+      Definite:    authz.FromIDs[Company](result.Definite),
+      Conditional: make([]CompanyConditionalLookupEntry, 0, len(result.Conditional)),
+    }
+    for _, c := range result.Conditional {
+      out.Conditional = append(out.Conditional, CompanyConditionalLookupEntry{
+        ID:          Company(c.ID),
+        MissingKeys: c.MissingKeys,
+      })
+    }
+    return out, nil
   }
   
-  return []Company{}, nil
+  return CompanyLookupResult{}, nil
 }
 const CompanyCreateOrder PermissionCompany = "create_order"
 
@@ -325,26 +355,36 @@ func (company Company) CheckCreateOrder(ctx context.Context, input CheckCompanyC
   return true, nil
 }
 
-func LookupCreateOrderCompanyResources(ctx context.Context, input CheckCompanyCreateOrderInputs) ([]Company, error) {
+func LookupCreateOrderCompanyResources(ctx context.Context, input CheckCompanyCreateOrderInputs) (CompanyLookupResult, error) {
 
   if len(input.User) > 0 {
-    ids, err := authz.GetEngine(ctx).LookupResources(ctx,
+    result, err := authz.GetEngine(ctx).LookupResources(ctx,
       TypeCompany, authz.Permission(CompanyCreateOrder),
       TypeUser, authz.IDs(input.User),
     )
     if err != nil {
-      return nil, err
+      return CompanyLookupResult{}, err
     }
 
-    return authz.FromIDs[Company](ids), nil
+    out := CompanyLookupResult{
+      Definite:    authz.FromIDs[Company](result.Definite),
+      Conditional: make([]CompanyConditionalLookupEntry, 0, len(result.Conditional)),
+    }
+    for _, c := range result.Conditional {
+      out.Conditional = append(out.Conditional, CompanyConditionalLookupEntry{
+        ID:          Company(c.ID),
+        MissingKeys: c.MissingKeys,
+      })
+    }
+    return out, nil
   }
   
-  return []Company{}, nil
+  return CompanyLookupResult{}, nil
 }
 
-func (company Company) LookupManageUserSubjects(ctx context.Context) ([]User, error) {
+func (company Company) LookupManageUserSubjects(ctx context.Context) (UserLookupResult, error) {
 
-  ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+  result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeCompany,
       ID: authz.ID(company),
@@ -352,10 +392,20 @@ func (company Company) LookupManageUserSubjects(ctx context.Context) ([]User, er
     authz.Permission(CompanyManage), TypeUser,
   )
   if err != nil {
-    return nil, err
+    return UserLookupResult{}, err
   }
 
-  return authz.FromIDsExcludingWildcard[User](ids), nil
+  out := UserLookupResult{
+    Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
+    Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
+  }
+  for _, c := range result.Conditional {
+    out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
+      ID:          User(c.ID),
+      MissingKeys: c.MissingKeys,
+    })
+  }
+  return out, nil
 }
 
 func (company Company) LookupManageUserWildcardSubjects(ctx context.Context) (bool, error) {
@@ -368,9 +418,9 @@ func (company Company) LookupManageUserWildcardSubjects(ctx context.Context) (bo
   )
 }
 
-func (company Company) LookupCreateBookingUserSubjects(ctx context.Context) ([]User, error) {
+func (company Company) LookupCreateBookingUserSubjects(ctx context.Context) (UserLookupResult, error) {
 
-  ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+  result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeCompany,
       ID: authz.ID(company),
@@ -378,10 +428,20 @@ func (company Company) LookupCreateBookingUserSubjects(ctx context.Context) ([]U
     authz.Permission(CompanyCreateBooking), TypeUser,
   )
   if err != nil {
-    return nil, err
+    return UserLookupResult{}, err
   }
 
-  return authz.FromIDsExcludingWildcard[User](ids), nil
+  out := UserLookupResult{
+    Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
+    Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
+  }
+  for _, c := range result.Conditional {
+    out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
+      ID:          User(c.ID),
+      MissingKeys: c.MissingKeys,
+    })
+  }
+  return out, nil
 }
 
 func (company Company) LookupCreateBookingUserWildcardSubjects(ctx context.Context) (bool, error) {
@@ -394,9 +454,9 @@ func (company Company) LookupCreateBookingUserWildcardSubjects(ctx context.Conte
   )
 }
 
-func (company Company) LookupCreateOrderUserSubjects(ctx context.Context) ([]User, error) {
+func (company Company) LookupCreateOrderUserSubjects(ctx context.Context) (UserLookupResult, error) {
 
-  ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+  result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeCompany,
       ID: authz.ID(company),
@@ -404,10 +464,20 @@ func (company Company) LookupCreateOrderUserSubjects(ctx context.Context) ([]Use
     authz.Permission(CompanyCreateOrder), TypeUser,
   )
   if err != nil {
-    return nil, err
+    return UserLookupResult{}, err
   }
 
-  return authz.FromIDsExcludingWildcard[User](ids), nil
+  out := UserLookupResult{
+    Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
+    Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
+  }
+  for _, c := range result.Conditional {
+    out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
+      ID:          User(c.ID),
+      MissingKeys: c.MissingKeys,
+    })
+  }
+  return out, nil
 }
 
 func (company Company) LookupCreateOrderUserWildcardSubjects(ctx context.Context) (bool, error) {

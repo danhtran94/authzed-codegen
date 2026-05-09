@@ -35,6 +35,16 @@ type {{ $typeName }}{{ snakeToPascal $rel.Name }}Objects struct {
 
 {{ end }}
 type {{ $typeName }} authz.ID
+
+type {{ $typeName }}LookupResult struct {
+  Definite    []{{ $typeName }}
+  Conditional []{{ $typeName }}ConditionalLookupEntry
+}
+type {{ $typeName }}ConditionalLookupEntry struct {
+  ID          {{ $typeName }}
+  MissingKeys []string
+}
+
 func {{ $typeName }}Stringer(id authz.StringConvertable) {{ $typeName }} {
   return {{ $typeName }}(id.String())
 }
@@ -220,7 +230,7 @@ func ({{ $var }} {{ $typeName }}) Check{{ snakeToPascal $perm.Name }}(ctx contex
   return true, nil
 }
 
-func Lookup{{ snakeToPascal $perm.Name }}{{ $typeName }}Resources(ctx context.Context, input {{ $inputName }}) ([]{{ $typeName }}, error) {
+func Lookup{{ snakeToPascal $perm.Name }}{{ $typeName }}Resources(ctx context.Context, input {{ $inputName }}) ({{ $typeName }}LookupResult, error) {
 {{ if hasPermCaveats $objectType $perm.Name }}
   var caveatCtx map[string]any
 {{ range $caveatName := permCaveats $objectType $perm.Name }}  if c := input.Caveats.{{ pascalCaveat $caveatName }}; c != nil {
@@ -233,22 +243,32 @@ func Lookup{{ snakeToPascal $perm.Name }}{{ $typeName }}Resources(ctx context.Co
 {{ end }}  }
 {{ end }}{{ end }}
   {{ range $inputType := permissionInputTypes $objectType $perm.Name }}if len(input.{{ typeName $inputType }}) > 0 {
-    ids, err := authz.GetEngine(ctx).{{ if hasPermCaveats $objectType $perm.Name }}LookupResourcesWithCaveat{{ else }}LookupResources{{ end }}(ctx,
+    result, err := authz.GetEngine(ctx).{{ if hasPermCaveats $objectType $perm.Name }}LookupResourcesWithCaveat{{ else }}LookupResources{{ end }}(ctx,
       Type{{ $typeName }}, authz.Permission({{ $typeName }}{{ snakeToPascal $perm.Name }}),
       Type{{ typeName $inputType }}, authz.IDs(input.{{ typeName $inputType }}),{{ if hasPermCaveats $objectType $perm.Name }}
       caveatCtx,{{ end }}
     )
     if err != nil {
-      return nil, err
+      return {{ $typeName }}LookupResult{}, err
     }
 
-    return authz.FromIDs[{{ $typeName }}](ids), nil
+    out := {{ $typeName }}LookupResult{
+      Definite:    authz.FromIDs[{{ $typeName }}](result.Definite),
+      Conditional: make([]{{ $typeName }}ConditionalLookupEntry, 0, len(result.Conditional)),
+    }
+    for _, c := range result.Conditional {
+      out.Conditional = append(out.Conditional, {{ $typeName }}ConditionalLookupEntry{
+        ID:          {{ $typeName }}(c.ID),
+        MissingKeys: c.MissingKeys,
+      })
+    }
+    return out, nil
   }
   {{ end }}
-  return []{{ $typeName }}{}, nil
+  return {{ $typeName }}LookupResult{}, nil
 }
 {{ end }}{{ range $perm := .Permissions }}{{ $caveatsTypeName := (print "Check" $typeName (snakeToPascal $perm.Name) "Caveats") }}
-{{ range $inputType := permissionInputTypes $objectType $perm.Name }}func ({{ $var }} {{ $typeName }}) Lookup{{ snakeToPascal $perm.Name }}{{ typeName $inputType }}Subjects(ctx context.Context{{ if hasPermCaveats $objectType $perm.Name }}, caveats {{ $caveatsTypeName }}{{ end }}) ([]{{ typeName $inputType }}, error) {
+{{ range $inputType := permissionInputTypes $objectType $perm.Name }}func ({{ $var }} {{ $typeName }}) Lookup{{ snakeToPascal $perm.Name }}{{ typeName $inputType }}Subjects(ctx context.Context{{ if hasPermCaveats $objectType $perm.Name }}, caveats {{ $caveatsTypeName }}{{ end }}) ({{ typeName $inputType }}LookupResult, error) {
 {{ if hasPermCaveats $objectType $perm.Name }}
   var caveatCtx map[string]any
 {{ range $caveatName := permCaveats $objectType $perm.Name }}  if c := caveats.{{ pascalCaveat $caveatName }}; c != nil {
@@ -260,7 +280,7 @@ func Lookup{{ snakeToPascal $perm.Name }}{{ $typeName }}Resources(ctx context.Co
     }
 {{ end }}  }
 {{ end }}{{ end }}
-  ids, err := authz.GetEngine(ctx).{{ if hasPermCaveats $objectType $perm.Name }}LookupSubjectsWithCaveat{{ else }}LookupSubjects{{ end }}(ctx,
+  result, err := authz.GetEngine(ctx).{{ if hasPermCaveats $objectType $perm.Name }}LookupSubjectsWithCaveat{{ else }}LookupSubjects{{ end }}(ctx,
     authz.Resource{
       Type: Type{{ $typeName }},
       ID: authz.ID({{ $var }}),
@@ -269,10 +289,20 @@ func Lookup{{ snakeToPascal $perm.Name }}{{ $typeName }}Resources(ctx context.Co
     caveatCtx,{{ end }}
   )
   if err != nil {
-    return nil, err
+    return {{ typeName $inputType }}LookupResult{}, err
   }
 
-  return authz.FromIDsExcludingWildcard[{{ typeName $inputType }}](ids), nil
+  out := {{ typeName $inputType }}LookupResult{
+    Definite:    authz.FromIDsExcludingWildcard[{{ typeName $inputType }}](result.Definite),
+    Conditional: make([]{{ typeName $inputType }}ConditionalLookupEntry, 0, len(result.Conditional)),
+  }
+  for _, c := range result.Conditional {
+    out.Conditional = append(out.Conditional, {{ typeName $inputType }}ConditionalLookupEntry{
+      ID:          {{ typeName $inputType }}(c.ID),
+      MissingKeys: c.MissingKeys,
+    })
+  }
+  return out, nil
 }
 
 func ({{ $var }} {{ $typeName }}) Lookup{{ snakeToPascal $perm.Name }}{{ typeName $inputType }}WildcardSubjects(ctx context.Context) (bool, error) {

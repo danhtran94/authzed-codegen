@@ -19,6 +19,16 @@ type TableOwnerObjects struct {
 }
 
 type Table authz.ID
+
+type TableLookupResult struct {
+  Definite    []Table
+  Conditional []TableConditionalLookupEntry
+}
+type TableConditionalLookupEntry struct {
+  ID          Table
+  MissingKeys []string
+}
+
 func TableStringer(id authz.StringConvertable) Table {
   return Table(id.String())
 }
@@ -119,26 +129,36 @@ func (table Table) CheckWrite(ctx context.Context, input CheckTableWriteInputs) 
   return true, nil
 }
 
-func LookupWriteTableResources(ctx context.Context, input CheckTableWriteInputs) ([]Table, error) {
+func LookupWriteTableResources(ctx context.Context, input CheckTableWriteInputs) (TableLookupResult, error) {
 
   if len(input.User) > 0 {
-    ids, err := authz.GetEngine(ctx).LookupResources(ctx,
+    result, err := authz.GetEngine(ctx).LookupResources(ctx,
       TypeTable, authz.Permission(TableWrite),
       TypeUser, authz.IDs(input.User),
     )
     if err != nil {
-      return nil, err
+      return TableLookupResult{}, err
     }
 
-    return authz.FromIDs[Table](ids), nil
+    out := TableLookupResult{
+      Definite:    authz.FromIDs[Table](result.Definite),
+      Conditional: make([]TableConditionalLookupEntry, 0, len(result.Conditional)),
+    }
+    for _, c := range result.Conditional {
+      out.Conditional = append(out.Conditional, TableConditionalLookupEntry{
+        ID:          Table(c.ID),
+        MissingKeys: c.MissingKeys,
+      })
+    }
+    return out, nil
   }
   
-  return []Table{}, nil
+  return TableLookupResult{}, nil
 }
 
-func (table Table) LookupWriteUserSubjects(ctx context.Context) ([]User, error) {
+func (table Table) LookupWriteUserSubjects(ctx context.Context) (UserLookupResult, error) {
 
-  ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+  result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeTable,
       ID: authz.ID(table),
@@ -146,10 +166,20 @@ func (table Table) LookupWriteUserSubjects(ctx context.Context) ([]User, error) 
     authz.Permission(TableWrite), TypeUser,
   )
   if err != nil {
-    return nil, err
+    return UserLookupResult{}, err
   }
 
-  return authz.FromIDsExcludingWildcard[User](ids), nil
+  out := UserLookupResult{
+    Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
+    Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
+  }
+  for _, c := range result.Conditional {
+    out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
+      ID:          User(c.ID),
+      MissingKeys: c.MissingKeys,
+    })
+  }
+  return out, nil
 }
 
 func (table Table) LookupWriteUserWildcardSubjects(ctx context.Context) (bool, error) {

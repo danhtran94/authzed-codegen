@@ -182,7 +182,7 @@ func TestFolder_LookupBrowseUserSubjects(t *testing.T) {
 
 	ids, err := f.LookupBrowseUserSubjects(ctx)
 	require.NoError(t, err)
-	assert.ElementsMatch(t, []extsvc.User{"tvu4a", "tvu4b"}, ids)
+	assert.ElementsMatch(t, []extsvc.User{"tvu4a", "tvu4b"}, ids.Definite)
 }
 
 // --- Document: arrow-only view + mixed identifier+arrow edit ---
@@ -405,7 +405,7 @@ func TestArticle_LookupEditorUserSubjects(t *testing.T) {
 
 	ids, err := art.LookupEditorUserSubjects(ctx)
 	require.NoError(t, err)
-	assert.Contains(t, ids, extsvc.User("au7"))
+	assert.Contains(t, ids.Definite, extsvc.User("au7"))
 }
 
 // --- Folder.tenanted_browse: caveat codegen path (AUZ-006 read + AUZ-007 write) ---
@@ -1265,7 +1265,7 @@ func TestFolder_LookupTenantedBrowseUserSubjects_GrantedWithCaveat(t *testing.T)
 		TenantMatch: &extsvc.TenantMatchArgs{Tenant: new("acme")},
 	})
 	require.NoError(t, err)
-	assert.Contains(t, users, extsvc.User("u-lk-s-ok"), "matching tenant must surface as definite grant")
+	assert.Contains(t, users.Definite, extsvc.User("u-lk-s-ok"), "matching tenant must surface as definite grant")
 }
 
 func TestFolder_LookupTenantedBrowseFolderResources_GrantedWithCaveat(t *testing.T) {
@@ -1282,14 +1282,15 @@ func TestFolder_LookupTenantedBrowseFolderResources_GrantedWithCaveat(t *testing
 		},
 	})
 	require.NoError(t, err)
-	assert.Contains(t, folders, extsvc.Folder("lk-r-ok"), "resource lookup with matching caveat returns the folder")
+	assert.Contains(t, folders.Definite, extsvc.Folder("lk-r-ok"), "resource lookup with matching caveat returns the folder")
 }
 
 // Pre-AUZ-008, an empty Caveats input would cause SpiceDB to return
 // CONDITIONAL_PERMISSION; the engine appended every response ID
 // regardless, so the user appeared in the result even though access
 // wasn't actually granted. Post-AUZ-008, the filter drops CONDITIONAL
-// from the returned slice.
+// from the .Definite slice. Post-AUZ-013, the conditional row surfaces
+// in .Conditional with MissingKeys populated for caller recovery.
 func TestFolder_LookupTenantedBrowseUserSubjects_ConditionalFiltered(t *testing.T) {
 	ctx := context.Background()
 
@@ -1298,10 +1299,101 @@ func TestFolder_LookupTenantedBrowseUserSubjects_ConditionalFiltered(t *testing.
 	}))
 
 	// No Caveats supplied — SpiceDB returns CONDITIONAL because `tenant`
-	// has nothing to bind. Filter drops it from the returned slice.
+	// has nothing to bind. Filter drops it from .Definite.
 	users, err := extsvc.Folder("lk-s-cond").LookupTenantedBrowseUserSubjects(ctx, extsvc.CheckFolderTenantedBrowseCaveats{})
 	require.NoError(t, err)
-	assert.NotContains(t, users, extsvc.User("u-lk-s-cond"), "CONDITIONAL_PERMISSION must be filtered out — pre-AUZ-008 silent bug")
+	assert.NotContains(t, users.Definite, extsvc.User("u-lk-s-cond"), "CONDITIONAL_PERMISSION must be filtered out of .Definite")
+}
+
+// AUZ-013 — conditional Lookup rows surface in .Conditional with MissingKeys.
+
+func TestFolder_LookupTenantedBrowseUserSubjects_ConditionalSurfacedWithMissingKeys(t *testing.T) {
+	ctx := context.Background()
+
+	// Defer the caveat at write — caller will omit context at Lookup.
+	require.NoError(t, extsvc.Folder("lk-s-cond-rich").CreateTenantedViewerRelations(ctx, extsvc.FolderTenantedViewerObjects{
+		User: []extsvc.User{"u-lk-s-cond-rich"},
+	}))
+
+	result, err := extsvc.Folder("lk-s-cond-rich").LookupTenantedBrowseUserSubjects(ctx, extsvc.CheckFolderTenantedBrowseCaveats{})
+	require.NoError(t, err)
+
+	assert.Empty(t, result.Definite, "no caveat context → no definite grants")
+	require.Len(t, result.Conditional, 1, "the user's row surfaces as conditional")
+	assert.Equal(t, extsvc.User("u-lk-s-cond-rich"), result.Conditional[0].ID)
+	assert.Contains(t, result.Conditional[0].MissingKeys, "tenant",
+		"PartialCaveatInfo.MissingRequiredContext surfaces the caveat key the caller forgot")
+}
+
+func TestFolder_LookupTenantedBrowseFolderResources_ConditionalSurfacedWithMissingKeys(t *testing.T) {
+	ctx := context.Background()
+
+	require.NoError(t, extsvc.Folder("lk-r-cond-rich").CreateTenantedViewerRelations(ctx, extsvc.FolderTenantedViewerObjects{
+		User: []extsvc.User{"u-lk-r-cond-rich"},
+	}))
+
+	result, err := extsvc.LookupTenantedBrowseFolderResources(ctx, extsvc.CheckFolderTenantedBrowseInputs{
+		User: []extsvc.User{"u-lk-r-cond-rich"},
+		// Caveats omitted — tenant unbound
+	})
+	require.NoError(t, err)
+
+	assert.Empty(t, result.Definite)
+	require.Len(t, result.Conditional, 1)
+	assert.Equal(t, extsvc.Folder("lk-r-cond-rich"), result.Conditional[0].ID)
+	assert.Contains(t, result.Conditional[0].MissingKeys, "tenant")
+}
+
+func TestFolder_LookupTenantedBrowseFolderResources_HardDenyEmptyConditional(t *testing.T) {
+	ctx := context.Background()
+
+	require.NoError(t, extsvc.Folder("lk-r-hard").CreateTenantedViewerRelations(ctx, extsvc.FolderTenantedViewerObjects{
+		User: []extsvc.User{"u-lk-r-hard"},
+	}))
+
+	// Wrong tenant — CEL false → NO_PERMISSION, not CONDITIONAL.
+	// SpiceDB never streams the row to begin with; both slices empty.
+	result, err := extsvc.LookupTenantedBrowseFolderResources(ctx, extsvc.CheckFolderTenantedBrowseInputs{
+		User: []extsvc.User{"u-lk-r-hard"},
+		Caveats: extsvc.CheckFolderTenantedBrowseCaveats{
+			TenantMatch: &extsvc.TenantMatchArgs{Tenant: new("not-acme")},
+		},
+	})
+	require.NoError(t, err)
+	assert.Empty(t, result.Definite, "CEL false → not in Definite")
+	assert.Empty(t, result.Conditional, "CEL false ≠ indeterminate; not in Conditional either")
+}
+
+func TestFolder_LookupTenantedBrowseUserSubjects_MixedDefiniteAndConditional(t *testing.T) {
+	ctx := context.Background()
+
+	folder := extsvc.Folder("lk-s-mixed")
+
+	// User A — pre-bind tenant=acme at write (definite when looked up without caveat input).
+	require.NoError(t, folder.CreateTenantedViewerRelations(ctx, extsvc.FolderTenantedViewerObjects{
+		User: []extsvc.User{"u-mixed-def"},
+		Caveats: extsvc.FolderTenantedViewerCaveats{
+			User: &extsvc.TenantMatchArgs{Tenant: new("acme")},
+		},
+	}))
+
+	// User B — defer the caveat at write (conditional when no caveat input).
+	require.NoError(t, folder.CreateTenantedViewerRelations(ctx, extsvc.FolderTenantedViewerObjects{
+		User: []extsvc.User{"u-mixed-cond"},
+	}))
+
+	// Lookup without caveat input — SpiceDB evaluates per row:
+	//   pre-bound row → CEL eval succeeds with the stored value → HAS_PERMISSION
+	//   deferred row → tenant unbound → CONDITIONAL_PERMISSION
+	result, err := folder.LookupTenantedBrowseUserSubjects(ctx, extsvc.CheckFolderTenantedBrowseCaveats{})
+	require.NoError(t, err)
+
+	assert.Contains(t, result.Definite, extsvc.User("u-mixed-def"),
+		"pre-bound caveat → definite grant when context unspecified")
+	require.Len(t, result.Conditional, 1)
+	assert.Equal(t, extsvc.User("u-mixed-cond"), result.Conditional[0].ID,
+		"deferred caveat → conditional entry with the user's ID")
+	assert.Contains(t, result.Conditional[0].MissingKeys, "tenant")
 }
 
 // Lookup with a non-matching caveat: SpiceDB evaluates the expression
@@ -1321,7 +1413,7 @@ func TestFolder_LookupTenantedBrowseFolderResources_WrongCaveatFiltered(t *testi
 		},
 	})
 	require.NoError(t, err)
-	assert.NotContains(t, folders, extsvc.Folder("lk-r-wrong"), "mismatched caveat must not surface the folder")
+	assert.NotContains(t, folders.Definite, extsvc.Folder("lk-r-wrong"), "mismatched caveat must not surface the folder")
 }
 
 // AUZ-009 — `with expiration` per-tuple TTL.
@@ -1701,7 +1793,7 @@ func TestArticle_LookupAuthorOnlyUserSubjects(t *testing.T) {
 
 	ids, err := art.LookupAuthorOnlyUserSubjects(ctx)
 	require.NoError(t, err)
-	assert.Contains(t, ids, extsvc.User("au8"))
+	assert.Contains(t, ids.Definite, extsvc.User("au8"))
 }
 
 // AUZ-011 — sub-relation references (`team#admin`).

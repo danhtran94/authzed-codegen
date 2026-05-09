@@ -19,6 +19,16 @@ type UserBelongsCompanyObjects struct {
 }
 
 type User authz.ID
+
+type UserLookupResult struct {
+  Definite    []User
+  Conditional []UserConditionalLookupEntry
+}
+type UserConditionalLookupEntry struct {
+  ID          User
+  MissingKeys []string
+}
+
 func UserStringer(id authz.StringConvertable) User {
   return User(id.String())
 }
@@ -119,26 +129,36 @@ func (user User) CheckManage(ctx context.Context, input CheckUserManageInputs) (
   return true, nil
 }
 
-func LookupManageUserResources(ctx context.Context, input CheckUserManageInputs) ([]User, error) {
+func LookupManageUserResources(ctx context.Context, input CheckUserManageInputs) (UserLookupResult, error) {
 
   if len(input.User) > 0 {
-    ids, err := authz.GetEngine(ctx).LookupResources(ctx,
+    result, err := authz.GetEngine(ctx).LookupResources(ctx,
       TypeUser, authz.Permission(UserManage),
       TypeUser, authz.IDs(input.User),
     )
     if err != nil {
-      return nil, err
+      return UserLookupResult{}, err
     }
 
-    return authz.FromIDs[User](ids), nil
+    out := UserLookupResult{
+      Definite:    authz.FromIDs[User](result.Definite),
+      Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
+    }
+    for _, c := range result.Conditional {
+      out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
+        ID:          User(c.ID),
+        MissingKeys: c.MissingKeys,
+      })
+    }
+    return out, nil
   }
   
-  return []User{}, nil
+  return UserLookupResult{}, nil
 }
 
-func (user User) LookupManageUserSubjects(ctx context.Context) ([]User, error) {
+func (user User) LookupManageUserSubjects(ctx context.Context) (UserLookupResult, error) {
 
-  ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+  result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeUser,
       ID: authz.ID(user),
@@ -146,10 +166,20 @@ func (user User) LookupManageUserSubjects(ctx context.Context) ([]User, error) {
     authz.Permission(UserManage), TypeUser,
   )
   if err != nil {
-    return nil, err
+    return UserLookupResult{}, err
   }
 
-  return authz.FromIDsExcludingWildcard[User](ids), nil
+  out := UserLookupResult{
+    Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
+    Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
+  }
+  for _, c := range result.Conditional {
+    out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
+      ID:          User(c.ID),
+      MissingKeys: c.MissingKeys,
+    })
+  }
+  return out, nil
 }
 
 func (user User) LookupManageUserWildcardSubjects(ctx context.Context) (bool, error) {

@@ -14,6 +14,16 @@ type PermissionGroup authz.Permission
 
 
 type Group authz.ID
+
+type GroupLookupResult struct {
+  Definite    []Group
+  Conditional []GroupConditionalLookupEntry
+}
+type GroupConditionalLookupEntry struct {
+  ID          Group
+  MissingKeys []string
+}
+
 func GroupStringer(id authz.StringConvertable) Group {
   return Group(id.String())
 }

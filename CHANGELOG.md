@@ -4,6 +4,59 @@ All notable changes to this project are documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0] - 2026-05-09
+
+Closes the symmetric gap to v1.6's Check rich-signal: `LookupResources` / `LookupSubjects` (and their `*WithCaveat` variants) now return a typed `LookupResult` partitioning definite grants from conditional grants. Conditional entries carry `MissingKeys` from `PartialCaveatInfo.MissingRequiredContext` so callers can fetch missing context and retry — no more silent "no resources found" when the actual answer is "found conditional, supply context to see them."
+
+After v1.7, Check and Lookup paths give consistent semantics for caveat-reaching schemas: both surface the recoverable-conditional case distinctly from definite grants and from hard denies. Variant-C philosophy from AUZ-010 SPEC-005: uniform replacement across all 4 Lookup paths, schema evolution invisible.
+
+### Added
+
+- **`authz.LookupResult`** — engine-surface return type for all `Lookup*` methods. `Definite []ID` and `Conditional []LookupConditionalEntry`. Both slices initialised to empty (not nil) — callers range over either field unconditionally.
+- **`authz.LookupConditionalEntry`** — runtime conditional row with `ID` and `MissingKeys []string`.
+- **Generated `<Type>LookupResult`** — typed counterpart per resource/subject type. `Definite []<Type>` + `Conditional []<Type>ConditionalLookupEntry`. Shared across every Lookup method returning that type (per-resource-type, NOT per-permission).
+- **Generated `<Type>ConditionalLookupEntry`** — typed conditional row.
+- **5 new e2e tests** covering: conditional surfacing on Subjects path with `MissingKeys` populated, conditional surfacing on Resources path, hard-deny path (CEL false → both slices empty, NOT conditional), mixed definite/conditional in a single Lookup, regression check on existing AUZ-008 conditional-filter behavior (now via `.Definite`).
+
+### Changed
+
+- **BREAKING (Engine interface)**: `Engine.LookupResources` / `LookupResourcesWithCaveat` / `LookupSubjects` / `LookupSubjectsWithCaveat` return types change from `([]ID, error)` to `(LookupResult, error)`. External `Engine` implementers must update.
+- **BREAKING (Generated code)**: every generated `Lookup<Perm><Type>Resources` / `Lookup<Perm><Type>Subjects` return type changes from `([]<Type>, error)` to `(<Type>LookupResult, error)`.
+- `*spicedb.Engine.HasPublicSubject` body rewritten to scan `result.Definite` for `WildcardID`. External `(bool, error)` signature preserved.
+- `*spicedb.Engine.HasPublicRelation` similarly preserved.
+
+### Migration recipe
+
+For tests/callers that consumed `[]<Type>` from Lookup methods:
+
+```go
+// Before:
+ids, err := folder.LookupBrowseUserSubjects(ctx)
+assert.Contains(t, ids, extsvc.User("u1"))
+
+// After:
+ids, err := folder.LookupBrowseUserSubjects(ctx)
+assert.Contains(t, ids.Definite, extsvc.User("u1"))
+
+// Caveat-aware caller — recover from conditional Lookup:
+result, err := folder.LookupTenantedBrowseUserSubjects(ctx, caveats)
+for _, c := range result.Conditional {
+    fetched := fetch(c.MissingKeys)
+    // retry Check or Lookup with fetched context
+}
+```
+
+### Verified
+
+- All 4 e2e packages pass.
+- Codegen idempotent at the new baseline.
+- `go build ./...` + `go vet ./...` clean.
+
+### Deferred
+
+- **Conditional wildcards** — `HasPublicSubject` and the wildcard subject methods (`Lookup<Perm><Type>WildcardSubjects`) check only `result.Definite` for `WildcardID`. A wildcard tuple with a caveat that resolves CONDITIONAL at Lookup would land in `result.Conditional`, NOT trigger the wildcard helper. Per SPEC-008 A4 — this case is extremely rare in practice; if a real schema needs it, a future SPEC adds `HasPublicSubjectConditional` or similar.
+- **Auto-retry helper for Lookup** — same disposition as v1.6's Check path. Surfacing `MissingKeys` is the engine's job; deciding whether to fetch and retry is the caller's.
+
 ## [1.6.0] - 2026-05-09
 
 Surfaces SpiceDB's `CONDITIONAL_PERMISSION` signal as a typed error path. Recoverable failures (caller forgot to supply caveat context) are now distinguishable from hard denies (user genuinely lacks permission) via `errors.Is(err, ErrConditionalPermission)` and `errors.As(err, &cpe)` — `cpe.MissingKeys` carries the caveat parameter names from `PartialCaveatInfo.MissingRequiredContext` so callers can fetch and retry. Backward compat preserved: existing `errors.Is(err, ErrPermissionDenied)` checks still match all deny cases via the typed error's custom `Is` method.

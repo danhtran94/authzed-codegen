@@ -262,7 +262,22 @@ case errors.Is(err, authz.ErrPermissionDenied):
 
 The typed error's custom `Is` method matches both `ErrConditionalPermission` (for the rich-signal opt-in path) and `ErrPermissionDenied` (for backward compat with existing deny checks). Callers that only care about "denied vs. granted" keep working unchanged.
 
-Lookup paths (`LookupResources` / `LookupSubjects`) silently filter conditional results from the returned slice — the rich-signal surface applies to Check paths only in v1.6. See `docs/spec-007-conditional-permission-signal.md` for the SPEC and the deferred Lookup-with-conditional-entries work.
+Lookup paths return a typed `LookupResult` partitioning definite grants from conditional grants — the same recovery hint surfaces on both Check and Lookup. Caller pattern:
+
+```go
+result, err := folder.LookupTenantedBrowseUserSubjects(ctx, caveats)
+// result.Definite — confirmed grants
+// result.Conditional — partial grants; each has MissingKeys for caller to fetch and retry
+
+for _, c := range result.Conditional {
+    fetched := fetchTenantContext(c.MissingKeys)
+    // retry Check / Lookup with the fetched context
+}
+```
+
+Per-type `<Type>LookupResult` and `<Type>ConditionalLookupEntry` structs are generated once per object type and shared across every Lookup method returning that type. Wildcard subject methods (`Lookup<Perm><Type>WildcardSubjects`) keep their `(bool, error)` signature — they check `result.Definite` for the wildcard sentinel internally.
+
+See `docs/spec-007-conditional-permission-signal.md` for the Check path, `docs/spec-008-lookup-conditional-surfacing.md` for the Lookup path.
 
 ## Behavior Notes
 

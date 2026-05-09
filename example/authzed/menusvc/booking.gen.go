@@ -74,6 +74,16 @@ type WithinMonthsArgs struct {
 
 
 type Booking authz.ID
+
+type BookingLookupResult struct {
+  Definite    []Booking
+  Conditional []BookingConditionalLookupEntry
+}
+type BookingConditionalLookupEntry struct {
+  ID          Booking
+  MissingKeys []string
+}
+
 func BookingStringer(id authz.StringConvertable) Booking {
   return Booking(id.String())
 }
@@ -744,32 +754,52 @@ func (booking Booking) CheckWrite(ctx context.Context, input CheckBookingWriteIn
   return true, nil
 }
 
-func LookupWriteBookingResources(ctx context.Context, input CheckBookingWriteInputs) ([]Booking, error) {
+func LookupWriteBookingResources(ctx context.Context, input CheckBookingWriteInputs) (BookingLookupResult, error) {
 
   if len(input.User) > 0 {
-    ids, err := authz.GetEngine(ctx).LookupResources(ctx,
+    result, err := authz.GetEngine(ctx).LookupResources(ctx,
       TypeBooking, authz.Permission(BookingWrite),
       TypeUser, authz.IDs(input.User),
     )
     if err != nil {
-      return nil, err
+      return BookingLookupResult{}, err
     }
 
-    return authz.FromIDs[Booking](ids), nil
+    out := BookingLookupResult{
+      Definite:    authz.FromIDs[Booking](result.Definite),
+      Conditional: make([]BookingConditionalLookupEntry, 0, len(result.Conditional)),
+    }
+    for _, c := range result.Conditional {
+      out.Conditional = append(out.Conditional, BookingConditionalLookupEntry{
+        ID:          Booking(c.ID),
+        MissingKeys: c.MissingKeys,
+      })
+    }
+    return out, nil
   }
   if len(input.Customer) > 0 {
-    ids, err := authz.GetEngine(ctx).LookupResources(ctx,
+    result, err := authz.GetEngine(ctx).LookupResources(ctx,
       TypeBooking, authz.Permission(BookingWrite),
       TypeCustomer, authz.IDs(input.Customer),
     )
     if err != nil {
-      return nil, err
+      return BookingLookupResult{}, err
     }
 
-    return authz.FromIDs[Booking](ids), nil
+    out := BookingLookupResult{
+      Definite:    authz.FromIDs[Booking](result.Definite),
+      Conditional: make([]BookingConditionalLookupEntry, 0, len(result.Conditional)),
+    }
+    for _, c := range result.Conditional {
+      out.Conditional = append(out.Conditional, BookingConditionalLookupEntry{
+        ID:          Booking(c.ID),
+        MissingKeys: c.MissingKeys,
+      })
+    }
+    return out, nil
   }
   
-  return []Booking{}, nil
+  return BookingLookupResult{}, nil
 }
 const BookingHoursCheck PermissionBooking = "hours_check"
 
@@ -815,7 +845,7 @@ func (booking Booking) CheckHoursCheck(ctx context.Context, input CheckBookingHo
   return true, nil
 }
 
-func LookupHoursCheckBookingResources(ctx context.Context, input CheckBookingHoursCheckInputs) ([]Booking, error) {
+func LookupHoursCheckBookingResources(ctx context.Context, input CheckBookingHoursCheckInputs) (BookingLookupResult, error) {
 
   var caveatCtx map[string]any
   if c := input.Caveats.WithinHours; c != nil {
@@ -834,19 +864,29 @@ func LookupHoursCheckBookingResources(ctx context.Context, input CheckBookingHou
   }
 
   if len(input.User) > 0 {
-    ids, err := authz.GetEngine(ctx).LookupResourcesWithCaveat(ctx,
+    result, err := authz.GetEngine(ctx).LookupResourcesWithCaveat(ctx,
       TypeBooking, authz.Permission(BookingHoursCheck),
       TypeUser, authz.IDs(input.User),
       caveatCtx,
     )
     if err != nil {
-      return nil, err
+      return BookingLookupResult{}, err
     }
 
-    return authz.FromIDs[Booking](ids), nil
+    out := BookingLookupResult{
+      Definite:    authz.FromIDs[Booking](result.Definite),
+      Conditional: make([]BookingConditionalLookupEntry, 0, len(result.Conditional)),
+    }
+    for _, c := range result.Conditional {
+      out.Conditional = append(out.Conditional, BookingConditionalLookupEntry{
+        ID:          Booking(c.ID),
+        MissingKeys: c.MissingKeys,
+      })
+    }
+    return out, nil
   }
   
-  return []Booking{}, nil
+  return BookingLookupResult{}, nil
 }
 const BookingMultiTemporalCheck PermissionBooking = "multi_temporal_check"
 
@@ -917,7 +957,7 @@ func (booking Booking) CheckMultiTemporalCheck(ctx context.Context, input CheckB
   return true, nil
 }
 
-func LookupMultiTemporalCheckBookingResources(ctx context.Context, input CheckBookingMultiTemporalCheckInputs) ([]Booking, error) {
+func LookupMultiTemporalCheckBookingResources(ctx context.Context, input CheckBookingMultiTemporalCheckInputs) (BookingLookupResult, error) {
 
   var caveatCtx map[string]any
   if c := input.Caveats.WithinHours; c != nil {
@@ -950,31 +990,51 @@ func LookupMultiTemporalCheckBookingResources(ctx context.Context, input CheckBo
   }
 
   if len(input.User) > 0 {
-    ids, err := authz.GetEngine(ctx).LookupResourcesWithCaveat(ctx,
+    result, err := authz.GetEngine(ctx).LookupResourcesWithCaveat(ctx,
       TypeBooking, authz.Permission(BookingMultiTemporalCheck),
       TypeUser, authz.IDs(input.User),
       caveatCtx,
     )
     if err != nil {
-      return nil, err
+      return BookingLookupResult{}, err
     }
 
-    return authz.FromIDs[Booking](ids), nil
+    out := BookingLookupResult{
+      Definite:    authz.FromIDs[Booking](result.Definite),
+      Conditional: make([]BookingConditionalLookupEntry, 0, len(result.Conditional)),
+    }
+    for _, c := range result.Conditional {
+      out.Conditional = append(out.Conditional, BookingConditionalLookupEntry{
+        ID:          Booking(c.ID),
+        MissingKeys: c.MissingKeys,
+      })
+    }
+    return out, nil
   }
   if len(input.Customer) > 0 {
-    ids, err := authz.GetEngine(ctx).LookupResourcesWithCaveat(ctx,
+    result, err := authz.GetEngine(ctx).LookupResourcesWithCaveat(ctx,
       TypeBooking, authz.Permission(BookingMultiTemporalCheck),
       TypeCustomer, authz.IDs(input.Customer),
       caveatCtx,
     )
     if err != nil {
-      return nil, err
+      return BookingLookupResult{}, err
     }
 
-    return authz.FromIDs[Booking](ids), nil
+    out := BookingLookupResult{
+      Definite:    authz.FromIDs[Booking](result.Definite),
+      Conditional: make([]BookingConditionalLookupEntry, 0, len(result.Conditional)),
+    }
+    for _, c := range result.Conditional {
+      out.Conditional = append(out.Conditional, BookingConditionalLookupEntry{
+        ID:          Booking(c.ID),
+        MissingKeys: c.MissingKeys,
+      })
+    }
+    return out, nil
   }
   
-  return []Booking{}, nil
+  return BookingLookupResult{}, nil
 }
 const BookingSharedCavCheck PermissionBooking = "shared_cav_check"
 
@@ -1030,7 +1090,7 @@ func (booking Booking) CheckSharedCavCheck(ctx context.Context, input CheckBooki
   return true, nil
 }
 
-func LookupSharedCavCheckBookingResources(ctx context.Context, input CheckBookingSharedCavCheckInputs) ([]Booking, error) {
+func LookupSharedCavCheckBookingResources(ctx context.Context, input CheckBookingSharedCavCheckInputs) (BookingLookupResult, error) {
 
   var caveatCtx map[string]any
   if c := input.Caveats.WithinHours; c != nil {
@@ -1049,31 +1109,51 @@ func LookupSharedCavCheckBookingResources(ctx context.Context, input CheckBookin
   }
 
   if len(input.User) > 0 {
-    ids, err := authz.GetEngine(ctx).LookupResourcesWithCaveat(ctx,
+    result, err := authz.GetEngine(ctx).LookupResourcesWithCaveat(ctx,
       TypeBooking, authz.Permission(BookingSharedCavCheck),
       TypeUser, authz.IDs(input.User),
       caveatCtx,
     )
     if err != nil {
-      return nil, err
+      return BookingLookupResult{}, err
     }
 
-    return authz.FromIDs[Booking](ids), nil
+    out := BookingLookupResult{
+      Definite:    authz.FromIDs[Booking](result.Definite),
+      Conditional: make([]BookingConditionalLookupEntry, 0, len(result.Conditional)),
+    }
+    for _, c := range result.Conditional {
+      out.Conditional = append(out.Conditional, BookingConditionalLookupEntry{
+        ID:          Booking(c.ID),
+        MissingKeys: c.MissingKeys,
+      })
+    }
+    return out, nil
   }
   if len(input.Customer) > 0 {
-    ids, err := authz.GetEngine(ctx).LookupResourcesWithCaveat(ctx,
+    result, err := authz.GetEngine(ctx).LookupResourcesWithCaveat(ctx,
       TypeBooking, authz.Permission(BookingSharedCavCheck),
       TypeCustomer, authz.IDs(input.Customer),
       caveatCtx,
     )
     if err != nil {
-      return nil, err
+      return BookingLookupResult{}, err
     }
 
-    return authz.FromIDs[Booking](ids), nil
+    out := BookingLookupResult{
+      Definite:    authz.FromIDs[Booking](result.Definite),
+      Conditional: make([]BookingConditionalLookupEntry, 0, len(result.Conditional)),
+    }
+    for _, c := range result.Conditional {
+      out.Conditional = append(out.Conditional, BookingConditionalLookupEntry{
+        ID:          Booking(c.ID),
+        MissingKeys: c.MissingKeys,
+      })
+    }
+    return out, nil
   }
   
-  return []Booking{}, nil
+  return BookingLookupResult{}, nil
 }
 const BookingDupTypedCheck PermissionBooking = "dup_typed_check"
 
@@ -1134,7 +1214,7 @@ func (booking Booking) CheckDupTypedCheck(ctx context.Context, input CheckBookin
   return true, nil
 }
 
-func LookupDupTypedCheckBookingResources(ctx context.Context, input CheckBookingDupTypedCheckInputs) ([]Booking, error) {
+func LookupDupTypedCheckBookingResources(ctx context.Context, input CheckBookingDupTypedCheckInputs) (BookingLookupResult, error) {
 
   var caveatCtx map[string]any
   if c := input.Caveats.WithinHours; c != nil {
@@ -1167,24 +1247,34 @@ func LookupDupTypedCheckBookingResources(ctx context.Context, input CheckBooking
   }
 
   if len(input.User) > 0 {
-    ids, err := authz.GetEngine(ctx).LookupResourcesWithCaveat(ctx,
+    result, err := authz.GetEngine(ctx).LookupResourcesWithCaveat(ctx,
       TypeBooking, authz.Permission(BookingDupTypedCheck),
       TypeUser, authz.IDs(input.User),
       caveatCtx,
     )
     if err != nil {
-      return nil, err
+      return BookingLookupResult{}, err
     }
 
-    return authz.FromIDs[Booking](ids), nil
+    out := BookingLookupResult{
+      Definite:    authz.FromIDs[Booking](result.Definite),
+      Conditional: make([]BookingConditionalLookupEntry, 0, len(result.Conditional)),
+    }
+    for _, c := range result.Conditional {
+      out.Conditional = append(out.Conditional, BookingConditionalLookupEntry{
+        ID:          Booking(c.ID),
+        MissingKeys: c.MissingKeys,
+      })
+    }
+    return out, nil
   }
   
-  return []Booking{}, nil
+  return BookingLookupResult{}, nil
 }
 
-func (booking Booking) LookupWriteUserSubjects(ctx context.Context) ([]User, error) {
+func (booking Booking) LookupWriteUserSubjects(ctx context.Context) (UserLookupResult, error) {
 
-  ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+  result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeBooking,
       ID: authz.ID(booking),
@@ -1192,10 +1282,20 @@ func (booking Booking) LookupWriteUserSubjects(ctx context.Context) ([]User, err
     authz.Permission(BookingWrite), TypeUser,
   )
   if err != nil {
-    return nil, err
+    return UserLookupResult{}, err
   }
 
-  return authz.FromIDsExcludingWildcard[User](ids), nil
+  out := UserLookupResult{
+    Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
+    Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
+  }
+  for _, c := range result.Conditional {
+    out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
+      ID:          User(c.ID),
+      MissingKeys: c.MissingKeys,
+    })
+  }
+  return out, nil
 }
 
 func (booking Booking) LookupWriteUserWildcardSubjects(ctx context.Context) (bool, error) {
@@ -1207,9 +1307,9 @@ func (booking Booking) LookupWriteUserWildcardSubjects(ctx context.Context) (boo
     authz.Permission(BookingWrite), TypeUser,
   )
 }
-func (booking Booking) LookupWriteCustomerSubjects(ctx context.Context) ([]Customer, error) {
+func (booking Booking) LookupWriteCustomerSubjects(ctx context.Context) (CustomerLookupResult, error) {
 
-  ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+  result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeBooking,
       ID: authz.ID(booking),
@@ -1217,10 +1317,20 @@ func (booking Booking) LookupWriteCustomerSubjects(ctx context.Context) ([]Custo
     authz.Permission(BookingWrite), TypeCustomer,
   )
   if err != nil {
-    return nil, err
+    return CustomerLookupResult{}, err
   }
 
-  return authz.FromIDsExcludingWildcard[Customer](ids), nil
+  out := CustomerLookupResult{
+    Definite:    authz.FromIDsExcludingWildcard[Customer](result.Definite),
+    Conditional: make([]CustomerConditionalLookupEntry, 0, len(result.Conditional)),
+  }
+  for _, c := range result.Conditional {
+    out.Conditional = append(out.Conditional, CustomerConditionalLookupEntry{
+      ID:          Customer(c.ID),
+      MissingKeys: c.MissingKeys,
+    })
+  }
+  return out, nil
 }
 
 func (booking Booking) LookupWriteCustomerWildcardSubjects(ctx context.Context) (bool, error) {
@@ -1233,7 +1343,7 @@ func (booking Booking) LookupWriteCustomerWildcardSubjects(ctx context.Context) 
   )
 }
 
-func (booking Booking) LookupHoursCheckUserSubjects(ctx context.Context, caveats CheckBookingHoursCheckCaveats) ([]User, error) {
+func (booking Booking) LookupHoursCheckUserSubjects(ctx context.Context, caveats CheckBookingHoursCheckCaveats) (UserLookupResult, error) {
 
   var caveatCtx map[string]any
   if c := caveats.WithinHours; c != nil {
@@ -1251,7 +1361,7 @@ func (booking Booking) LookupHoursCheckUserSubjects(ctx context.Context, caveats
     }
   }
 
-  ids, err := authz.GetEngine(ctx).LookupSubjectsWithCaveat(ctx,
+  result, err := authz.GetEngine(ctx).LookupSubjectsWithCaveat(ctx,
     authz.Resource{
       Type: TypeBooking,
       ID: authz.ID(booking),
@@ -1260,10 +1370,20 @@ func (booking Booking) LookupHoursCheckUserSubjects(ctx context.Context, caveats
     caveatCtx,
   )
   if err != nil {
-    return nil, err
+    return UserLookupResult{}, err
   }
 
-  return authz.FromIDsExcludingWildcard[User](ids), nil
+  out := UserLookupResult{
+    Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
+    Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
+  }
+  for _, c := range result.Conditional {
+    out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
+      ID:          User(c.ID),
+      MissingKeys: c.MissingKeys,
+    })
+  }
+  return out, nil
 }
 
 func (booking Booking) LookupHoursCheckUserWildcardSubjects(ctx context.Context) (bool, error) {
@@ -1276,7 +1396,7 @@ func (booking Booking) LookupHoursCheckUserWildcardSubjects(ctx context.Context)
   )
 }
 
-func (booking Booking) LookupMultiTemporalCheckUserSubjects(ctx context.Context, caveats CheckBookingMultiTemporalCheckCaveats) ([]User, error) {
+func (booking Booking) LookupMultiTemporalCheckUserSubjects(ctx context.Context, caveats CheckBookingMultiTemporalCheckCaveats) (UserLookupResult, error) {
 
   var caveatCtx map[string]any
   if c := caveats.WithinHours; c != nil {
@@ -1308,7 +1428,7 @@ func (booking Booking) LookupMultiTemporalCheckUserSubjects(ctx context.Context,
     }
   }
 
-  ids, err := authz.GetEngine(ctx).LookupSubjectsWithCaveat(ctx,
+  result, err := authz.GetEngine(ctx).LookupSubjectsWithCaveat(ctx,
     authz.Resource{
       Type: TypeBooking,
       ID: authz.ID(booking),
@@ -1317,10 +1437,20 @@ func (booking Booking) LookupMultiTemporalCheckUserSubjects(ctx context.Context,
     caveatCtx,
   )
   if err != nil {
-    return nil, err
+    return UserLookupResult{}, err
   }
 
-  return authz.FromIDsExcludingWildcard[User](ids), nil
+  out := UserLookupResult{
+    Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
+    Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
+  }
+  for _, c := range result.Conditional {
+    out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
+      ID:          User(c.ID),
+      MissingKeys: c.MissingKeys,
+    })
+  }
+  return out, nil
 }
 
 func (booking Booking) LookupMultiTemporalCheckUserWildcardSubjects(ctx context.Context) (bool, error) {
@@ -1332,7 +1462,7 @@ func (booking Booking) LookupMultiTemporalCheckUserWildcardSubjects(ctx context.
     authz.Permission(BookingMultiTemporalCheck), TypeUser,
   )
 }
-func (booking Booking) LookupMultiTemporalCheckCustomerSubjects(ctx context.Context, caveats CheckBookingMultiTemporalCheckCaveats) ([]Customer, error) {
+func (booking Booking) LookupMultiTemporalCheckCustomerSubjects(ctx context.Context, caveats CheckBookingMultiTemporalCheckCaveats) (CustomerLookupResult, error) {
 
   var caveatCtx map[string]any
   if c := caveats.WithinHours; c != nil {
@@ -1364,7 +1494,7 @@ func (booking Booking) LookupMultiTemporalCheckCustomerSubjects(ctx context.Cont
     }
   }
 
-  ids, err := authz.GetEngine(ctx).LookupSubjectsWithCaveat(ctx,
+  result, err := authz.GetEngine(ctx).LookupSubjectsWithCaveat(ctx,
     authz.Resource{
       Type: TypeBooking,
       ID: authz.ID(booking),
@@ -1373,10 +1503,20 @@ func (booking Booking) LookupMultiTemporalCheckCustomerSubjects(ctx context.Cont
     caveatCtx,
   )
   if err != nil {
-    return nil, err
+    return CustomerLookupResult{}, err
   }
 
-  return authz.FromIDsExcludingWildcard[Customer](ids), nil
+  out := CustomerLookupResult{
+    Definite:    authz.FromIDsExcludingWildcard[Customer](result.Definite),
+    Conditional: make([]CustomerConditionalLookupEntry, 0, len(result.Conditional)),
+  }
+  for _, c := range result.Conditional {
+    out.Conditional = append(out.Conditional, CustomerConditionalLookupEntry{
+      ID:          Customer(c.ID),
+      MissingKeys: c.MissingKeys,
+    })
+  }
+  return out, nil
 }
 
 func (booking Booking) LookupMultiTemporalCheckCustomerWildcardSubjects(ctx context.Context) (bool, error) {
@@ -1389,7 +1529,7 @@ func (booking Booking) LookupMultiTemporalCheckCustomerWildcardSubjects(ctx cont
   )
 }
 
-func (booking Booking) LookupSharedCavCheckUserSubjects(ctx context.Context, caveats CheckBookingSharedCavCheckCaveats) ([]User, error) {
+func (booking Booking) LookupSharedCavCheckUserSubjects(ctx context.Context, caveats CheckBookingSharedCavCheckCaveats) (UserLookupResult, error) {
 
   var caveatCtx map[string]any
   if c := caveats.WithinHours; c != nil {
@@ -1407,7 +1547,7 @@ func (booking Booking) LookupSharedCavCheckUserSubjects(ctx context.Context, cav
     }
   }
 
-  ids, err := authz.GetEngine(ctx).LookupSubjectsWithCaveat(ctx,
+  result, err := authz.GetEngine(ctx).LookupSubjectsWithCaveat(ctx,
     authz.Resource{
       Type: TypeBooking,
       ID: authz.ID(booking),
@@ -1416,10 +1556,20 @@ func (booking Booking) LookupSharedCavCheckUserSubjects(ctx context.Context, cav
     caveatCtx,
   )
   if err != nil {
-    return nil, err
+    return UserLookupResult{}, err
   }
 
-  return authz.FromIDsExcludingWildcard[User](ids), nil
+  out := UserLookupResult{
+    Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
+    Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
+  }
+  for _, c := range result.Conditional {
+    out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
+      ID:          User(c.ID),
+      MissingKeys: c.MissingKeys,
+    })
+  }
+  return out, nil
 }
 
 func (booking Booking) LookupSharedCavCheckUserWildcardSubjects(ctx context.Context) (bool, error) {
@@ -1431,7 +1581,7 @@ func (booking Booking) LookupSharedCavCheckUserWildcardSubjects(ctx context.Cont
     authz.Permission(BookingSharedCavCheck), TypeUser,
   )
 }
-func (booking Booking) LookupSharedCavCheckCustomerSubjects(ctx context.Context, caveats CheckBookingSharedCavCheckCaveats) ([]Customer, error) {
+func (booking Booking) LookupSharedCavCheckCustomerSubjects(ctx context.Context, caveats CheckBookingSharedCavCheckCaveats) (CustomerLookupResult, error) {
 
   var caveatCtx map[string]any
   if c := caveats.WithinHours; c != nil {
@@ -1449,7 +1599,7 @@ func (booking Booking) LookupSharedCavCheckCustomerSubjects(ctx context.Context,
     }
   }
 
-  ids, err := authz.GetEngine(ctx).LookupSubjectsWithCaveat(ctx,
+  result, err := authz.GetEngine(ctx).LookupSubjectsWithCaveat(ctx,
     authz.Resource{
       Type: TypeBooking,
       ID: authz.ID(booking),
@@ -1458,10 +1608,20 @@ func (booking Booking) LookupSharedCavCheckCustomerSubjects(ctx context.Context,
     caveatCtx,
   )
   if err != nil {
-    return nil, err
+    return CustomerLookupResult{}, err
   }
 
-  return authz.FromIDsExcludingWildcard[Customer](ids), nil
+  out := CustomerLookupResult{
+    Definite:    authz.FromIDsExcludingWildcard[Customer](result.Definite),
+    Conditional: make([]CustomerConditionalLookupEntry, 0, len(result.Conditional)),
+  }
+  for _, c := range result.Conditional {
+    out.Conditional = append(out.Conditional, CustomerConditionalLookupEntry{
+      ID:          Customer(c.ID),
+      MissingKeys: c.MissingKeys,
+    })
+  }
+  return out, nil
 }
 
 func (booking Booking) LookupSharedCavCheckCustomerWildcardSubjects(ctx context.Context) (bool, error) {
@@ -1474,7 +1634,7 @@ func (booking Booking) LookupSharedCavCheckCustomerWildcardSubjects(ctx context.
   )
 }
 
-func (booking Booking) LookupDupTypedCheckUserSubjects(ctx context.Context, caveats CheckBookingDupTypedCheckCaveats) ([]User, error) {
+func (booking Booking) LookupDupTypedCheckUserSubjects(ctx context.Context, caveats CheckBookingDupTypedCheckCaveats) (UserLookupResult, error) {
 
   var caveatCtx map[string]any
   if c := caveats.WithinHours; c != nil {
@@ -1506,7 +1666,7 @@ func (booking Booking) LookupDupTypedCheckUserSubjects(ctx context.Context, cave
     }
   }
 
-  ids, err := authz.GetEngine(ctx).LookupSubjectsWithCaveat(ctx,
+  result, err := authz.GetEngine(ctx).LookupSubjectsWithCaveat(ctx,
     authz.Resource{
       Type: TypeBooking,
       ID: authz.ID(booking),
@@ -1515,10 +1675,20 @@ func (booking Booking) LookupDupTypedCheckUserSubjects(ctx context.Context, cave
     caveatCtx,
   )
   if err != nil {
-    return nil, err
+    return UserLookupResult{}, err
   }
 
-  return authz.FromIDsExcludingWildcard[User](ids), nil
+  out := UserLookupResult{
+    Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
+    Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
+  }
+  for _, c := range result.Conditional {
+    out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
+      ID:          User(c.ID),
+      MissingKeys: c.MissingKeys,
+    })
+  }
+  return out, nil
 }
 
 func (booking Booking) LookupDupTypedCheckUserWildcardSubjects(ctx context.Context) (bool, error) {

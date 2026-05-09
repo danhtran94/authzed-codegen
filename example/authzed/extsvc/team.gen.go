@@ -23,6 +23,16 @@ type TeamManagerObjects struct {
 }
 
 type Team authz.ID
+
+type TeamLookupResult struct {
+  Definite    []Team
+  Conditional []TeamConditionalLookupEntry
+}
+type TeamConditionalLookupEntry struct {
+  ID          Team
+  MissingKeys []string
+}
+
 func TeamStringer(id authz.StringConvertable) Team {
   return Team(id.String())
 }
@@ -182,26 +192,36 @@ func (team Team) CheckAdmin(ctx context.Context, input CheckTeamAdminInputs) (bo
   return true, nil
 }
 
-func LookupAdminTeamResources(ctx context.Context, input CheckTeamAdminInputs) ([]Team, error) {
+func LookupAdminTeamResources(ctx context.Context, input CheckTeamAdminInputs) (TeamLookupResult, error) {
 
   if len(input.User) > 0 {
-    ids, err := authz.GetEngine(ctx).LookupResources(ctx,
+    result, err := authz.GetEngine(ctx).LookupResources(ctx,
       TypeTeam, authz.Permission(TeamAdmin),
       TypeUser, authz.IDs(input.User),
     )
     if err != nil {
-      return nil, err
+      return TeamLookupResult{}, err
     }
 
-    return authz.FromIDs[Team](ids), nil
+    out := TeamLookupResult{
+      Definite:    authz.FromIDs[Team](result.Definite),
+      Conditional: make([]TeamConditionalLookupEntry, 0, len(result.Conditional)),
+    }
+    for _, c := range result.Conditional {
+      out.Conditional = append(out.Conditional, TeamConditionalLookupEntry{
+        ID:          Team(c.ID),
+        MissingKeys: c.MissingKeys,
+      })
+    }
+    return out, nil
   }
   
-  return []Team{}, nil
+  return TeamLookupResult{}, nil
 }
 
-func (team Team) LookupAdminUserSubjects(ctx context.Context) ([]User, error) {
+func (team Team) LookupAdminUserSubjects(ctx context.Context) (UserLookupResult, error) {
 
-  ids, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+  result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
     authz.Resource{
       Type: TypeTeam,
       ID: authz.ID(team),
@@ -209,10 +229,20 @@ func (team Team) LookupAdminUserSubjects(ctx context.Context) ([]User, error) {
     authz.Permission(TeamAdmin), TypeUser,
   )
   if err != nil {
-    return nil, err
+    return UserLookupResult{}, err
   }
 
-  return authz.FromIDsExcludingWildcard[User](ids), nil
+  out := UserLookupResult{
+    Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
+    Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
+  }
+  for _, c := range result.Conditional {
+    out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
+      ID:          User(c.ID),
+      MissingKeys: c.MissingKeys,
+    })
+  }
+  return out, nil
 }
 
 func (team Team) LookupAdminUserWildcardSubjects(ctx context.Context) (bool, error) {
