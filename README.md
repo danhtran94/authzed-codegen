@@ -63,6 +63,7 @@ a complete schema and its generated output.
 | Caveats (`with <caveat>`)              | ✓ — typed `<Pascal>Args` per caveat; nested `Caveats` sub-struct on `<Rel>Objects` and `Check<Perm>Inputs`; multi-caveat-per-permission supported |
 | Expiration (`with expiration`)         | ✓ — per-tuple TTL via `Expirations` sub-struct on `<Rel>Objects`; auto-switches to `OPERATION_TOUCH`; combines with caveats |
 | Sub-relation references (`foo#bar`)    | ✓ — typed userset write field (`<TypeName><PascalSubRel>`) on `<Rel>Objects`; userset Check input field; `SubRelation` on metadata struct |
+| `_this`, functioned tuple-to-userset   | ✗ rejected at adapt time (rare; revisit if a real schema needs them)                            |
 
 Parsing delegates to `github.com/authzed/spicedb/pkg/schemadsl/compiler` —
 any schema SpiceDB accepts will parse. The codegen layer is narrower;
@@ -356,6 +357,18 @@ go test ./pkg/authz/spicedb/... ./example/authzed/...
 ```
 
 Tests skip cleanly when Docker is unavailable.
+
+## Versioning
+
+Starting with **v1.10.0**, this project commits to [Semantic Versioning](https://semver.org/spec/v2.0.0.html):
+
+- **Major** (`v2.0.0`) — breaking changes to the `Engine` interface, runtime types in `pkg/authz/`, generated method signatures, or the codegen output structure.
+- **Minor** (`v1.11.0`+) — additive features: new generated methods, new runtime helpers, new schema constructs, new Engine methods.
+- **Patch** (`v1.10.1`) — bug fixes, doc corrections, codegen output stability fixes that don't change the typed surface.
+
+The **v1.0–v1.9 line** was active development. Several minor releases included breaking changes to the `Engine` interface and generated method signatures (notably v1.4 changed `ReadRelations` return type, v1.7 changed `Lookup*` return types). That pattern ends at v1.10 — going forward, breaking changes require a major bump to v2.0.
+
+A `<output-dir>/schema.gen.go` `SchemaText` constant pins the schema baseline of each binary release; pair with `VerifySchema(ctx)` at startup to catch deploy-time drift between the binary and the deployed SpiceDB schema. See `docs/spec-010-schema-drift-detection.md`.
 
 ## License
 

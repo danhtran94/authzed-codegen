@@ -4,6 +4,50 @@ All notable changes to this project are documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.10.0] - 2026-05-09
+
+**Stable milestone.** Same code as v1.9.0; this release marks the API stability commitment going forward. From v1.10 onward, breaking changes to the `Engine` interface, runtime types in `pkg/authz/`, or generated method signatures require a major bump (v2.0). Active-development minor bumps with breaking changes (the v1.0–v1.9 pattern, e.g. v1.4 changed `ReadRelations` return type, v1.7 changed `Lookup*` return types) end here.
+
+### Added
+
+- **Versioning policy** documented in README. Semver-real from v1.10 onward: major (v2.0) = breaking, minor (v1.11+) = additive, patch (v1.10.1) = fixes.
+
+### Changed
+
+- **ADR-001 rejection list** refreshed. Constructs lifted across v1.0–v1.9 (intersection/exclusion, caveats, expiration, sub-relation references, caveat definitions) annotated with their shipping job + SPEC. Only `_this` and functioned tuple-to-userset (`with self`) remain rejected — both rare in production schemas.
+- **README Schema Support table** gains a row noting the still-rejected constructs explicitly.
+
+### What's stable as of v1.10
+
+End-to-end SpiceDB feature coverage:
+- ✅ Union, arrow, intersection, exclusion permission operators
+- ✅ Wildcard relations
+- ✅ Caveats (write-time pre-context + check-time context, multi-caveat-per-permission, partial binding via per-field pointers)
+- ✅ Expiration traits with auto-TOUCH semantics
+- ✅ Sub-relation references (userset writes, reads, and check inputs)
+- ✅ Read with metadata (caveat name + context + expiry per tuple)
+- ✅ Lookup with conditional surfacing (Definite + Conditional partition with MissingKeys)
+- ✅ Conditional permission rich signal on Check (typed error + backward-compat `Is`)
+- ✅ Per-call consistency mode override via context
+- ✅ Schema drift detection at startup via `VerifySchema(ctx)`
+
+### Verified
+
+- All 5 e2e packages pass.
+- Codegen idempotent (zero diff vs v1.9.0).
+- `go build ./...` + `go vet ./...` clean.
+
+### Deferred (carried forward)
+
+Tracked openly in CHANGELOG entries from earlier releases:
+- `_this` and `with self` schema constructs — rejected at adapt time; revisit if a real schema needs them.
+- Iterator API for `ReadRelations` — `[]RelationTuple` materializes; SpiceDB stream is wasted.
+- Token-based consistency modes (`AtLeastAsFresh`, `AtExactSnapshot` with caller-supplied tokens).
+- Conditional wildcards on `HasPublicSubject` / `Lookup<Perm><Type>WildcardSubjects` — extremely rare in practice.
+- Auto-retry helper for `*ConditionalPermissionError` — caller's concern.
+- Watch API codegen — change feeds for cache invalidation.
+- Lookup pagination/cursor — for large result sets.
+
 ## [1.9.0] - 2026-05-09
 
 Adds runtime detection of mismatch between the codegen baseline schema and the schema currently deployed in SpiceDB. Closes a class of silent production bugs: binary built against schema v1 calling SpiceDB running schema v2 → mis-permission everything with no error path. The codegen now emits a top-level `<output-dir>/schema.gen.go` containing the source `.zed` bytes verbatim plus `VerifySchema(ctx)` helper that calls SpiceDB's `DiffSchema` RPC, server-side normalises, and partitions the typed diffs into severity buckets. Caller hard-fails at startup on `IsBreaking()`.

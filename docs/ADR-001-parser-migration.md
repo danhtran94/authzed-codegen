@@ -51,14 +51,18 @@ Keep the existing parser for the supported subset. Add a validation layer that d
 
 The SpiceDB `schemadsl/compiler` package becomes the sole parser backend for `authzed-codegen`. The CLI calls `compiler.Compile(InputSchema, RequirePrefixedObjectType())` — the strict-prefix mode matches the existing hand-written parser's invariant that every definition is `prefix/name`. Compiled output is wrapped in a `generator.DefinitionView` adapter so the existing templates keep their field-access shape (`ObjectType.Prefix`, `ObjectType.Name`, `Relations`, `Permissions`); proto coupling is confined to one Go file.
 
-**Out of scope** (rejected at adapt time with schema-relative errors):
-- Intersection (`&`) and exclusion (`-`) rewrite operators
-- Caveats (`with <caveat>`) and expiration traits (`with expiration`)
-- Sub-relation references (`bookingsvc/employee#manage`)
-- Legacy `_this` and functioned tuple-to-userset (`with self`)
-- Caveat definitions (`CompiledSchema.CaveatDefinitions` is ignored; only `ObjectDefinitions` is consumed)
+**Out of scope at the time of this ADR** (rejected at adapt time with schema-relative errors):
+- ~~Intersection (`&`) and exclusion (`-`) rewrite operators~~ — lifted in AUZ-004 (pre-session) per `docs/spec-001-intersection-exclusion-codegen.md`
+- ~~Caveats (`with <caveat>`)~~ — lifted in AUZ-006 / AUZ-007 (v1.1.0) per `docs/spec-002-caveat-codegen.md` + `docs/spec-003-write-time-caveat-codegen.md`
+- ~~Expiration traits (`with expiration`)~~ — lifted in AUZ-009 (v1.3.0) per `docs/spec-004-expiration-codegen.md`
+- ~~Sub-relation references (`bookingsvc/employee#manage`)~~ — lifted in AUZ-011 (v1.5.0) per `docs/spec-006-sub-relation-references.md`
+- ~~Caveat definitions~~ — codegen now consumes `CompiledSchema.CaveatDefinitions` (v1.1.0+)
 
-A future job may lift any of these by extending the adapter and adding the corresponding codegen path.
+**Still out of scope** as of v2.0.0:
+- Legacy `_this` (explicit reflexive permission references) — uncommon in production schemas
+- Functioned tuple-to-userset (`with self`) — specialized; schema patterns using inline-anonymous usersets are rare
+
+A future job may lift either by extending the adapter and adding the corresponding codegen path.
 
 ## Consequences
 
