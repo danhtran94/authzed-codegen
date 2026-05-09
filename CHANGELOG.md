@@ -4,6 +4,60 @@ All notable changes to this project are documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.11.0] - 2026-05-09
+
+Accepts SpiceDB's functioned tuple-to-userset syntax — schemas using `.any(view)` or `.all(view)` arrow function syntax now compile. `.any()` is semantically equivalent to a regular arrow `parent->view`; `.all()` is the genuinely-new strict-intersection semantic ("subject must reach the inner permission via EVERY parent row, not just any one") used in dual-control / multi-approver / cross-region patterns.
+
+The codegen treats functioned arrows identically to regular arrows — function value (`FUNCTION_ANY` / `FUNCTION_ALL`) is server-side semantic enforced by SpiceDB at Check time. Generated `Check<Perm>` / `Lookup<Perm>` method signatures are byte-identical between regular and functioned arrows; the difference is invisible to caller-facing API.
+
+### Added
+
+- **Adapter** in `internal/generator/adapter.go` — `lowerSetOperationChild` handles `FunctionedTupleToUserset` parallel to the existing `TupleToUserset` branch. Maps `tupleset.relation` → `LeftRel` and `computed_userset.relation` → `RightPerm`.
+- **Schema fixtures** on `extsvc/folder` exercising both functions plus combinations:
+  - `relation any_parent: extsvc/folder` + `permission any_via = any_parent.any(browse)` (regular form)
+  - `relation all_parent: extsvc/folder` + `permission all_via = all_parent.all(browse)` (strict-intersection)
+  - `relation gated_parent: extsvc/folder with extsvc/tenant_match` + `permission gated_all_via = gated_parent.all(browse)` (`.all()` reaching a caveated LeftRel — verifies caveat collection extends to functioned arrows)
+  - `relation direct_member: extsvc/user` + `permission mixed_all = direct_member + all_parent.all(browse)` (mixed expression — regular identifier combined with functioned arrow)
+- **2 new adapter unit tests** verifying `.any()` and `.all()` map to `PermExprArrow` correctly (function value not stored).
+- **8 new e2e tests** covering: `.any()` single-parent grant; `.all()` two-parent both grant; `.all()` two-parent only one grants → deny (proves strict intersection); `.all()` zero parents → vacuous deny; `.all()` + matching caveat → grant; `.all()` + caveat false → deny; mixed expression direct path; mixed expression `.all()` path.
+
+### Changed
+
+- **README Schema Support table** gains a row for functioned arrows (`.any()` / `.all()`) marked ✓.
+
+### Caller pattern (no API change vs regular arrows)
+
+```go
+// Regular arrow:
+folder.CheckView(ctx, input)         // permission view = parent->browse
+
+// Functioned `.all()` arrow — same caller surface:
+folder.CheckAllVia(ctx, input)       // permission all_via = all_parent.all(browse)
+// SpiceDB enforces: subject must reach `browse` via EVERY all_parent row
+```
+
+### Use cases for `.all()`
+
+- **Dual-control / four-eyes** — `permission deploy = approver_pool.all(approved)` (every approver must sign off)
+- **Multi-tenant compliance** — `permission process = jurisdiction.all(compliant)` (every regulator must clear)
+- **Cross-region replication** — `permission read = region.all(authorized_reader)` (every region must authorize)
+- **Multi-team ownership** — `permission merge = owning_team.all(reviewer)` (every team must have a reviewer approve)
+
+The alternative — N Check calls intersected client-side — has measurable cost (N round-trips), no atomic evaluation, and shifts the semantic into application code. `.all()` does it in one Check against a single SpiceDB snapshot.
+
+### Verified
+
+- All 5 e2e packages pass.
+- Codegen idempotent at the new baseline.
+- `go build ./...` + `go vet ./...` clean.
+- Per-namespace `.gen.go` files unchanged for definitions without functioned-TTU usage.
+
+### Deferred (carried forward)
+
+- `_self` schema construct (`use self`) — reflexive permissions; less common pattern. Future SPEC if real schema needs it.
+- `_nil` graceful skip — internal compiler artifact; users don't write it. Defensive polish if it ever appears.
+- `_this` — fully deprecated upstream; permanent rejection.
+
 ## [1.10.0] - 2026-05-09
 
 **Stable milestone.** Same code as v1.9.0; this release marks the API stability commitment going forward. From v1.10 onward, breaking changes to the `Engine` interface, runtime types in `pkg/authz/`, or generated method signatures require a major bump (v2.0). Active-development minor bumps with breaking changes (the v1.0–v1.9 pattern, e.g. v1.4 changed `ReadRelations` return type, v1.7 changed `Lookup*` return types) end here.

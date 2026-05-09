@@ -612,7 +612,20 @@ func lowerSetOperationChild(permName string, c *core.SetOperation_Child) (Permis
 		}
 		return PermissionExpr{}, fmt.Errorf("permission %q: userset rewrite child produced no expressions", permName)
 	case c.GetFunctionedTupleToUserset() != nil:
-		return PermissionExpr{}, fmt.Errorf("permission %q: functioned tuple-to-userset (with self/expiration) is not supported", permName)
+		// Functioned arrows (`parent.any(view)` / `parent.all(view)`) are
+		// the post-v1.40 wire format for arrows with explicit aggregation
+		// functions. The function value (FUNCTION_ANY = union, FUNCTION_ALL
+		// = strict-intersection across parent rows) is server-side semantic
+		// — SpiceDB enforces it at Check time. The codegen treats them
+		// identically to regular TupleToUserset; downstream consumers
+		// (perm tree resolver, walkPermCaveats, walkPermUsersets, template
+		// arrow walker) key on PermExprArrow + LeftRel/RightPerm.
+		fttu := c.GetFunctionedTupleToUserset()
+		return PermissionExpr{
+			Kind:      PermExprArrow,
+			LeftRel:   fttu.GetTupleset().GetRelation(),
+			RightPerm: fttu.GetComputedUserset().GetRelation(),
+		}, nil
 	default:
 		return PermissionExpr{}, fmt.Errorf("permission %q: unknown rewrite child type", permName)
 	}

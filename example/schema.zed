@@ -357,6 +357,33 @@ definition extsvc/folder {
 	// userset reference; SpiceDB filters expired references at Check time.
 	relation temp_collab: extsvc/team#admin with expiration
 	permission temp_collab_view = temp_collab
+
+	// AUZ-016 — Functioned TTU `.any()`. Equivalent semantic to the
+	// regular arrow `parent->browse`; exercises the explicit syntax form.
+	relation any_parent: extsvc/folder
+	permission any_via = any_parent.any(browse)
+
+	// AUZ-016 — Functioned TTU `.all()`. Strict-intersection: grants
+	// only when EVERY tuple in `all_parent` independently grants `browse`.
+	// Tested by writing two parents, omitting one's grant, and asserting
+	// deny.
+	relation all_parent: extsvc/folder
+	permission all_via = all_parent.all(browse)
+
+	// AUZ-016 combination — `.all()` reaching a CAVEATED LeftRel.
+	// Verifies caveat collection (walkPermCaveats) extends to functioned
+	// arrows. CheckGatedAllViaInputs gains the Caveats sub-struct
+	// reaching `tenant_match` (same as the existing `via_gated_root`
+	// arrow + caveat fixture proves for regular arrows).
+	relation gated_parent: extsvc/folder with extsvc/tenant_match
+	permission gated_all_via = gated_parent.all(browse)
+
+	// AUZ-016 combination — mixed expression: regular identifier +
+	// functioned arrow in one permission. Verifies both branches
+	// contribute to Check inputs and route through the appropriate
+	// engine method.
+	relation direct_member: extsvc/user
+	permission mixed_all = direct_member + all_parent.all(browse)
 }
 
 definition extsvc/document {

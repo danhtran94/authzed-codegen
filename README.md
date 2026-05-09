@@ -63,7 +63,8 @@ a complete schema and its generated output.
 | Caveats (`with <caveat>`)              | ✓ — typed `<Pascal>Args` per caveat; nested `Caveats` sub-struct on `<Rel>Objects` and `Check<Perm>Inputs`; multi-caveat-per-permission supported |
 | Expiration (`with expiration`)         | ✓ — per-tuple TTL via `Expirations` sub-struct on `<Rel>Objects`; auto-switches to `OPERATION_TOUCH`; combines with caveats |
 | Sub-relation references (`foo#bar`)    | ✓ — typed userset write field (`<TypeName><PascalSubRel>`) on `<Rel>Objects`; userset Check input field; `SubRelation` on metadata struct |
-| `_this`, functioned tuple-to-userset   | ✗ rejected at adapt time (rare; revisit if a real schema needs them)                            |
+| Functioned arrows (`.any()` / `.all()`) | ✓ — server-side function semantic; `.all()` enforces strict-intersection across parent rows (dual-control / multi-approver patterns) |
+| `_this`, `_self`, `with self`           | ✗ rejected at adapt time (rare; revisit if a real schema needs them)                            |
 
 Parsing delegates to `github.com/authzed/spicedb/pkg/schemadsl/compiler` —
 any schema SpiceDB accepts will parse. The codegen layer is narrower;

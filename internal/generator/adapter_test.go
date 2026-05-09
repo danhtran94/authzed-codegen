@@ -247,3 +247,45 @@ func TestFlattenAllowedTypes_UsersetWithDistinctCaveats_Disambiguates(t *testing
 	assert.Equal(t, "TeamAdminCavB", got[1].IDFieldName)
 	assert.Equal(t, "TeamAdminCavB", got[1].CaveatFieldName)
 }
+
+// AUZ-016 — Functioned tuple-to-userset (`parent.any(view)` / `parent.all(view)`).
+
+func TestLowerSetOperationChild_FunctionedTUSeAny_MapsToPermExprArrow(t *testing.T) {
+	// `permission p = parent.any(view)` — codegen treats it identically
+	// to a regular TupleToUserset arrow (PermExprArrow with LeftRel +
+	// RightPerm). Function value (FUNCTION_ANY) is read but not stored.
+	child := &core.SetOperation_Child{
+		ChildType: &core.SetOperation_Child_FunctionedTupleToUserset{
+			FunctionedTupleToUserset: &core.FunctionedTupleToUserset{
+				Function:        core.FunctionedTupleToUserset_FUNCTION_ANY,
+				Tupleset:        &core.FunctionedTupleToUserset_Tupleset{Relation: "parent"},
+				ComputedUserset: &core.ComputedUserset{Relation: "view"},
+			},
+		},
+	}
+	got, err := lowerSetOperationChild("p", child)
+	require.NoError(t, err)
+	assert.Equal(t, PermExprArrow, got.Kind)
+	assert.Equal(t, "parent", got.LeftRel)
+	assert.Equal(t, "view", got.RightPerm)
+}
+
+func TestLowerSetOperationChild_FunctionedTUSeAll_MapsToPermExprArrow(t *testing.T) {
+	// `permission p = parent.all(view)` — strict-intersection semantic
+	// is server-side at Check time; codegen output is identical to .any()
+	// at the PermissionExpr level.
+	child := &core.SetOperation_Child{
+		ChildType: &core.SetOperation_Child_FunctionedTupleToUserset{
+			FunctionedTupleToUserset: &core.FunctionedTupleToUserset{
+				Function:        core.FunctionedTupleToUserset_FUNCTION_ALL,
+				Tupleset:        &core.FunctionedTupleToUserset_Tupleset{Relation: "parent"},
+				ComputedUserset: &core.ComputedUserset{Relation: "view"},
+			},
+		},
+	}
+	got, err := lowerSetOperationChild("p", child)
+	require.NoError(t, err)
+	assert.Equal(t, PermExprArrow, got.Kind)
+	assert.Equal(t, "parent", got.LeftRel)
+	assert.Equal(t, "view", got.RightPerm)
+}

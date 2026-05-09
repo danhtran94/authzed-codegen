@@ -201,6 +201,26 @@ type FolderTempCollabObjects struct {
 type FolderTempCollabExpirations struct {
   TeamAdmin *time.Time
 }
+const FolderAnyParent RelationFolder = "any_parent"
+type FolderAnyParentObjects struct {
+  Folder []Folder
+}
+const FolderAllParent RelationFolder = "all_parent"
+type FolderAllParentObjects struct {
+  Folder []Folder
+}
+const FolderGatedParent RelationFolder = "gated_parent"
+type FolderGatedParentObjects struct {
+  Folder []Folder
+  Caveats FolderGatedParentCaveats
+}
+type FolderGatedParentCaveats struct {
+  Folder *TenantMatchArgs
+}
+const FolderDirectMember RelationFolder = "direct_member"
+type FolderDirectMemberObjects struct {
+  User []User
+}
 type HasTokenArgs struct {
   Token []byte
 }
@@ -758,6 +778,61 @@ func (folder Folder) CreateTempCollabRelations(ctx context.Context, objects Fold
   }
   return nil
 }
+func (folder Folder) CreateAnyParentRelations(ctx context.Context, objects FolderAnyParentObjects) error {
+  if len(objects.Folder) > 0 {
+    err := authz.GetEngine(ctx).CreateRelations(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Relation(FolderAnyParent), TypeFolder, authz.IDs(objects.Folder))
+    if err != nil {
+      return err
+    }
+  }
+  return nil
+}
+func (folder Folder) CreateAllParentRelations(ctx context.Context, objects FolderAllParentObjects) error {
+  if len(objects.Folder) > 0 {
+    err := authz.GetEngine(ctx).CreateRelations(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Relation(FolderAllParent), TypeFolder, authz.IDs(objects.Folder))
+    if err != nil {
+      return err
+    }
+  }
+  return nil
+}
+func (folder Folder) CreateGatedParentRelations(ctx context.Context, objects FolderGatedParentObjects) error {
+  if len(objects.Folder) > 0 {
+    var caveatCtx map[string]any
+    if c := objects.Caveats.Folder; c != nil {
+      caveatCtx = map[string]any{}
+      if c.Tenant != nil {
+        caveatCtx["tenant"] = *c.Tenant
+      }
+    }
+    err := authz.GetEngine(ctx).CreateRelationsWithCaveat(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Relation(FolderGatedParent), TypeFolder, authz.IDs(objects.Folder), "extsvc/tenant_match", caveatCtx)
+    if err != nil {
+      return err
+    }
+  }
+  return nil
+}
+func (folder Folder) CreateDirectMemberRelations(ctx context.Context, objects FolderDirectMemberObjects) error {
+  if len(objects.User) > 0 {
+    err := authz.GetEngine(ctx).CreateRelations(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Relation(FolderDirectMember), TypeUser, authz.IDs(objects.User))
+    if err != nil {
+      return err
+    }
+  }
+  return nil
+}
 
 func (folder Folder) DeleteViewerRelations(ctx context.Context, objects FolderViewerObjects) error {
   if len(objects.User) > 0 {
@@ -1110,6 +1185,58 @@ func (folder Folder) DeleteTempCollabRelations(ctx context.Context, objects Fold
       Type: TypeFolder,
       ID: authz.ID(folder),
     }, authz.Relation(FolderTempCollab), TypeTeam, authz.IDs(objects.TeamAdmin))
+    if err != nil {
+      return err
+    }
+  }
+  return nil
+}
+
+func (folder Folder) DeleteAnyParentRelations(ctx context.Context, objects FolderAnyParentObjects) error {
+  if len(objects.Folder) > 0 {
+    err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Relation(FolderAnyParent), TypeFolder, authz.IDs(objects.Folder))
+    if err != nil {
+      return err
+    }
+  }
+  return nil
+}
+
+func (folder Folder) DeleteAllParentRelations(ctx context.Context, objects FolderAllParentObjects) error {
+  if len(objects.Folder) > 0 {
+    err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Relation(FolderAllParent), TypeFolder, authz.IDs(objects.Folder))
+    if err != nil {
+      return err
+    }
+  }
+  return nil
+}
+
+func (folder Folder) DeleteGatedParentRelations(ctx context.Context, objects FolderGatedParentObjects) error {
+  if len(objects.Folder) > 0 {
+    err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Relation(FolderGatedParent), TypeFolder, authz.IDs(objects.Folder))
+    if err != nil {
+      return err
+    }
+  }
+  return nil
+}
+
+func (folder Folder) DeleteDirectMemberRelations(ctx context.Context, objects FolderDirectMemberObjects) error {
+  if len(objects.User) > 0 {
+    err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Relation(FolderDirectMember), TypeUser, authz.IDs(objects.User))
     if err != nil {
       return err
     }
@@ -2076,6 +2203,142 @@ func (folder Folder) ReadTempCollabTeamRelations(ctx context.Context) ([]FolderT
     }
     rels = append(rels, FolderTempCollabTeamRelation{
       ID:            Team(t.ID),
+      SubRelation:   t.SubRelation,
+      CaveatName:    t.CaveatName,
+      CaveatContext: t.CaveatContext,
+      ExpiresAt:     t.ExpiresAt,
+    })
+  }
+  return rels, nil
+}
+
+type FolderAnyParentFolderRelation struct {
+  ID            Folder
+  SubRelation   string
+  CaveatName    string
+  CaveatContext map[string]any
+  ExpiresAt     *time.Time
+}
+func (r FolderAnyParentFolderRelation) RelationID() Folder { return r.ID }
+
+func (folder Folder) ReadAnyParentFolderRelations(ctx context.Context) ([]FolderAnyParentFolderRelation, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+    Type: TypeFolder,
+    ID: authz.ID(folder),
+  }, authz.Relation(FolderAnyParent), TypeFolder)
+  if err != nil {
+    return nil, err
+  }
+
+  rels := make([]FolderAnyParentFolderRelation, 0, len(tuples))
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      continue
+    }
+    rels = append(rels, FolderAnyParentFolderRelation{
+      ID:            Folder(t.ID),
+      SubRelation:   t.SubRelation,
+      CaveatName:    t.CaveatName,
+      CaveatContext: t.CaveatContext,
+      ExpiresAt:     t.ExpiresAt,
+    })
+  }
+  return rels, nil
+}
+
+type FolderAllParentFolderRelation struct {
+  ID            Folder
+  SubRelation   string
+  CaveatName    string
+  CaveatContext map[string]any
+  ExpiresAt     *time.Time
+}
+func (r FolderAllParentFolderRelation) RelationID() Folder { return r.ID }
+
+func (folder Folder) ReadAllParentFolderRelations(ctx context.Context) ([]FolderAllParentFolderRelation, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+    Type: TypeFolder,
+    ID: authz.ID(folder),
+  }, authz.Relation(FolderAllParent), TypeFolder)
+  if err != nil {
+    return nil, err
+  }
+
+  rels := make([]FolderAllParentFolderRelation, 0, len(tuples))
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      continue
+    }
+    rels = append(rels, FolderAllParentFolderRelation{
+      ID:            Folder(t.ID),
+      SubRelation:   t.SubRelation,
+      CaveatName:    t.CaveatName,
+      CaveatContext: t.CaveatContext,
+      ExpiresAt:     t.ExpiresAt,
+    })
+  }
+  return rels, nil
+}
+
+type FolderGatedParentFolderRelation struct {
+  ID            Folder
+  SubRelation   string
+  CaveatName    string
+  CaveatContext map[string]any
+  ExpiresAt     *time.Time
+}
+func (r FolderGatedParentFolderRelation) RelationID() Folder { return r.ID }
+
+func (folder Folder) ReadGatedParentFolderRelations(ctx context.Context) ([]FolderGatedParentFolderRelation, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+    Type: TypeFolder,
+    ID: authz.ID(folder),
+  }, authz.Relation(FolderGatedParent), TypeFolder)
+  if err != nil {
+    return nil, err
+  }
+
+  rels := make([]FolderGatedParentFolderRelation, 0, len(tuples))
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      continue
+    }
+    rels = append(rels, FolderGatedParentFolderRelation{
+      ID:            Folder(t.ID),
+      SubRelation:   t.SubRelation,
+      CaveatName:    t.CaveatName,
+      CaveatContext: t.CaveatContext,
+      ExpiresAt:     t.ExpiresAt,
+    })
+  }
+  return rels, nil
+}
+
+type FolderDirectMemberUserRelation struct {
+  ID            User
+  SubRelation   string
+  CaveatName    string
+  CaveatContext map[string]any
+  ExpiresAt     *time.Time
+}
+func (r FolderDirectMemberUserRelation) RelationID() User { return r.ID }
+
+func (folder Folder) ReadDirectMemberUserRelations(ctx context.Context) ([]FolderDirectMemberUserRelation, error) {
+  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+    Type: TypeFolder,
+    ID: authz.ID(folder),
+  }, authz.Relation(FolderDirectMember), TypeUser)
+  if err != nil {
+    return nil, err
+  }
+
+  rels := make([]FolderDirectMemberUserRelation, 0, len(tuples))
+  for _, t := range tuples {
+    if t.ID == authz.WildcardID {
+      continue
+    }
+    rels = append(rels, FolderDirectMemberUserRelation{
+      ID:            User(t.ID),
       SubRelation:   t.SubRelation,
       CaveatName:    t.CaveatName,
       CaveatContext: t.CaveatContext,
@@ -3756,6 +4019,479 @@ func LookupTempCollabViewFolderResources(ctx context.Context, input CheckFolderT
   
   return FolderLookupResult{}, nil
 }
+const FolderAnyVia PermissionFolder = "any_via"
+
+type CheckFolderAnyViaInputs struct {
+  User []User
+  Group []Group
+  Role []Role
+}
+
+func (folder Folder) CheckAnyVia(ctx context.Context, input CheckFolderAnyViaInputs) (bool, error) {
+  if len(input.User) == 0 && len(input.Group) == 0 && len(input.Role) == 0 && true {
+    return false, authz.ErrNoInput
+  }
+
+  if len(input.User) > 0 {
+    err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Permission(FolderAnyVia), TypeUser, authz.IDs(input.User))
+    if err != nil {
+      return false, err
+    }
+  }
+  if len(input.Group) > 0 {
+    err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Permission(FolderAnyVia), TypeGroup, authz.IDs(input.Group))
+    if err != nil {
+      return false, err
+    }
+  }
+  if len(input.Role) > 0 {
+    err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Permission(FolderAnyVia), TypeRole, authz.IDs(input.Role))
+    if err != nil {
+      return false, err
+    }
+  }
+  
+  return true, nil
+}
+
+func LookupAnyViaFolderResources(ctx context.Context, input CheckFolderAnyViaInputs) (FolderLookupResult, error) {
+
+  if len(input.User) > 0 {
+    result, err := authz.GetEngine(ctx).LookupResources(ctx,
+      TypeFolder, authz.Permission(FolderAnyVia),
+      TypeUser, authz.IDs(input.User),
+    )
+    if err != nil {
+      return FolderLookupResult{}, err
+    }
+
+    out := FolderLookupResult{
+      Definite:    authz.FromIDs[Folder](result.Definite),
+      Conditional: make([]FolderConditionalLookupEntry, 0, len(result.Conditional)),
+    }
+    for _, c := range result.Conditional {
+      out.Conditional = append(out.Conditional, FolderConditionalLookupEntry{
+        ID:          Folder(c.ID),
+        MissingKeys: c.MissingKeys,
+      })
+    }
+    return out, nil
+  }
+  if len(input.Group) > 0 {
+    result, err := authz.GetEngine(ctx).LookupResources(ctx,
+      TypeFolder, authz.Permission(FolderAnyVia),
+      TypeGroup, authz.IDs(input.Group),
+    )
+    if err != nil {
+      return FolderLookupResult{}, err
+    }
+
+    out := FolderLookupResult{
+      Definite:    authz.FromIDs[Folder](result.Definite),
+      Conditional: make([]FolderConditionalLookupEntry, 0, len(result.Conditional)),
+    }
+    for _, c := range result.Conditional {
+      out.Conditional = append(out.Conditional, FolderConditionalLookupEntry{
+        ID:          Folder(c.ID),
+        MissingKeys: c.MissingKeys,
+      })
+    }
+    return out, nil
+  }
+  if len(input.Role) > 0 {
+    result, err := authz.GetEngine(ctx).LookupResources(ctx,
+      TypeFolder, authz.Permission(FolderAnyVia),
+      TypeRole, authz.IDs(input.Role),
+    )
+    if err != nil {
+      return FolderLookupResult{}, err
+    }
+
+    out := FolderLookupResult{
+      Definite:    authz.FromIDs[Folder](result.Definite),
+      Conditional: make([]FolderConditionalLookupEntry, 0, len(result.Conditional)),
+    }
+    for _, c := range result.Conditional {
+      out.Conditional = append(out.Conditional, FolderConditionalLookupEntry{
+        ID:          Folder(c.ID),
+        MissingKeys: c.MissingKeys,
+      })
+    }
+    return out, nil
+  }
+  
+  return FolderLookupResult{}, nil
+}
+const FolderAllVia PermissionFolder = "all_via"
+
+type CheckFolderAllViaInputs struct {
+  User []User
+  Group []Group
+  Role []Role
+}
+
+func (folder Folder) CheckAllVia(ctx context.Context, input CheckFolderAllViaInputs) (bool, error) {
+  if len(input.User) == 0 && len(input.Group) == 0 && len(input.Role) == 0 && true {
+    return false, authz.ErrNoInput
+  }
+
+  if len(input.User) > 0 {
+    err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Permission(FolderAllVia), TypeUser, authz.IDs(input.User))
+    if err != nil {
+      return false, err
+    }
+  }
+  if len(input.Group) > 0 {
+    err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Permission(FolderAllVia), TypeGroup, authz.IDs(input.Group))
+    if err != nil {
+      return false, err
+    }
+  }
+  if len(input.Role) > 0 {
+    err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Permission(FolderAllVia), TypeRole, authz.IDs(input.Role))
+    if err != nil {
+      return false, err
+    }
+  }
+  
+  return true, nil
+}
+
+func LookupAllViaFolderResources(ctx context.Context, input CheckFolderAllViaInputs) (FolderLookupResult, error) {
+
+  if len(input.User) > 0 {
+    result, err := authz.GetEngine(ctx).LookupResources(ctx,
+      TypeFolder, authz.Permission(FolderAllVia),
+      TypeUser, authz.IDs(input.User),
+    )
+    if err != nil {
+      return FolderLookupResult{}, err
+    }
+
+    out := FolderLookupResult{
+      Definite:    authz.FromIDs[Folder](result.Definite),
+      Conditional: make([]FolderConditionalLookupEntry, 0, len(result.Conditional)),
+    }
+    for _, c := range result.Conditional {
+      out.Conditional = append(out.Conditional, FolderConditionalLookupEntry{
+        ID:          Folder(c.ID),
+        MissingKeys: c.MissingKeys,
+      })
+    }
+    return out, nil
+  }
+  if len(input.Group) > 0 {
+    result, err := authz.GetEngine(ctx).LookupResources(ctx,
+      TypeFolder, authz.Permission(FolderAllVia),
+      TypeGroup, authz.IDs(input.Group),
+    )
+    if err != nil {
+      return FolderLookupResult{}, err
+    }
+
+    out := FolderLookupResult{
+      Definite:    authz.FromIDs[Folder](result.Definite),
+      Conditional: make([]FolderConditionalLookupEntry, 0, len(result.Conditional)),
+    }
+    for _, c := range result.Conditional {
+      out.Conditional = append(out.Conditional, FolderConditionalLookupEntry{
+        ID:          Folder(c.ID),
+        MissingKeys: c.MissingKeys,
+      })
+    }
+    return out, nil
+  }
+  if len(input.Role) > 0 {
+    result, err := authz.GetEngine(ctx).LookupResources(ctx,
+      TypeFolder, authz.Permission(FolderAllVia),
+      TypeRole, authz.IDs(input.Role),
+    )
+    if err != nil {
+      return FolderLookupResult{}, err
+    }
+
+    out := FolderLookupResult{
+      Definite:    authz.FromIDs[Folder](result.Definite),
+      Conditional: make([]FolderConditionalLookupEntry, 0, len(result.Conditional)),
+    }
+    for _, c := range result.Conditional {
+      out.Conditional = append(out.Conditional, FolderConditionalLookupEntry{
+        ID:          Folder(c.ID),
+        MissingKeys: c.MissingKeys,
+      })
+    }
+    return out, nil
+  }
+  
+  return FolderLookupResult{}, nil
+}
+const FolderGatedAllVia PermissionFolder = "gated_all_via"
+
+type CheckFolderGatedAllViaInputs struct {
+  User []User
+  Group []Group
+  Role []Role
+  Caveats CheckFolderGatedAllViaCaveats
+}
+type CheckFolderGatedAllViaCaveats struct {
+  TenantMatch *TenantMatchArgs
+}
+
+func (folder Folder) CheckGatedAllVia(ctx context.Context, input CheckFolderGatedAllViaInputs) (bool, error) {
+  if len(input.User) == 0 && len(input.Group) == 0 && len(input.Role) == 0 && true {
+    return false, authz.ErrNoInput
+  }
+
+  var caveatCtx map[string]any
+  if c := input.Caveats.TenantMatch; c != nil {
+    caveatCtx = map[string]any{}
+
+    if c.Tenant != nil {
+      caveatCtx["tenant"] = *c.Tenant
+    }
+  }
+
+  if len(input.User) > 0 {
+    err := authz.GetEngine(ctx).CheckPermissionWithCaveat(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Permission(FolderGatedAllVia), TypeUser, authz.IDs(input.User), caveatCtx)
+    if err != nil {
+      return false, err
+    }
+  }
+  if len(input.Group) > 0 {
+    err := authz.GetEngine(ctx).CheckPermissionWithCaveat(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Permission(FolderGatedAllVia), TypeGroup, authz.IDs(input.Group), caveatCtx)
+    if err != nil {
+      return false, err
+    }
+  }
+  if len(input.Role) > 0 {
+    err := authz.GetEngine(ctx).CheckPermissionWithCaveat(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Permission(FolderGatedAllVia), TypeRole, authz.IDs(input.Role), caveatCtx)
+    if err != nil {
+      return false, err
+    }
+  }
+  
+  return true, nil
+}
+
+func LookupGatedAllViaFolderResources(ctx context.Context, input CheckFolderGatedAllViaInputs) (FolderLookupResult, error) {
+
+  var caveatCtx map[string]any
+  if c := input.Caveats.TenantMatch; c != nil {
+    caveatCtx = map[string]any{}
+
+    if c.Tenant != nil {
+      caveatCtx["tenant"] = *c.Tenant
+    }
+  }
+
+  if len(input.User) > 0 {
+    result, err := authz.GetEngine(ctx).LookupResourcesWithCaveat(ctx,
+      TypeFolder, authz.Permission(FolderGatedAllVia),
+      TypeUser, authz.IDs(input.User),
+      caveatCtx,
+    )
+    if err != nil {
+      return FolderLookupResult{}, err
+    }
+
+    out := FolderLookupResult{
+      Definite:    authz.FromIDs[Folder](result.Definite),
+      Conditional: make([]FolderConditionalLookupEntry, 0, len(result.Conditional)),
+    }
+    for _, c := range result.Conditional {
+      out.Conditional = append(out.Conditional, FolderConditionalLookupEntry{
+        ID:          Folder(c.ID),
+        MissingKeys: c.MissingKeys,
+      })
+    }
+    return out, nil
+  }
+  if len(input.Group) > 0 {
+    result, err := authz.GetEngine(ctx).LookupResourcesWithCaveat(ctx,
+      TypeFolder, authz.Permission(FolderGatedAllVia),
+      TypeGroup, authz.IDs(input.Group),
+      caveatCtx,
+    )
+    if err != nil {
+      return FolderLookupResult{}, err
+    }
+
+    out := FolderLookupResult{
+      Definite:    authz.FromIDs[Folder](result.Definite),
+      Conditional: make([]FolderConditionalLookupEntry, 0, len(result.Conditional)),
+    }
+    for _, c := range result.Conditional {
+      out.Conditional = append(out.Conditional, FolderConditionalLookupEntry{
+        ID:          Folder(c.ID),
+        MissingKeys: c.MissingKeys,
+      })
+    }
+    return out, nil
+  }
+  if len(input.Role) > 0 {
+    result, err := authz.GetEngine(ctx).LookupResourcesWithCaveat(ctx,
+      TypeFolder, authz.Permission(FolderGatedAllVia),
+      TypeRole, authz.IDs(input.Role),
+      caveatCtx,
+    )
+    if err != nil {
+      return FolderLookupResult{}, err
+    }
+
+    out := FolderLookupResult{
+      Definite:    authz.FromIDs[Folder](result.Definite),
+      Conditional: make([]FolderConditionalLookupEntry, 0, len(result.Conditional)),
+    }
+    for _, c := range result.Conditional {
+      out.Conditional = append(out.Conditional, FolderConditionalLookupEntry{
+        ID:          Folder(c.ID),
+        MissingKeys: c.MissingKeys,
+      })
+    }
+    return out, nil
+  }
+  
+  return FolderLookupResult{}, nil
+}
+const FolderMixedAll PermissionFolder = "mixed_all"
+
+type CheckFolderMixedAllInputs struct {
+  User []User
+  Group []Group
+  Role []Role
+}
+
+func (folder Folder) CheckMixedAll(ctx context.Context, input CheckFolderMixedAllInputs) (bool, error) {
+  if len(input.User) == 0 && len(input.Group) == 0 && len(input.Role) == 0 && true {
+    return false, authz.ErrNoInput
+  }
+
+  if len(input.User) > 0 {
+    err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Permission(FolderMixedAll), TypeUser, authz.IDs(input.User))
+    if err != nil {
+      return false, err
+    }
+  }
+  if len(input.Group) > 0 {
+    err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Permission(FolderMixedAll), TypeGroup, authz.IDs(input.Group))
+    if err != nil {
+      return false, err
+    }
+  }
+  if len(input.Role) > 0 {
+    err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    }, authz.Permission(FolderMixedAll), TypeRole, authz.IDs(input.Role))
+    if err != nil {
+      return false, err
+    }
+  }
+  
+  return true, nil
+}
+
+func LookupMixedAllFolderResources(ctx context.Context, input CheckFolderMixedAllInputs) (FolderLookupResult, error) {
+
+  if len(input.User) > 0 {
+    result, err := authz.GetEngine(ctx).LookupResources(ctx,
+      TypeFolder, authz.Permission(FolderMixedAll),
+      TypeUser, authz.IDs(input.User),
+    )
+    if err != nil {
+      return FolderLookupResult{}, err
+    }
+
+    out := FolderLookupResult{
+      Definite:    authz.FromIDs[Folder](result.Definite),
+      Conditional: make([]FolderConditionalLookupEntry, 0, len(result.Conditional)),
+    }
+    for _, c := range result.Conditional {
+      out.Conditional = append(out.Conditional, FolderConditionalLookupEntry{
+        ID:          Folder(c.ID),
+        MissingKeys: c.MissingKeys,
+      })
+    }
+    return out, nil
+  }
+  if len(input.Group) > 0 {
+    result, err := authz.GetEngine(ctx).LookupResources(ctx,
+      TypeFolder, authz.Permission(FolderMixedAll),
+      TypeGroup, authz.IDs(input.Group),
+    )
+    if err != nil {
+      return FolderLookupResult{}, err
+    }
+
+    out := FolderLookupResult{
+      Definite:    authz.FromIDs[Folder](result.Definite),
+      Conditional: make([]FolderConditionalLookupEntry, 0, len(result.Conditional)),
+    }
+    for _, c := range result.Conditional {
+      out.Conditional = append(out.Conditional, FolderConditionalLookupEntry{
+        ID:          Folder(c.ID),
+        MissingKeys: c.MissingKeys,
+      })
+    }
+    return out, nil
+  }
+  if len(input.Role) > 0 {
+    result, err := authz.GetEngine(ctx).LookupResources(ctx,
+      TypeFolder, authz.Permission(FolderMixedAll),
+      TypeRole, authz.IDs(input.Role),
+    )
+    if err != nil {
+      return FolderLookupResult{}, err
+    }
+
+    out := FolderLookupResult{
+      Definite:    authz.FromIDs[Folder](result.Definite),
+      Conditional: make([]FolderConditionalLookupEntry, 0, len(result.Conditional)),
+    }
+    for _, c := range result.Conditional {
+      out.Conditional = append(out.Conditional, FolderConditionalLookupEntry{
+        ID:          Folder(c.ID),
+        MissingKeys: c.MissingKeys,
+      })
+    }
+    return out, nil
+  }
+  
+  return FolderLookupResult{}, nil
+}
 
 func (folder Folder) LookupBrowseUserSubjects(ctx context.Context) (UserLookupResult, error) {
 
@@ -4849,3 +5585,457 @@ func (folder Folder) LookupMixedBrowseUserWildcardSubjects(ctx context.Context) 
 }
 
 
+
+func (folder Folder) LookupAnyViaUserSubjects(ctx context.Context) (UserLookupResult, error) {
+
+  result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+    authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    },
+    authz.Permission(FolderAnyVia), TypeUser,
+  )
+  if err != nil {
+    return UserLookupResult{}, err
+  }
+
+  out := UserLookupResult{
+    Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
+    Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
+  }
+  for _, c := range result.Conditional {
+    out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
+      ID:          User(c.ID),
+      MissingKeys: c.MissingKeys,
+    })
+  }
+  return out, nil
+}
+
+func (folder Folder) LookupAnyViaUserWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    },
+    authz.Permission(FolderAnyVia), TypeUser,
+  )
+}
+func (folder Folder) LookupAnyViaGroupSubjects(ctx context.Context) (GroupLookupResult, error) {
+
+  result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+    authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    },
+    authz.Permission(FolderAnyVia), TypeGroup,
+  )
+  if err != nil {
+    return GroupLookupResult{}, err
+  }
+
+  out := GroupLookupResult{
+    Definite:    authz.FromIDsExcludingWildcard[Group](result.Definite),
+    Conditional: make([]GroupConditionalLookupEntry, 0, len(result.Conditional)),
+  }
+  for _, c := range result.Conditional {
+    out.Conditional = append(out.Conditional, GroupConditionalLookupEntry{
+      ID:          Group(c.ID),
+      MissingKeys: c.MissingKeys,
+    })
+  }
+  return out, nil
+}
+
+func (folder Folder) LookupAnyViaGroupWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    },
+    authz.Permission(FolderAnyVia), TypeGroup,
+  )
+}
+func (folder Folder) LookupAnyViaRoleSubjects(ctx context.Context) (RoleLookupResult, error) {
+
+  result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+    authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    },
+    authz.Permission(FolderAnyVia), TypeRole,
+  )
+  if err != nil {
+    return RoleLookupResult{}, err
+  }
+
+  out := RoleLookupResult{
+    Definite:    authz.FromIDsExcludingWildcard[Role](result.Definite),
+    Conditional: make([]RoleConditionalLookupEntry, 0, len(result.Conditional)),
+  }
+  for _, c := range result.Conditional {
+    out.Conditional = append(out.Conditional, RoleConditionalLookupEntry{
+      ID:          Role(c.ID),
+      MissingKeys: c.MissingKeys,
+    })
+  }
+  return out, nil
+}
+
+func (folder Folder) LookupAnyViaRoleWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    },
+    authz.Permission(FolderAnyVia), TypeRole,
+  )
+}
+
+func (folder Folder) LookupAllViaUserSubjects(ctx context.Context) (UserLookupResult, error) {
+
+  result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+    authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    },
+    authz.Permission(FolderAllVia), TypeUser,
+  )
+  if err != nil {
+    return UserLookupResult{}, err
+  }
+
+  out := UserLookupResult{
+    Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
+    Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
+  }
+  for _, c := range result.Conditional {
+    out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
+      ID:          User(c.ID),
+      MissingKeys: c.MissingKeys,
+    })
+  }
+  return out, nil
+}
+
+func (folder Folder) LookupAllViaUserWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    },
+    authz.Permission(FolderAllVia), TypeUser,
+  )
+}
+func (folder Folder) LookupAllViaGroupSubjects(ctx context.Context) (GroupLookupResult, error) {
+
+  result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+    authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    },
+    authz.Permission(FolderAllVia), TypeGroup,
+  )
+  if err != nil {
+    return GroupLookupResult{}, err
+  }
+
+  out := GroupLookupResult{
+    Definite:    authz.FromIDsExcludingWildcard[Group](result.Definite),
+    Conditional: make([]GroupConditionalLookupEntry, 0, len(result.Conditional)),
+  }
+  for _, c := range result.Conditional {
+    out.Conditional = append(out.Conditional, GroupConditionalLookupEntry{
+      ID:          Group(c.ID),
+      MissingKeys: c.MissingKeys,
+    })
+  }
+  return out, nil
+}
+
+func (folder Folder) LookupAllViaGroupWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    },
+    authz.Permission(FolderAllVia), TypeGroup,
+  )
+}
+func (folder Folder) LookupAllViaRoleSubjects(ctx context.Context) (RoleLookupResult, error) {
+
+  result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+    authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    },
+    authz.Permission(FolderAllVia), TypeRole,
+  )
+  if err != nil {
+    return RoleLookupResult{}, err
+  }
+
+  out := RoleLookupResult{
+    Definite:    authz.FromIDsExcludingWildcard[Role](result.Definite),
+    Conditional: make([]RoleConditionalLookupEntry, 0, len(result.Conditional)),
+  }
+  for _, c := range result.Conditional {
+    out.Conditional = append(out.Conditional, RoleConditionalLookupEntry{
+      ID:          Role(c.ID),
+      MissingKeys: c.MissingKeys,
+    })
+  }
+  return out, nil
+}
+
+func (folder Folder) LookupAllViaRoleWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    },
+    authz.Permission(FolderAllVia), TypeRole,
+  )
+}
+
+func (folder Folder) LookupGatedAllViaUserSubjects(ctx context.Context, caveats CheckFolderGatedAllViaCaveats) (UserLookupResult, error) {
+
+  var caveatCtx map[string]any
+  if c := caveats.TenantMatch; c != nil {
+    caveatCtx = map[string]any{}
+
+    if c.Tenant != nil {
+      caveatCtx["tenant"] = *c.Tenant
+    }
+  }
+
+  result, err := authz.GetEngine(ctx).LookupSubjectsWithCaveat(ctx,
+    authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    },
+    authz.Permission(FolderGatedAllVia), TypeUser,
+    caveatCtx,
+  )
+  if err != nil {
+    return UserLookupResult{}, err
+  }
+
+  out := UserLookupResult{
+    Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
+    Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
+  }
+  for _, c := range result.Conditional {
+    out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
+      ID:          User(c.ID),
+      MissingKeys: c.MissingKeys,
+    })
+  }
+  return out, nil
+}
+
+func (folder Folder) LookupGatedAllViaUserWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    },
+    authz.Permission(FolderGatedAllVia), TypeUser,
+  )
+}
+func (folder Folder) LookupGatedAllViaGroupSubjects(ctx context.Context, caveats CheckFolderGatedAllViaCaveats) (GroupLookupResult, error) {
+
+  var caveatCtx map[string]any
+  if c := caveats.TenantMatch; c != nil {
+    caveatCtx = map[string]any{}
+
+    if c.Tenant != nil {
+      caveatCtx["tenant"] = *c.Tenant
+    }
+  }
+
+  result, err := authz.GetEngine(ctx).LookupSubjectsWithCaveat(ctx,
+    authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    },
+    authz.Permission(FolderGatedAllVia), TypeGroup,
+    caveatCtx,
+  )
+  if err != nil {
+    return GroupLookupResult{}, err
+  }
+
+  out := GroupLookupResult{
+    Definite:    authz.FromIDsExcludingWildcard[Group](result.Definite),
+    Conditional: make([]GroupConditionalLookupEntry, 0, len(result.Conditional)),
+  }
+  for _, c := range result.Conditional {
+    out.Conditional = append(out.Conditional, GroupConditionalLookupEntry{
+      ID:          Group(c.ID),
+      MissingKeys: c.MissingKeys,
+    })
+  }
+  return out, nil
+}
+
+func (folder Folder) LookupGatedAllViaGroupWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    },
+    authz.Permission(FolderGatedAllVia), TypeGroup,
+  )
+}
+func (folder Folder) LookupGatedAllViaRoleSubjects(ctx context.Context, caveats CheckFolderGatedAllViaCaveats) (RoleLookupResult, error) {
+
+  var caveatCtx map[string]any
+  if c := caveats.TenantMatch; c != nil {
+    caveatCtx = map[string]any{}
+
+    if c.Tenant != nil {
+      caveatCtx["tenant"] = *c.Tenant
+    }
+  }
+
+  result, err := authz.GetEngine(ctx).LookupSubjectsWithCaveat(ctx,
+    authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    },
+    authz.Permission(FolderGatedAllVia), TypeRole,
+    caveatCtx,
+  )
+  if err != nil {
+    return RoleLookupResult{}, err
+  }
+
+  out := RoleLookupResult{
+    Definite:    authz.FromIDsExcludingWildcard[Role](result.Definite),
+    Conditional: make([]RoleConditionalLookupEntry, 0, len(result.Conditional)),
+  }
+  for _, c := range result.Conditional {
+    out.Conditional = append(out.Conditional, RoleConditionalLookupEntry{
+      ID:          Role(c.ID),
+      MissingKeys: c.MissingKeys,
+    })
+  }
+  return out, nil
+}
+
+func (folder Folder) LookupGatedAllViaRoleWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    },
+    authz.Permission(FolderGatedAllVia), TypeRole,
+  )
+}
+
+func (folder Folder) LookupMixedAllUserSubjects(ctx context.Context) (UserLookupResult, error) {
+
+  result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+    authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    },
+    authz.Permission(FolderMixedAll), TypeUser,
+  )
+  if err != nil {
+    return UserLookupResult{}, err
+  }
+
+  out := UserLookupResult{
+    Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
+    Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
+  }
+  for _, c := range result.Conditional {
+    out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
+      ID:          User(c.ID),
+      MissingKeys: c.MissingKeys,
+    })
+  }
+  return out, nil
+}
+
+func (folder Folder) LookupMixedAllUserWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    },
+    authz.Permission(FolderMixedAll), TypeUser,
+  )
+}
+func (folder Folder) LookupMixedAllGroupSubjects(ctx context.Context) (GroupLookupResult, error) {
+
+  result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+    authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    },
+    authz.Permission(FolderMixedAll), TypeGroup,
+  )
+  if err != nil {
+    return GroupLookupResult{}, err
+  }
+
+  out := GroupLookupResult{
+    Definite:    authz.FromIDsExcludingWildcard[Group](result.Definite),
+    Conditional: make([]GroupConditionalLookupEntry, 0, len(result.Conditional)),
+  }
+  for _, c := range result.Conditional {
+    out.Conditional = append(out.Conditional, GroupConditionalLookupEntry{
+      ID:          Group(c.ID),
+      MissingKeys: c.MissingKeys,
+    })
+  }
+  return out, nil
+}
+
+func (folder Folder) LookupMixedAllGroupWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    },
+    authz.Permission(FolderMixedAll), TypeGroup,
+  )
+}
+func (folder Folder) LookupMixedAllRoleSubjects(ctx context.Context) (RoleLookupResult, error) {
+
+  result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+    authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    },
+    authz.Permission(FolderMixedAll), TypeRole,
+  )
+  if err != nil {
+    return RoleLookupResult{}, err
+  }
+
+  out := RoleLookupResult{
+    Definite:    authz.FromIDsExcludingWildcard[Role](result.Definite),
+    Conditional: make([]RoleConditionalLookupEntry, 0, len(result.Conditional)),
+  }
+  for _, c := range result.Conditional {
+    out.Conditional = append(out.Conditional, RoleConditionalLookupEntry{
+      ID:          Role(c.ID),
+      MissingKeys: c.MissingKeys,
+    })
+  }
+  return out, nil
+}
+
+func (folder Folder) LookupMixedAllRoleWildcardSubjects(ctx context.Context) (bool, error) {
+  return authz.GetEngine(ctx).HasPublicSubject(ctx,
+    authz.Resource{
+      Type: TypeFolder,
+      ID: authz.ID(folder),
+    },
+    authz.Permission(FolderMixedAll), TypeRole,
+  )
+}

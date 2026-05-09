@@ -2267,3 +2267,216 @@ func TestDocument_InheritedCollab_UnrelatedUserDenied(t *testing.T) {
 	assert.ErrorIs(t, err, authz.ErrPermissionDenied,
 		"user outside the userset's expansion is denied through the arrow chain")
 }
+
+// AUZ-016 — Functioned tuple-to-userset (`.any()` / `.all()`).
+//
+// Schema:
+//   relation any_parent: extsvc/folder
+//   permission any_via = any_parent.any(browse)
+//   relation all_parent: extsvc/folder
+//   permission all_via = all_parent.all(browse)
+//   relation gated_parent: extsvc/folder with extsvc/tenant_match
+//   permission gated_all_via = gated_parent.all(browse)
+//   relation direct_member: extsvc/user
+//   permission mixed_all = direct_member + all_parent.all(browse)
+//
+// `.any()` is semantically equivalent to a regular arrow — verified for
+// regression. `.all()` enforces strict-intersection: subject must reach
+// `browse` via EVERY parent row. Combinations: caveated LeftRel,
+// mixed-expression with regular identifier.
+
+func TestFolder_AnyVia_SingleParentGrantsBrowse_Granted(t *testing.T) {
+	ctx := context.Background()
+
+	parent := extsvc.Folder("ftu-any-parent")
+	folder := extsvc.Folder("ftu-any")
+	user := extsvc.User("u-ftu-any")
+
+	// Grant browse on the parent via viewer relation.
+	require.NoError(t, parent.CreateViewerRelations(ctx, extsvc.FolderViewerObjects{
+		User: []extsvc.User{user},
+	}))
+	// Link folder → parent via any_parent.
+	require.NoError(t, folder.CreateAnyParentRelations(ctx, extsvc.FolderAnyParentObjects{
+		Folder: []extsvc.Folder{parent},
+	}))
+
+	ok, err := folder.CheckAnyVia(ctx, extsvc.CheckFolderAnyViaInputs{
+		User: []extsvc.User{user},
+	})
+	require.NoError(t, err)
+	assert.True(t, ok, ".any() on a parent that grants browse → granted (regular-arrow equivalent)")
+}
+
+func TestFolder_AllVia_TwoParentsBothGrant_Granted(t *testing.T) {
+	ctx := context.Background()
+
+	parent1 := extsvc.Folder("ftu-all-p1")
+	parent2 := extsvc.Folder("ftu-all-p2")
+	folder := extsvc.Folder("ftu-all-both")
+	user := extsvc.User("u-ftu-all-both")
+
+	// Both parents grant browse to user.
+	require.NoError(t, parent1.CreateViewerRelations(ctx, extsvc.FolderViewerObjects{
+		User: []extsvc.User{user},
+	}))
+	require.NoError(t, parent2.CreateViewerRelations(ctx, extsvc.FolderViewerObjects{
+		User: []extsvc.User{user},
+	}))
+	// Link folder → both parents.
+	require.NoError(t, folder.CreateAllParentRelations(ctx, extsvc.FolderAllParentObjects{
+		Folder: []extsvc.Folder{parent1, parent2},
+	}))
+
+	ok, err := folder.CheckAllVia(ctx, extsvc.CheckFolderAllViaInputs{
+		User: []extsvc.User{user},
+	})
+	require.NoError(t, err)
+	assert.True(t, ok, ".all() with both parents granting browse → granted (strict intersection holds)")
+}
+
+func TestFolder_AllVia_TwoParentsOnlyOneGrants_Denied(t *testing.T) {
+	ctx := context.Background()
+
+	parent1 := extsvc.Folder("ftu-all-onep1")
+	parent2 := extsvc.Folder("ftu-all-onep2")
+	folder := extsvc.Folder("ftu-all-one")
+	user := extsvc.User("u-ftu-all-one")
+
+	// Only parent1 grants browse; parent2 has no viewer for this user.
+	require.NoError(t, parent1.CreateViewerRelations(ctx, extsvc.FolderViewerObjects{
+		User: []extsvc.User{user},
+	}))
+	require.NoError(t, folder.CreateAllParentRelations(ctx, extsvc.FolderAllParentObjects{
+		Folder: []extsvc.Folder{parent1, parent2},
+	}))
+
+	_, err := folder.CheckAllVia(ctx, extsvc.CheckFolderAllViaInputs{
+		User: []extsvc.User{user},
+	})
+	assert.ErrorIs(t, err, authz.ErrPermissionDenied,
+		".all() with one parent missing the grant → denied (proves strict intersection vs union)")
+}
+
+func TestFolder_AllVia_ZeroParents_Denied(t *testing.T) {
+	ctx := context.Background()
+
+	folder := extsvc.Folder("ftu-all-empty")
+	user := extsvc.User("u-ftu-all-empty")
+
+	// No all_parent tuples written for this folder.
+	_, err := folder.CheckAllVia(ctx, extsvc.CheckFolderAllViaInputs{
+		User: []extsvc.User{user},
+	})
+	assert.ErrorIs(t, err, authz.ErrPermissionDenied,
+		".all() with zero parents → denied (vacuous case; no parents to traverse)")
+}
+
+func TestFolder_GatedAllVia_Combination_CaveatPlusAll_Granted(t *testing.T) {
+	ctx := context.Background()
+
+	parent1 := extsvc.Folder("ftu-gated-p1")
+	parent2 := extsvc.Folder("ftu-gated-p2")
+	folder := extsvc.Folder("ftu-gated-ok")
+	user := extsvc.User("u-ftu-gated-ok")
+
+	// Both parents grant browse to user.
+	require.NoError(t, parent1.CreateViewerRelations(ctx, extsvc.FolderViewerObjects{
+		User: []extsvc.User{user},
+	}))
+	require.NoError(t, parent2.CreateViewerRelations(ctx, extsvc.FolderViewerObjects{
+		User: []extsvc.User{user},
+	}))
+	// Link folder → both parents via the CAVEATED gated_parent relation.
+	// Pre-bind tenant=acme at write time on each row.
+	require.NoError(t, folder.CreateGatedParentRelations(ctx, extsvc.FolderGatedParentObjects{
+		Folder: []extsvc.Folder{parent1, parent2},
+		Caveats: extsvc.FolderGatedParentCaveats{
+			Folder: &extsvc.TenantMatchArgs{Tenant: new("acme")},
+		},
+	}))
+
+	// Caveat reachable through the arrow → CheckGatedAllViaInputs gains
+	// the Caveats sub-struct. Per AUZ-007 SPEC-003 walkPermCaveats handling,
+	// caveats on the LeftRel of an arrow are collected; this test verifies
+	// the same collection path runs through FunctionedTupleToUserset.
+	ok, err := folder.CheckGatedAllVia(ctx, extsvc.CheckFolderGatedAllViaInputs{
+		User: []extsvc.User{user},
+	})
+	require.NoError(t, err)
+	assert.True(t, ok, ".all() + matching caveat + every parent grants → granted")
+}
+
+func TestFolder_GatedAllVia_Combination_WrongCaveat_Denied(t *testing.T) {
+	ctx := context.Background()
+
+	parent1 := extsvc.Folder("ftu-gated-no-p1")
+	folder := extsvc.Folder("ftu-gated-no")
+	user := extsvc.User("u-ftu-gated-no")
+
+	require.NoError(t, parent1.CreateViewerRelations(ctx, extsvc.FolderViewerObjects{
+		User: []extsvc.User{user},
+	}))
+	// Defer the caveat at write time.
+	require.NoError(t, folder.CreateGatedParentRelations(ctx, extsvc.FolderGatedParentObjects{
+		Folder: []extsvc.Folder{parent1},
+	}))
+
+	// Wrong tenant supplied at check → CEL eval false → denied,
+	// regardless of the .all() semantic.
+	_, err := folder.CheckGatedAllVia(ctx, extsvc.CheckFolderGatedAllViaInputs{
+		User: []extsvc.User{user},
+		Caveats: extsvc.CheckFolderGatedAllViaCaveats{
+			TenantMatch: &extsvc.TenantMatchArgs{Tenant: new("not-acme")},
+		},
+	})
+	assert.ErrorIs(t, err, authz.ErrPermissionDenied,
+		".all() reaching a caveat that evaluates false → denied (caveat + .all() compose)")
+}
+
+func TestFolder_MixedAll_Combination_DirectPathGrants(t *testing.T) {
+	ctx := context.Background()
+
+	folder := extsvc.Folder("ftu-mixed-direct")
+	user := extsvc.User("u-ftu-mixed-direct")
+
+	// Grant via direct_member only — no all_parent rows.
+	require.NoError(t, folder.CreateDirectMemberRelations(ctx, extsvc.FolderDirectMemberObjects{
+		User: []extsvc.User{user},
+	}))
+
+	// Permission expression: direct_member + all_parent.all(browse)
+	// Direct path satisfies → granted, even though .all() side has zero parents.
+	ok, err := folder.CheckMixedAll(ctx, extsvc.CheckFolderMixedAllInputs{
+		User: []extsvc.User{user},
+	})
+	require.NoError(t, err)
+	assert.True(t, ok, "mixed expression: direct path grants regardless of .all() side")
+}
+
+func TestFolder_MixedAll_Combination_AllPathGrants(t *testing.T) {
+	ctx := context.Background()
+
+	parent1 := extsvc.Folder("ftu-mixed-all-p1")
+	parent2 := extsvc.Folder("ftu-mixed-all-p2")
+	folder := extsvc.Folder("ftu-mixed-all")
+	user := extsvc.User("u-ftu-mixed-all")
+
+	// User is NOT a direct_member of the folder; only reachable via
+	// the .all() arrow side.
+	require.NoError(t, parent1.CreateViewerRelations(ctx, extsvc.FolderViewerObjects{
+		User: []extsvc.User{user},
+	}))
+	require.NoError(t, parent2.CreateViewerRelations(ctx, extsvc.FolderViewerObjects{
+		User: []extsvc.User{user},
+	}))
+	require.NoError(t, folder.CreateAllParentRelations(ctx, extsvc.FolderAllParentObjects{
+		Folder: []extsvc.Folder{parent1, parent2},
+	}))
+
+	ok, err := folder.CheckMixedAll(ctx, extsvc.CheckFolderMixedAllInputs{
+		User: []extsvc.User{user},
+	})
+	require.NoError(t, err)
+	assert.True(t, ok, "mixed expression: .all() side grants when every parent contributes browse, even with no direct_member")
+}
