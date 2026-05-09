@@ -66,7 +66,15 @@ func (e *Engine) SetSnapshotToken(token string) {
 	e.setToken(token)
 }
 
-func (e *Engine) getConsistencySnapshot() *v1.Consistency {
+func (e *Engine) getConsistencySnapshot(ctx context.Context) *v1.Consistency {
+	switch authz.GetConsistency(ctx) {
+	case authz.ConsistencyFullyConsistent:
+		e.debugLog("Using full consistency (ctx override)")
+		return &v1.Consistency{
+			Requirement: &v1.Consistency_FullyConsistent{FullyConsistent: true},
+		}
+	}
+
 	now := time.Now().UnixNano()
 	if now-e.setTokenTime > e.durationExpire.Nanoseconds() {
 		e.debugLog("Using default consistency")
@@ -315,7 +323,7 @@ func (e *Engine) DeleteRelations(ctx context.Context, from authz.Resource, relat
 
 func (e *Engine) CheckPermissionWithCaveat(ctx context.Context, dest authz.Resource, has authz.Permission, subject authz.Type, audIDs []authz.ID, caveatParams map[string]any) error {
 	e.debugLog("Checking permission with caveat: dest=%v, has=%v, subject=%v, audIDs=%v, params=%v", dest, has, subject, audIDs, caveatParams)
-	consistency := e.getConsistencySnapshot()
+	consistency := e.getConsistencySnapshot(ctx)
 
 	caveatCtx, err := serializeCaveatMap(caveatParams)
 	if err != nil {
@@ -427,7 +435,7 @@ func toAnySlice[T any](in []T) []any {
 
 func (e *Engine) CheckPermission(ctx context.Context, dest authz.Resource, has authz.Permission, subject authz.Type, audIDs []authz.ID) error {
 	e.debugLog("Checking permission: dest=%v, has=%v, subject=%v, audIDs=%v", dest, has, subject, audIDs)
-	consistency := e.getConsistencySnapshot()
+	consistency := e.getConsistencySnapshot(ctx)
 
 	for _, id := range audIDs {
 		e.debugLog("Processing id: %v", id) // Added debug log
@@ -459,7 +467,7 @@ func (e *Engine) LookupResources(ctx context.Context, from authz.Type, match aut
 
 func (e *Engine) LookupResourcesWithCaveat(ctx context.Context, from authz.Type, match authz.Permission, subject authz.Type, byIDs []authz.ID, caveatParams map[string]any) (authz.LookupResult, error) {
 	e.debugLog("Looking up resources: from=%v, match=%v, subject=%v, byIDs=%v, caveatParams=%v", from, match, subject, byIDs, caveatParams)
-	consistency := e.getConsistencySnapshot()
+	consistency := e.getConsistencySnapshot(ctx)
 
 	caveatCtx, err := serializeCaveatMap(caveatParams)
 	if err != nil {
@@ -522,7 +530,7 @@ func (e *Engine) LookupSubjects(ctx context.Context, on authz.Resource, permissi
 
 func (e *Engine) LookupSubjectsWithCaveat(ctx context.Context, on authz.Resource, permission authz.Permission, subject authz.Type, caveatParams map[string]any) (authz.LookupResult, error) {
 	e.debugLog("Looking up subjects: on=%v, permission=%v, subject=%v, caveatParams=%v", on, permission, subject, caveatParams)
-	consistency := e.getConsistencySnapshot()
+	consistency := e.getConsistencySnapshot(ctx)
 
 	caveatCtx, err := serializeCaveatMap(caveatParams)
 	if err != nil {
@@ -595,7 +603,7 @@ func (e *Engine) CheckPermissionUserset(ctx context.Context, dest authz.Resource
 		}
 	}
 
-	consistency := e.getConsistencySnapshot()
+	consistency := e.getConsistencySnapshot(ctx)
 	for _, id := range audIDs {
 		res, err := e.client.CheckPermission(ctx, &v1.CheckPermissionRequest{
 			Consistency: consistency,
@@ -622,7 +630,7 @@ func (e *Engine) CheckPermissionUserset(ctx context.Context, dest authz.Resource
 
 func (e *Engine) ReadRelations(ctx context.Context, from authz.Resource, relation authz.Relation, subject authz.Type) ([]authz.RelationTuple, error) {
 	e.debugLog("Reading relations: from=%v, relation=%v, subject=%v", from, relation, subject)
-	consistency := e.getConsistencySnapshot()
+	consistency := e.getConsistencySnapshot(ctx)
 	tuples := []authz.RelationTuple{}
 
 	res, err := e.client.ReadRelationships(ctx, &v1.ReadRelationshipsRequest{

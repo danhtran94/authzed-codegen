@@ -279,6 +279,23 @@ Per-type `<Type>LookupResult` and `<Type>ConditionalLookupEntry` structs are gen
 
 See `docs/spec-007-conditional-permission-signal.md` for the Check path, `docs/spec-008-lookup-conditional-surfacing.md` for the Lookup path.
 
+## Consistency
+
+The `*spicedb.Engine` defaults to a time-based consistency policy: pin to `AtExactSnapshot` when a recent write token exists (read-your-own-writes), fall through to SpiceDB's `MinimumLatency` otherwise. For security-sensitive checks where stale reads are unacceptable, opt into `FullyConsistent`:
+
+```go
+// Default behavior — recent-token-or-nil from the engine's time-based policy:
+err := folder.CheckTenantedBrowse(ctx, input)
+
+// Force fresh evaluation — bypasses cached snapshot:
+ctx = authz.WithConsistency(ctx, authz.ConsistencyFullyConsistent)
+err := folder.CheckTenantedBrowse(ctx, input)
+```
+
+The override is per-call via context. Caller scopes it at the request boundary; all downstream Check / Lookup / Read methods called with that ctx honor the mode automatically. Zero codegen change — ctx already flows through every generated method.
+
+Token-based modes (`AtLeastAsFresh`, `AtExactSnapshot` with caller-supplied tokens) are deferred — the engine already uses `AtExactSnapshot` internally for read-your-own-writes. See `docs/spec-009-consistency-mode-opt-in.md`.
+
 ## Behavior Notes
 
 - **Permission chains.** `Check<Permission>Inputs` exposes the full set

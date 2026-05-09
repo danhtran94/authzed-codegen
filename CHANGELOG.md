@@ -4,6 +4,49 @@ All notable changes to this project are documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.0] - 2026-05-09
+
+Adds caller-controlled consistency mode selection on read-side methods. The `*spicedb.Engine` previously hardcoded a time-based policy (`AtExactSnapshot` post-write, `MinimumLatency` otherwise) — fine for read-your-own-writes but not for security-sensitive checks where stale reads are unacceptable. Callers now opt into `ConsistencyFullyConsistent` via `authz.WithConsistency(ctx, mode)`; the override flows through every Check / Lookup / Read method via context. **Zero codegen template change** — ctx is already plumbed through every generated method.
+
+### Added
+
+- **`authz.ConsistencyMode`** — closed `int` type with `ConsistencyDefault` (=0) and `ConsistencyFullyConsistent` (=1) constants.
+- **`authz.WithConsistency(ctx, mode)`** — context helper that derives a child ctx carrying the override.
+- **`authz.GetConsistency(ctx)`** — returns the mode set on ctx, or `ConsistencyDefault` if not set. Read by the engine internally.
+- **3 new e2e tests** covering: full-consistency override on userset expiration (filters expired tuple), full-consistency override on direct-subject expiration (sanity), full-consistency override on non-expiring tuple (happy path).
+
+### Changed
+
+- **`*spicedb.Engine.getConsistencySnapshot`** — refactored to take `ctx context.Context`. Switches on `authz.GetConsistency(ctx)`: `ConsistencyFullyConsistent` returns wire `Consistency_FullyConsistent`; default branch preserves existing recent-token-or-nil logic. 6 internal call sites in Check / Lookup / Read paths updated to pass ctx.
+
+### Caller pattern
+
+```go
+// Default behavior — engine uses recent-token-or-nil:
+err := folder.CheckTenantedBrowse(ctx, input)
+
+// Force full consistency for security-sensitive check:
+ctx = authz.WithConsistency(ctx, authz.ConsistencyFullyConsistent)
+err := folder.CheckTenantedBrowse(ctx, input)
+```
+
+The override applies to every read-side method called with that ctx. Caller scope it at the request boundary; all downstream Check/Lookup/Read inherits transparently.
+
+### Verified
+
+- All 4 e2e packages pass.
+- Codegen idempotent at the new baseline (zero diff vs v1.7.0).
+- `go build ./...` + `go vet ./...` clean.
+
+### Discovered during implementation
+
+AUZ-011 Discoveries hypothesized that `AtExactSnapshot` consistency masks wall-clock expiration on userset tuples — testing showed CheckPermissionUserset returned granted on expired userset tuples under default consistency. Empirical re-verification during AUZ-014 with the same fixture and timing showed expired userset tuples are filtered under BOTH default and FullyConsistent modes. SpiceDB enforces wall-clock expiration regardless of the snapshot revision pin. AUZ-014's value is independent of the AUZ-011 hypothesis: caller-controlled per-call consistency override for security-sensitive workloads where the engine's time-based default policy isn't strong enough.
+
+### Deferred
+
+- **`AtLeastAsFresh` / `AtExactSnapshot` modes for callers** (per SPEC-009 C7). The engine already uses `AtExactSnapshot` internally for read-your-own-writes; surfacing token-based modes to callers needs separate plumbing for caller-supplied ZedTokens, observability for token freshness, and stale-token rejection semantics. Future SPEC.
+- **Engine-level global default** — kept per-call for explicit control. A future `Engine.SetDefaultConsistency` could short-circuit if real demand surfaces.
+
 ## [1.7.0] - 2026-05-09
 
 Closes the symmetric gap to v1.6's Check rich-signal: `LookupResources` / `LookupSubjects` (and their `*WithCaveat` variants) now return a typed `LookupResult` partitioning definite grants from conditional grants. Conditional entries carry `MissingKeys` from `PartialCaveatInfo.MissingRequiredContext` so callers can fetch missing context and retry — no more silent "no resources found" when the actual answer is "found conditional, supply context to see them."

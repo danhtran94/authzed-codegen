@@ -1783,6 +1783,101 @@ func TestFolder_IDsOf_RoundTripEquivalent(t *testing.T) {
 		"IDsOf projects the same IDs the pre-AUZ-010 API would have returned")
 }
 
+// AUZ-014 — consistency mode opt-in.
+//
+// SpiceDB's CheckPermission honors a Consistency field on the wire. The
+// engine hardcodes a time-based policy (AtExactSnapshot post-write, nil
+// otherwise). For security-sensitive checks where stale reads are
+// unacceptable, callers can opt into ConsistencyFullyConsistent via
+// authz.WithConsistency(ctx, mode).
+//
+// Note: AUZ-011 Discoveries hypothesized that AtExactSnapshot masks
+// wall-clock expiration on userset tuples. Empirical re-verification
+// during AUZ-014 (same fixture, same sleep timing) shows expired
+// userset tuples are filtered under both default and FullyConsistent
+// modes — SpiceDB enforces wall-clock expiration regardless of the
+// snapshot revision pin. The AUZ-011 Discovery may have been a transient
+// observation. AUZ-014's value is independent: caller-controlled per-call
+// consistency override for security-sensitive workloads where the engine's
+// time-based default policy isn't strong enough.
+
+func TestFolder_TempCollab_ExpiredUserset_FullConsistencyDenies(t *testing.T) {
+	// Demonstrates the override path: caller opts into FullyConsistent.
+	// SpiceDB evaluates against most-up-to-date data + wall-clock;
+	// expired userset tuple is filtered, Check denies.
+	ctx := context.Background()
+
+	team := extsvc.Team("t-cm-full")
+	user := extsvc.User("u-cm-full")
+	folder := extsvc.Folder("f-cm-full")
+
+	require.NoError(t, team.CreateOwnerRelations(ctx, extsvc.TeamOwnerObjects{
+		User: []extsvc.User{user},
+	}))
+
+	expiresAt := time.Now().Add(150 * time.Millisecond)
+	require.NoError(t, folder.CreateTempCollabRelations(ctx, extsvc.FolderTempCollabObjects{
+		TeamAdmin: []extsvc.Team{team},
+		Expirations: extsvc.FolderTempCollabExpirations{
+			TeamAdmin: &expiresAt,
+		},
+	}))
+
+	time.Sleep(250 * time.Millisecond)
+
+	// Override — security-sensitive caller opts out of cached snapshot.
+	freshCtx := authz.WithConsistency(ctx, authz.ConsistencyFullyConsistent)
+	_, err := folder.CheckTempCollabView(freshCtx, extsvc.CheckFolderTempCollabViewInputs{
+		TeamAdmin: []extsvc.Team{team},
+	})
+	assert.ErrorIs(t, err, authz.ErrPermissionDenied,
+		"full consistency: wall-clock evaluation filters expired userset tuple → ErrPermissionDenied (closes AUZ-011 artifact)")
+}
+
+func TestFolder_ExpiringBrowse_FullConsistencyDeniesAfterExpiry(t *testing.T) {
+	// Direct-subject expiration — sanity check that the override path
+	// works for the simpler case too. AUZ-009 already enforces this
+	// under default consistency for direct subjects, but exercise the
+	// override branch explicitly to verify it composes.
+	ctx := context.Background()
+
+	folder := extsvc.Folder("f-cm-direct")
+	expiresAt := time.Now().Add(100 * time.Millisecond)
+	require.NoError(t, folder.CreateExpiringViewerRelations(ctx, extsvc.FolderExpiringViewerObjects{
+		User: []extsvc.User{"u-cm-direct"},
+		Expirations: extsvc.FolderExpiringViewerExpirations{
+			User: &expiresAt,
+		},
+	}))
+
+	time.Sleep(200 * time.Millisecond)
+
+	freshCtx := authz.WithConsistency(ctx, authz.ConsistencyFullyConsistent)
+	_, err := folder.CheckExpiringBrowse(freshCtx, extsvc.CheckFolderExpiringBrowseInputs{
+		User: []extsvc.User{"u-cm-direct"},
+	})
+	assert.ErrorIs(t, err, authz.ErrPermissionDenied,
+		"full consistency on direct-subject expiring tuple denies after wall-clock expiry")
+}
+
+func TestFolder_FullConsistency_NonExpiringTuple_StillGrants(t *testing.T) {
+	// Override doesn't break the happy path — a regular non-expiring
+	// tuple still grants when reached via FullyConsistent evaluation.
+	ctx := context.Background()
+
+	folder := extsvc.Folder("f-cm-happy")
+	require.NoError(t, folder.CreateViewerRelations(ctx, extsvc.FolderViewerObjects{
+		User: []extsvc.User{"u-cm-happy"},
+	}))
+
+	freshCtx := authz.WithConsistency(ctx, authz.ConsistencyFullyConsistent)
+	ok, err := folder.CheckBrowse(freshCtx, extsvc.CheckFolderBrowseInputs{
+		User: []extsvc.User{"u-cm-happy"},
+	})
+	require.NoError(t, err)
+	assert.True(t, ok, "FullyConsistent on a fresh non-expiring tuple grants normally")
+}
+
 func TestArticle_LookupAuthorOnlyUserSubjects(t *testing.T) {
 	ctx := context.Background()
 

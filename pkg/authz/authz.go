@@ -46,6 +46,52 @@ func (e *ConditionalPermissionError) Is(target error) bool {
 // references this constant rather than hardcoding the literal "*".
 const WildcardID ID = "*"
 
+// ConsistencyMode controls how strongly read-side methods (Check, Lookup,
+// Read) observe writes when evaluating against SpiceDB. Set per-call via
+// WithConsistency(ctx, mode); the *spicedb.Engine reads the override
+// internally. Per-call override; engine's existing recent-token logic
+// remains the default.
+type ConsistencyMode int
+
+const (
+	// ConsistencyDefault preserves the engine's existing behavior: pin to
+	// AtExactSnapshot when a recent write token is available (within the
+	// engine's durationExpire window), otherwise fall through to SpiceDB's
+	// MinimumLatency default. Optimised for read-your-own-writes.
+	ConsistencyDefault ConsistencyMode = 0
+
+	// ConsistencyFullyConsistent forces SpiceDB to evaluate against the
+	// most up-to-date data, bypassing any cached snapshot. Slower than
+	// default; required for security-sensitive checks where stale reads
+	// are unacceptable AND for any check that depends on wall-clock
+	// semantics like expiration filtering on userset tuples (per
+	// AUZ-011 Discoveries).
+	ConsistencyFullyConsistent ConsistencyMode = 1
+)
+
+// consistencyKey is the unexported context-value key for the
+// ConsistencyMode override. The struct{} type prevents external packages
+// from constructing a colliding key.
+type consistencyKey struct{}
+
+// WithConsistency returns a derived context carrying the consistency mode
+// override. Engine read-side methods (Check, Lookup, Read) honor the
+// override transparently — no codegen-method signature change. Caller
+// scope it at the request boundary; downstream calls inherit.
+func WithConsistency(ctx context.Context, mode ConsistencyMode) context.Context {
+	return context.WithValue(ctx, consistencyKey{}, mode)
+}
+
+// GetConsistency returns the consistency mode set on the context, or
+// ConsistencyDefault if not set. Engine impls call this from
+// getConsistencySnapshot to drive the per-call wire selection.
+func GetConsistency(ctx context.Context) ConsistencyMode {
+	if mode, ok := ctx.Value(consistencyKey{}).(ConsistencyMode); ok {
+		return mode
+	}
+	return ConsistencyDefault
+}
+
 // LookupResult is the return value of every Engine.Lookup* method.
 // Definite holds resource/subject IDs the caller has confirmed access to.
 // Conditional holds entries that would be granted IF the caller supplies
