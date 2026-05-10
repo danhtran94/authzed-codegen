@@ -21,6 +21,7 @@ Adds OPA Go builtins codegen. With the new `--emit-opa` CLI flag, the generator 
 - **OPA dependency** — `github.com/open-policy-agent/opa v1.16.1` added to `go.mod` (latest stable v1.x as of 2026-05-10).
 - **e2e test** in `example/authzed/extsvc/extsvc_opa_test.go` — exercises no-caveat path, with-caveat match, with-caveat mismatch, and Lookup against a live SpiceDB testcontainer.
 - **Generated fixtures** — `example/authzed/{bookingsvc,menusvc,extsvc}/opa.gen.go` committed (round-trip regression bar).
+- **`example/opa-embed/` — runnable all-embedded demo** (AUZ-020). Single Go binary composing SpiceDB (testcontainers, MemDB) + the OPA Rego runtime + the generated `SpiceDBBuiltins`, with a plain `net/http` endpoint (`POST /v1/data/authz/allow`, `GET /health`) serving policy decisions. Ships a sample `policy.rego` mixing RBAC + ReBAC + a deny override, and a README with run + curl recipes. Note: uses a plain HTTP server rather than `runtime.NewRuntime` — OPA's runtime has no hook for per-instance custom builtins; the codegen's `[]func(*rego.Rego)` form is opaque to global re-registration. Docker required.
 
 ### Notes
 
