@@ -1,9 +1,11 @@
 // Command opa-embed is a runnable demo of the all-embedded deployment
 // shape from RFC-001: one Go binary composing SpiceDB (via testcontainers),
-// the OPA Rego runtime, and the generated SpiceDBBuiltins from AUZ-019,
-// with an HTTP endpoint serving policy decisions.
+// OPA's runtime (runtime.NewRuntime — the standard OPA server), and the
+// generated SpiceDB builtins from AUZ-019/AUZ-021, serving policy decisions
+// over OPA's standard HTTP API.
 //
-// Run:
+// Run (from the repo root — the demo reads example/schema.zed and the
+// policy dir by relative path):
 //
 //	go run ./example/opa-embed            # binds :8181, brings up SpiceDB via Docker
 //	go run ./example/opa-embed --port 9000
@@ -12,33 +14,36 @@
 //
 //	curl -s -X POST localhost:8181/v1/data/authz/allow \
 //	  -d '{"input":{"user":{"id":"alice","role":"viewer"},"resource":{"id":"demo-folder"}}}'
-//	# => {"result":true}   (alice is a viewer of demo-folder)
+//	# => {"result":true}   (alice is a viewer of demo-folder — the ReBAC leg)
+//
+//	curl -s -X POST localhost:8181/v1/data/authz/allow \
+//	  -d '{"input":{"user":{"id":"carol","role":"admin"},"resource":{"id":"demo-folder"}}}'
+//	# => {"result":true}   (carol has the admin role — the RBAC leg)
 //
 //	curl -s -X POST localhost:8181/v1/data/authz/allow \
 //	  -d '{"input":{"user":{"id":"banned-user","role":"admin"},"resource":{"id":"demo-folder"}}}'
-//	# => {"result":false}  (deny override wins even over the admin role)
+//	# => {"result":false}  (deny override beats even the admin role)
 //
-// The SpiceDB-backed policy eval goes through this program's own HTTP
-// handler (not OPA's standard runtime) because OPA's runtime.NewRuntime
-// has no hook for per-instance custom builtins — see AUZ-020 Discoveries.
-// Docker is required: SpiceDB runs in a testcontainer. State is lost on
-// restart (MemDB datastore). Local-only; not production-hardened.
+//	curl -s localhost:8181/v1/policies          # → the loaded policy.rego
+//	curl -s -o /dev/null -w "%{http_code}\n" localhost:8181/health  # → 200
+//
+// The SpiceDB builtins are registered into OPA's process-global registry
+// via RegisterSpiceDBBuiltinsGlobal BEFORE runtime.NewRuntime, so OPA's
+// standard /v1/data evaluation resolves them. Docker is required: SpiceDB
+// runs in a testcontainer (MemDB datastore — state lost on restart).
+// Local-only; not production-hardened.
 package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 
-	_ "embed"
-
-	"github.com/open-policy-agent/opa/v1/rego"
+	"github.com/open-policy-agent/opa/v1/runtime"
 
 	bookingsvc "github.com/danhtran94/authzed-codegen/example/authzed/bookingsvc"
 	extsvc "github.com/danhtran94/authzed-codegen/example/authzed/extsvc"
@@ -47,13 +52,13 @@ import (
 	"github.com/danhtran94/authzed-codegen/pkg/authz/spicedbtest"
 )
 
-//go:embed policy/policy.rego
-var policyModule string
-
-const schemaPath = "example/schema.zed"
+const (
+	schemaPath = "example/schema.zed"
+	policyDir  = "example/opa-embed/policy"
+)
 
 func main() {
-	port := flag.Int("port", 8181, "HTTP listen port for the policy-decision endpoint")
+	port := flag.Int("port", 8181, "HTTP listen port for OPA's standard server")
 	flag.Parse()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -79,62 +84,36 @@ func main() {
 	if err := seed(ctx); err != nil {
 		fatalf("seed relationships: %v", err)
 	}
-	fmt.Println("seeded demo relationships: extsvc/folder:demo-folder#viewer@extsvc/user:alice (+ bob)")
+	fmt.Println("seeded demo relationships: extsvc/folder:demo-folder#viewer@extsvc/user:{alice,bob}")
 
-	// Build the SpiceDB-backed Rego builtin options once. The closures
-	// capture this long-lived ctx (Pattern P2 from SPEC-013); fine for a
-	// demo. The same options are reused across many rego.New calls below.
-	builtinOpts := make([]func(*rego.Rego), 0, 8)
-	builtinOpts = append(builtinOpts, extsvc.SpiceDBBuiltins(sb.Engine, ctx)...)
-	builtinOpts = append(builtinOpts, bookingsvc.SpiceDBBuiltins(sb.Engine, ctx)...)
-	builtinOpts = append(builtinOpts, menusvc.SpiceDBBuiltins(sb.Engine, ctx)...)
+	// Register the SpiceDB-backed builtins into OPA's PROCESS-GLOBAL
+	// registry — this MUST happen before runtime.NewRuntime, which builds
+	// its compiler (and thus reads the global builtin universe) at
+	// construction time. Per-instance options (SpiceDBBuiltins(...) →
+	// []func(*rego.Rego)) would be invisible to runtime.NewRuntime; the
+	// global form (RegisterSpiceDBBuiltinsGlobal) is what it picks up.
+	// Call each once.
+	extsvc.RegisterSpiceDBBuiltinsGlobal(sb.Engine, ctx)
+	bookingsvc.RegisterSpiceDBBuiltinsGlobal(sb.Engine, ctx)
+	menusvc.RegisterSpiceDBBuiltinsGlobal(sb.Engine, ctx)
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("ok"))
+	addr := fmt.Sprintf(":%d", *port)
+	addrs := []string{addr}
+	diagAddrs := []string{}
+	rt, err := runtime.NewRuntime(ctx, runtime.Params{
+		Addrs:                  &addrs,
+		DiagnosticAddrs:        &diagAddrs,
+		Paths:                  []string{policyDir}, // loads policy.rego → data.authz
+		GracefulShutdownPeriod: 5,
+		EnableVersionCheck:     false, // no phone-home for a demo
 	})
-	mux.HandleFunc("POST /v1/data/authz/allow", func(w http.ResponseWriter, r *http.Request) {
-		var body struct {
-			Input map[string]any `json:"input"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			http.Error(w, fmt.Sprintf("bad request body: %v", err), http.StatusBadRequest)
-			return
-		}
+	if err != nil {
+		fatalf("build OPA runtime: %v", err)
+	}
 
-		opts := make([]func(*rego.Rego), 0, len(builtinOpts)+3)
-		opts = append(opts, builtinOpts...)
-		opts = append(opts,
-			rego.Query("data.authz.allow"),
-			rego.Module("policy.rego", policyModule),
-			rego.Input(body.Input),
-		)
-		rs, err := rego.New(opts...).Eval(r.Context())
-		if err != nil {
-			http.Error(w, fmt.Sprintf("policy eval: %v", err), http.StatusInternalServerError)
-			return
-		}
-
-		result := false
-		if len(rs) > 0 && len(rs[0].Expressions) > 0 {
-			if b, ok := rs[0].Expressions[0].Value.(bool); ok {
-				result = b
-			}
-		}
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{"result": result})
-	})
-
-	srv := &http.Server{Addr: fmt.Sprintf(":%d", *port), Handler: mux}
-	go func() {
-		<-ctx.Done()
-		_ = srv.Shutdown(context.Background())
-	}()
-
-	fmt.Printf("policy-decision endpoint listening on :%d  (POST /v1/data/authz/allow, GET /health)\n", *port)
-	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		fatalf("http server: %v", err)
+	fmt.Printf("OPA server listening on %s  (POST /v1/data/authz/allow, GET /v1/policies, GET /health)\n", addr)
+	if err := rt.Serve(ctx); err != nil && !errors.Is(err, context.Canceled) {
+		fatalf("OPA server: %v", err)
 	}
 	fmt.Println("shut down")
 }

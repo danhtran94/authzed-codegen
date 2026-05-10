@@ -106,6 +106,29 @@ import (
 func RegisterSpiceDBBuiltins(r *rego.Rego, engine authz.Engine, ctx context.Context)
 ```
 
+**As-shipped naming (AUZ-019 / AUZ-021):** the function above was sketched
+during spec-writing before the `rego.New` initialization order was known. As
+implemented, the generated file declares **two** exported functions instead:
+
+```go
+// Per-instance — pass to rego.New(opts...). Returns options; no global state.
+// (AUZ-019; see jobs/AUZ-019 Discoveries for why this replaced the mutate-r form.)
+func SpiceDBBuiltins(engine authz.Engine, ctx context.Context) []func(*rego.Rego)
+
+// Process-global — registers into ast.Builtins + the topdown map via
+// rego.RegisterBuiltin2/3. This is what runtime.NewRuntime / the standard
+// /v1/data endpoint pick up (they have no hook for per-instance options).
+// Call ONCE at startup before any concurrent compilation — ast.RegisterBuiltin
+// is not concurrency-safe; double-calling appends duplicate ast.Builtins entries.
+// (AUZ-021.)
+func RegisterSpiceDBBuiltinsGlobal(engine authz.Engine, ctx context.Context)
+```
+
+Both forms use the same per-Check / per-Lookup decl + closure fragments
+(factored into shared `{{ define }}` template blocks); only the registration
+mechanism differs. The subject argument is a `"type:id"` string (per AUZ-019
+Discoveries) rather than the `subject_id` sketched above.
+
 Internal helpers (unexported, file-local):
 
 ```go
@@ -358,6 +381,8 @@ Engine errors do **not** silently convert to `false` (per C4). A Rego policy rea
 - **C6 — OPA version pinned in `go.mod`.** The repo's `go.mod` pins `github.com/open-policy-agent/opa` at a specific version (named in the implementation job's Discoveries). Round-trip determinism (C1) depends on stable OPA AST/term layout; version drift surfaces as a dependency-upgrade PR, not a silent codegen diff.
 
 - **C7 — `--emit-opa` is the only opt-in switch.** Without the flag, `cmd/authzed-codegen` produces the same output as the current commit (scope SC8). No build tags inside generated `.go` files. No environment variables. No config file. The flag is the contract for "I want OPA bindings."
+
+- **C8 — `RegisterSpiceDBBuiltinsGlobal` must be called once at startup, before concurrent compilation** (AUZ-021). It mutates OPA's process-global registry via `ast.RegisterBuiltin`, which is not concurrency-safe (OPA's source warns of "concurrent map read/write panics"). Calling it more than once appends duplicate entries to `ast.Builtins`. Callers using `rego.New` directly should prefer the per-instance `SpiceDBBuiltins() []func(*rego.Rego)` form, which has no global state; the global form exists specifically because `runtime.NewRuntime` (and the OPA server's `/v1/data` endpoint) build their compiler at construction time from the global builtin universe and have no hook for per-instance options.
 
 ---
 

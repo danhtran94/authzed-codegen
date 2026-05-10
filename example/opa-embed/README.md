@@ -1,11 +1,13 @@
-# opa-embed — all-embedded policy-decision demo
+# opa-embed — all-embedded policy-decision demo (on OPA's runtime)
 
 A runnable single-binary demo of the all-embedded deployment shape from
 [RFC-001](../../docs/RFC-001-policy-engine-integration-patterns.md): one Go
-process composing **SpiceDB** (relationship graph), the **OPA Rego runtime**
-(policy evaluation), and the **generated `SpiceDBBuiltins`** from
-[AUZ-019](../../jobs/AUZ-019-opa-go-builtins-codegen.md), exposing an HTTP
-endpoint that returns policy decisions.
+process composing **SpiceDB** (relationship graph), **OPA's runtime**
+(`runtime.NewRuntime` — the standard OPA server), and the **generated
+SpiceDB builtins** from
+[AUZ-019](../../jobs/AUZ-019-opa-go-builtins-codegen.md) /
+[AUZ-021](../../jobs/AUZ-021-opa-global-builtins.md), serving policy
+decisions over OPA's standard HTTP API.
 
 ## Architecture
 
@@ -13,47 +15,59 @@ endpoint that returns policy decisions.
 ┌─────────────────────────────────────────────────────────────┐
 │  opa-embed (one Go process)                                 │
 │                                                             │
-│  HTTP :8181                                                 │
-│   ├─ GET  /health               → 200                       │
-│   └─ POST /v1/data/authz/allow  → {"result": <bool>}        │
-│           │                                                 │
+│  startup:                                                   │
+│    spicedbtest.Start(schema) → SpiceDB testcontainer        │
+│    authz.SetDefaultEngine(engine)                           │
+│    seed: folder:demo-folder#viewer@user:{alice,bob}         │
+│    extsvc.RegisterSpiceDBBuiltinsGlobal(engine, ctx)  ──┐   │
+│    bookingsvc.RegisterSpiceDBBuiltinsGlobal(...)       ─┤ into OPA's
+│    menusvc.RegisterSpiceDBBuiltinsGlobal(...)          ─┘ process-global
+│           │                                                 │ builtin registry
 │           ▼                                                 │
-│   rego.New(extsvc.SpiceDBBuiltins(engine, ctx)...,          │
-│            rego.Module("policy.rego", …),                   │
-│            rego.Input(request.input)).Eval()                │
-│           │                                                 │
-│           ▼                                                 │
-│   policy.rego  ──┬─ RBAC:  input.user.role == "admin"       │
-│                  ├─ ReBAC: extsvc.check_folder_browse(…)    │
-│                  └─ deny:  blocklist override               │
+│    runtime.NewRuntime(Params{Addrs: [":8181"],              │
+│                              Paths: ["…/policy"]})          │
+│      └─► compiler reads the global builtin universe ───┐    │
+│      └─► loads policy.rego → data.authz                │    │
+│           │                                            │    │
+│           ▼                                            │    │
+│    OPA HTTP :8181                                      │    │
+│     ├─ GET  /health               → 200                │    │
+│     ├─ GET  /v1/policies          → policy.rego        │    │
+│     └─ POST /v1/data/authz/allow  → {"result":<bool>}  │    │
+│            │                                           │    │
+│            ▼ evals data.authz.allow:                   │    │
+│      policy.rego  ──┬─ RBAC:  input.user.role=="admin" │    │
+│                     ├─ ReBAC: extsvc.check_folder_browse(…)─┘
+│                     └─ deny:  blocklist override            │
 │                          │                                  │
 │                          ▼ (the ReBAC builtin calls)        │
-│   authz.Engine.CheckPermission(…)  ── gRPC ──┐              │
-└──────────────────────────────────────────────┼─────────────┘
-                                                │
-                              ┌─────────────────▼──────────────┐
-                              │  SpiceDB (testcontainer)        │
-                              │  MemDB datastore                │
-                              │  schema = example/schema.zed    │
-                              │  seeded: folder:demo-folder     │
-                              │          #viewer@user:alice,bob │
-                              └────────────────────────────────┘
+│      authz.Engine.CheckPermission(…)  ── gRPC ──┐           │
+└─────────────────────────────────────────────────┼───────────┘
+                                                  │
+                          ┌───────────────────────▼────────────────┐
+                          │  SpiceDB (testcontainer)               │
+                          │  MemDB datastore                       │
+                          │  schema = example/schema.zed           │
+                          └────────────────────────────────────────┘
 ```
 
-The SpiceDB-backed policy eval goes through this demo's own HTTP handler
-(`rego.New(...)` per request), **not** OPA's `runtime.NewRuntime` —
-OPA's runtime has no hook for per-instance custom builtins, so a plain
-`net/http` server doing the Rego eval is both simpler and sufficient.
-See [AUZ-020 Discoveries](../../jobs/AUZ-020-opa-embed-demo.md#discoveries--decisions-during-implementation).
+The SpiceDB builtins are registered into OPA's **process-global** registry
+(`ast.Builtins` + the topdown function map) via
+`RegisterSpiceDBBuiltinsGlobal` **before** `runtime.NewRuntime` — which
+builds its compiler at construction time and reads that universe. The
+per-instance form (`SpiceDBBuiltins(...) []func(*rego.Rego)`) would be
+invisible to the runtime; the global form is what it picks up. See
+[AUZ-021](../../jobs/AUZ-021-opa-global-builtins.md).
 
 ## Run
 
-From the **repo root** (the demo reads `example/schema.zed` by relative path):
+From the **repo root** (the demo reads `example/schema.zed` and
+`example/opa-embed/policy/` by relative path):
 
 ```sh
 go run ./example/opa-embed
 # → starts a SpiceDB testcontainer, applies the schema, seeds relationships,
-#   binds :8181
+#   registers the SpiceDB builtins globally, starts OPA's server on :8181
 
 go run ./example/opa-embed --port 9000   # use a different port
 ```
@@ -77,7 +91,7 @@ curl -s -X POST localhost:8181/v1/data/authz/allow \
 # => {"result":true}
 ```
 
-**Granted — carol has the admin role (RBAC leg), even though she has no SpiceDB grant:**
+**Granted — carol has the admin role (RBAC leg), even with no SpiceDB grant:**
 
 ```sh
 curl -s -X POST localhost:8181/v1/data/authz/allow \
@@ -85,7 +99,7 @@ curl -s -X POST localhost:8181/v1/data/authz/allow \
 # => {"result":true}
 ```
 
-**Denied — bob has a viewer grant but no admin role, and queries a folder he can't see:**
+**Denied — bob has a viewer grant but queries a folder he can't see:**
 
 ```sh
 curl -s -X POST localhost:8181/v1/data/authz/allow \
@@ -99,6 +113,13 @@ curl -s -X POST localhost:8181/v1/data/authz/allow \
 curl -s -X POST localhost:8181/v1/data/authz/allow \
   -d '{"input":{"user":{"id":"banned-user","role":"admin"},"resource":{"id":"demo-folder"}}}'
 # => {"result":false}
+```
+
+**The loaded policy (OPA standard endpoint):**
+
+```sh
+curl -s localhost:8181/v1/policies
+# => the parsed policy.rego, as JSON
 ```
 
 **Health:**
@@ -115,18 +136,19 @@ curl -s -o /dev/null -w "%{http_code}\n" localhost:8181/health
   doesn't exist in v1.9.0; building it ourselves is disproportionate for a demo.
 - **No persistence** — the MemDB datastore loses all relationships on restart.
   Swap to postgres / spanner in the SpiceDB config for a real deployment.
-- **Local-only, no auth** — the HTTP endpoint binds without TLS or
-  authentication. Production hardening (auth, TLS, observability, rate
-  limiting) is the deployer's responsibility; this is a starting template.
-- **Not OPA's standard server** — this demo runs a plain `net/http` server, not
-  `runtime.NewRuntime`, so OPA's standard endpoints (`/v1/policies`,
-  `/v1/data` for non-SpiceDB queries, decision logs, bundles) are not present.
-  Adding them is straightforward if needed — see RFC-001 §Pattern 4.
+- **Local-only, no auth** — OPA's server binds without TLS or authentication
+  here. Production hardening (auth, TLS, observability, rate limiting) is the
+  deployer's responsibility; this is a starting template.
+- **Global builtin registration is process-wide** — `RegisterSpiceDBBuiltinsGlobal`
+  mutates OPA's global registry. Call it once at startup before the runtime is
+  built. (For embedded `rego.New` use that doesn't go through `runtime.NewRuntime`,
+  the per-instance `SpiceDBBuiltins() []func(*rego.Rego)` form avoids global state.)
 
 ## What this demonstrates
 
-- ✓ Generated `<package>.SpiceDBBuiltins(engine, ctx)` wired into a Rego eval
+- ✓ Generated `<package>.RegisterSpiceDBBuiltinsGlobal(engine, ctx)` wired into `runtime.NewRuntime`
+- ✓ OPA's standard server (`/v1/data`, `/v1/policies`, `/health`) with SpiceDB builtins resolved
 - ✓ A single policy file mixing RBAC + ReBAC + a deny override
 - ✓ SpiceDB consulted as a primitive *from inside* a Rego policy
-- ✓ One binary; HTTP-exposed policy decisions
+- ✓ One binary; OPA-standard HTTP-exposed policy decisions
 - ✓ Generated `Create<Rel>Relations` used to seed the graph at startup

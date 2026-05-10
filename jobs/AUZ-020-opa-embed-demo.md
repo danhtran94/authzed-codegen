@@ -142,7 +142,9 @@ So the scope's A6 hypothesis ("runtime accepts builtins via Params.Builtins OR p
 - Keeps the SC4 curl invocation working as written (`POST /v1/data/authz/allow` → `{"result": true}`)
 - Is simpler than wrestling with `runtime.NewRuntime` + global registration
 
-Scope deviation: the demo does NOT use `runtime.NewRuntime`. The observable behavior (HTTP endpoint returning policy decisions via SpiceDB builtins) is identical; only the OPA-server-vs-plain-server implementation differs. Future AUZ-019 follow-up candidate: emit a `SpiceDBBuiltinDecls()` variant returning decl/impl pairs so callers can register globally (which `runtime.NewRuntime` would then pick up) — out of scope here.
+Scope deviation: the demo does NOT use `runtime.NewRuntime` (at the time of AUZ-020). The observable behavior (HTTP endpoint returning policy decisions via SpiceDB builtins) is identical; only the OPA-server-vs-plain-server implementation differs.
+
+**Superseded by AUZ-021** (2026-05-10): the runtime DOES pick up custom builtins — it just needs them registered in OPA's *process-global* registry (`ast.Builtins` + the topdown function map) rather than as per-instance `rego.Function*` options. AUZ-021 added a generated `RegisterSpiceDBBuiltinsGlobal(engine, ctx)` (via `rego.RegisterBuiltin2/3`) AND rewrote this demo's `main.go` to use `runtime.NewRuntime` + that global registration — so the demo now runs OPA's standard server (`/v1/data` with the SpiceDB builtins resolved, `/v1/policies`, `/health`). The plain-`http.Server` approach above was the AUZ-020-era stopgap; see AUZ-021 for the rewrite. The full mechanism trace (`rego.RegisterBuiltin3` → `ast.RegisterBuiltin` → `ast.NewCompiler` reads the global map → `server.handleData` uses `rego.Compiler(s.getCompiler())`) is in AUZ-021's Problem section.
 
 ### [Implementer] In-process SpiceDB embed blocked — demo uses `spicedbtest.Start` (testcontainers, automatic)
 WS1.2 attempted the in-process SpiceDB embed per scope SC3 ("no external SpiceDB / Docker required"). Blockers:

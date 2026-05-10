@@ -34,6 +34,24 @@ func (g *Generator) GenerateOPASource(tmplStr string) error {
 
 	mapFuncs := template.FuncMap{
 		"snakeName": strings.ToLower,
+		// dict builds a map[string]any from alternating key/value args so
+		// the template can pass a multi-field payload into a {{ define }}
+		// block (used to share the Check/Lookup decl+closure fragments
+		// between SpiceDBBuiltins and RegisterSpiceDBBuiltinsGlobal).
+		"dict": func(pairs ...any) (map[string]any, error) {
+			if len(pairs)%2 != 0 {
+				return nil, fmt.Errorf("dict: odd argument count %d", len(pairs))
+			}
+			m := make(map[string]any, len(pairs)/2)
+			for i := 0; i+1 < len(pairs); i += 2 {
+				k, ok := pairs[i].(string)
+				if !ok {
+					return nil, fmt.Errorf("dict: key %d is %T, want string", i, pairs[i])
+				}
+				m[k] = pairs[i+1]
+			}
+			return m, nil
+		},
 	}
 
 	tmpl, err := template.New("opa").Funcs(mapFuncs).Parse(tmplStr)
