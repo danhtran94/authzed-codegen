@@ -6,9 +6,10 @@ package authz
 #   - deny override: a blocklist that overrides any allow
 #
 # The SpiceDB builtin (extsvc.check_folder_browse) is registered by the
-# embedding Go program via extsvc.SpiceDBBuiltins(engine, ctx). It takes
-# a "type:id" subject string, a resource id, and a caveat-context object
-# ({} when no caveat applies).
+# embedding Go program (RegisterSpiceDBBuiltinsGlobal). It takes a subject
+# object keyed by SpiceDB subject type — {"extsvc/user": id} or
+# {"extsvc/user": [ids...], "extsvc/group": [...]} — a resource id, and a
+# caveat-context object ({} when no caveat applies).
 
 default allow := false
 
@@ -23,7 +24,7 @@ granted if input.user.role == "admin"
 
 # ReBAC leg — consult SpiceDB's relationship graph.
 granted if extsvc.check_folder_browse(
-	sprintf("extsvc/user:%s", [input.user.id]),
+	{"extsvc/user": input.user.id},
 	input.resource.id,
 	{},
 )

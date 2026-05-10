@@ -126,8 +126,38 @@ func RegisterSpiceDBBuiltinsGlobal(engine authz.Engine, ctx context.Context)
 
 Both forms use the same per-Check / per-Lookup decl + closure fragments
 (factored into shared `{{ define }}` template blocks); only the registration
-mechanism differs. The subject argument is a `"type:id"` string (per AUZ-019
-Discoveries) rather than the `subject_id` sketched above.
+mechanism differs.
+
+**Subject argument — keyed object (AUZ-022, supersedes the AUZ-019 `"type:id"` string):**
+the first builtin argument is an object keyed by SpiceDB subject type, value
+a single id string or a list of id strings:
+
+```rego
+extsvc.check_folder_browse({"extsvc/user": "alice"}, "demo-folder", {})
+extsvc.check_folder_browse({"extsvc/user": ["a","b"], "extsvc/group": ["g"]}, "demo-folder", {})
+```
+
+The argument is typed as a **fully-dynamic** object — `types.NewObject(nil,
+types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil,
+types.S))))`. (Static per-permission key sets were tried and rejected: OPA's
+static object properties are effectively required-all, so declaring the
+allowed-type keys would force a caller to pass *every* type, breaking the
+common single-key call. A bogus subject type therefore isn't caught at
+policy-compile time — it surfaces as a runtime error from SpiceDB's
+`CheckPermission`.) The value type *is* compile-time checked: a non-string,
+non-array value fails the OPA type checker.
+
+**Check semantics across multiple present keys: AND** — every present
+subject-type key must be granted, matching the generated typed `Check<X>`
+method (which loops over non-empty subject slices and returns `false` on the
+first denial). For the common single-key call this is just one check.
+**Lookup uses the first present key** (sorted namespace order), matching the
+typed `Lookup<Perm><Resource>Resources` method.
+
+The `parseSubject` / `errMalformedSubject` helpers from the string-form
+draft are gone; the object is parsed by `subjectEntries` (returns
+namespace-sorted `[]subjectEntry{Namespace, []authz.ID}`) and `idsFromTerm`
+(string or array of strings → `[]authz.ID`).
 
 Internal helpers (unexported, file-local):
 
@@ -383,6 +413,8 @@ Engine errors do **not** silently convert to `false` (per C4). A Rego policy rea
 - **C7 — `--emit-opa` is the only opt-in switch.** Without the flag, `cmd/authzed-codegen` produces the same output as the current commit (scope SC8). No build tags inside generated `.go` files. No environment variables. No config file. The flag is the contract for "I want OPA bindings."
 
 - **C8 — `RegisterSpiceDBBuiltinsGlobal` must be called once at startup, before concurrent compilation** (AUZ-021). It mutates OPA's process-global registry via `ast.RegisterBuiltin`, which is not concurrency-safe (OPA's source warns of "concurrent map read/write panics"). Calling it more than once appends duplicate entries to `ast.Builtins`. Callers using `rego.New` directly should prefer the per-instance `SpiceDBBuiltins() []func(*rego.Rego)` form, which has no global state; the global form exists specifically because `runtime.NewRuntime` (and the OPA server's `/v1/data` endpoint) build their compiler at construction time from the global builtin universe and have no hook for per-instance options.
+
+- **C9 — subject-object key iteration is deterministic** (AUZ-022). `subjectEntries` sorts the parsed `(namespace, ids)` pairs by namespace before returning, because OPA's `ast.Object` iteration order is not stable. This makes the Check AND short-circuit order and the Lookup "first present key" choice reproducible — and keeps the generated `opa.gen.go` byte-identical across regenerations (C1).
 
 ---
 

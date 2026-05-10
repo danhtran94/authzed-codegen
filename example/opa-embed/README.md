@@ -37,7 +37,8 @@ decisions over OPA's standard HTTP API.
 │            │                                           │    │
 │            ▼ evals data.authz.allow:                   │    │
 │      policy.rego  ──┬─ RBAC:  input.user.role=="admin" │    │
-│                     ├─ ReBAC: extsvc.check_folder_browse(…)─┘
+│                     ├─ ReBAC: extsvc.check_folder_browse(           │
+│                     │           {"extsvc/user": input.user.id}, …)─┘
 │                     └─ deny:  blocklist override            │
 │                          │                                  │
 │                          ▼ (the ReBAC builtin calls)        │
@@ -148,6 +149,7 @@ curl -s -o /dev/null -w "%{http_code}\n" localhost:8181/health
 
 - ✓ Generated `<package>.RegisterSpiceDBBuiltinsGlobal(engine, ctx)` wired into `runtime.NewRuntime`
 - ✓ OPA's standard server (`/v1/data`, `/v1/policies`, `/health`) with SpiceDB builtins resolved
+- ✓ Object-keyed subject argument — `{"extsvc/user": id}` (keys are the permission's allowed SpiceDB subject types, compile-time validated by OPA)
 - ✓ A single policy file mixing RBAC + ReBAC + a deny override
 - ✓ SpiceDB consulted as a primitive *from inside* a Rego policy
 - ✓ One binary; OPA-standard HTTP-exposed policy decisions

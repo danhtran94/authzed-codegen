@@ -31,7 +31,7 @@ func TestOPA_CheckFolderBrowse_NoCaveat(t *testing.T) {
 package test
 import future.keywords.if
 
-allow if extsvc.check_folder_browse("extsvc/user:opa-u-1", "opa-fb-1", {})
+allow if extsvc.check_folder_browse({"extsvc/user": "opa-u-1"}, "opa-fb-1", {})
 `),
 	}
 	opts = append(opts, extsvc.SpiceDBBuiltins(sb.Engine, ctx)...)
@@ -64,7 +64,7 @@ func TestOPA_CheckFolderTenantedBrowse_WithCaveat_Match(t *testing.T) {
 package test
 import future.keywords.if
 
-allow if extsvc.check_folder_tenanted_browse("extsvc/user:opa-u-tb-match", "opa-tb-match", {"tenant": "acme"})
+allow if extsvc.check_folder_tenanted_browse({"extsvc/user": "opa-u-tb-match"}, "opa-tb-match", {"tenant": "acme"})
 `),
 	}
 	opts = append(opts, extsvc.SpiceDBBuiltins(sb.Engine, ctx)...)
@@ -96,7 +96,7 @@ package test
 import future.keywords.if
 
 default allow := false
-allow if extsvc.check_folder_tenanted_browse("extsvc/user:opa-u-tb-wrong", "opa-tb-wrong", {"tenant": "not-acme"})
+allow if extsvc.check_folder_tenanted_browse({"extsvc/user": "opa-u-tb-wrong"}, "opa-tb-wrong", {"tenant": "not-acme"})
 `),
 	}
 	opts = append(opts, extsvc.SpiceDBBuiltins(sb.Engine, ctx)...)
@@ -123,7 +123,7 @@ func TestOPA_LookupFolderBrowseResources_NoCaveat(t *testing.T) {
 		rego.Module("test.rego", `
 package test
 
-resources := extsvc.lookup_folder_browse_resources("extsvc/user:opa-u-lk-1", {})
+resources := extsvc.lookup_folder_browse_resources({"extsvc/user": "opa-u-lk-1"}, {})
 `),
 	}
 	opts = append(opts, extsvc.SpiceDBBuiltins(sb.Engine, ctx)...)
@@ -136,6 +136,53 @@ resources := extsvc.lookup_folder_browse_resources("extsvc/user:opa-u-lk-1", {})
 	require.True(t, ok, "result should be []any list")
 	assert.Contains(t, got, "opa-lk-fa")
 	assert.Contains(t, got, "opa-lk-fb")
+}
+
+// TestOPA_CheckFolderBrowse_MultiSubject exercises the keyed-object subject
+// argument (AUZ-022): multiple subject-type keys (AND semantics, matching
+// the typed Check<X> method) and the list-of-ids value form. folder.viewer
+// accepts extsvc/user | extsvc/group | extsvc/role as direct subjects, and
+// folder.browse = viewer.
+func TestOPA_CheckFolderBrowse_MultiSubject(t *testing.T) {
+	ctx := context.Background()
+
+	folder := extsvc.Folder("opa-ms-1")
+	require.NoError(t, folder.CreateViewerRelations(ctx, extsvc.FolderViewerObjects{
+		User:  []extsvc.User{"ms-u"},
+		Group: []extsvc.Group{"ms-g"},
+	}))
+
+	eval := func(t *testing.T, query, module string) any {
+		t.Helper()
+		opts := []func(*rego.Rego){rego.Query(query), rego.Module("test.rego", module)}
+		opts = append(opts, extsvc.SpiceDBBuiltins(sb.Engine, ctx)...)
+		rs, err := rego.New(opts...).Eval(ctx)
+		require.NoError(t, err)
+		require.NotEmpty(t, rs)
+		return rs[0].Expressions[0].Value
+	}
+
+	// Both keys granted → AND → true.
+	assert.Equal(t, true, eval(t, "data.t.x", `
+package t
+import future.keywords.if
+x if extsvc.check_folder_browse({"extsvc/user": "ms-u", "extsvc/group": "ms-g"}, "opa-ms-1", {})
+`), "user AND group both granted")
+
+	// One key not granted → AND → false.
+	assert.Equal(t, false, eval(t, "data.t.x", `
+package t
+import future.keywords.if
+default x := false
+x if extsvc.check_folder_browse({"extsvc/user": "ms-u", "extsvc/group": "ms-g-missing"}, "opa-ms-1", {})
+`), "group key denies → AND fails")
+
+	// List-of-ids value form resolves like a single id.
+	assert.Equal(t, true, eval(t, "data.t.x", `
+package t
+import future.keywords.if
+x if extsvc.check_folder_browse({"extsvc/user": ["ms-u"]}, "opa-ms-1", {})
+`), "list-of-ids subject value")
 }
 
 // TestOPA_GlobalRegistration exercises the AUZ-021 global-registration
@@ -170,7 +217,7 @@ func TestOPA_GlobalRegistration(t *testing.T) {
 package test
 import future.keywords.if
 
-allow if extsvc.check_folder_browse("extsvc/user:opa-u-glob-1", "opa-glob-1", {})
+allow if extsvc.check_folder_browse({"extsvc/user": "opa-u-glob-1"}, "opa-glob-1", {})
 `),
 	)
 	rs, err := r.Eval(ctx)
