@@ -12,10 +12,14 @@ import (
 	"github.com/danhtran94/authzed-codegen/internal/templates"
 )
 
-var outputPath string
+var (
+	outputPath string
+	emitOPA    bool
+)
 
 func init() {
 	flag.StringVar(&outputPath, "output", "zed", "output path for generated files")
+	flag.BoolVar(&emitOPA, "emit-opa", false, "emit opa.gen.go per package with OPA custom-builtin registrations for Check/Lookup methods (adds opa/rego runtime dep on consumers)")
 }
 
 func main() {
@@ -58,5 +62,11 @@ func main() {
 
 	if err := g.GenerateSchemaSource(string(templates.SchemaTemplate), schemaBytes); err != nil {
 		panic(err)
+	}
+
+	if emitOPA {
+		if err := g.GenerateOPASource(string(templates.OPATemplate)); err != nil {
+			panic(err)
+		}
 	}
 }

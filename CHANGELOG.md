@@ -4,6 +4,32 @@ All notable changes to this project are documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.14.0] - 2026-05-10
+
+Adds OPA Go builtins codegen. With the new `--emit-opa` CLI flag, the generator emits a per-package `opa.gen.go` exposing every `Check<Perm>` and `Lookup<Perm>Resources` method as an OPA custom builtin invocable from Rego policies. Pattern 4 of RFC-001's policy-engine integration tiers — embedded OPA in a Go-first stack with the existing `authz.Engine` gRPC connection reused for SpiceDB calls. See `docs/RFC-001`, `docs/ADR-004`, `docs/scope-opa-go-builtins-codegen.md`, `docs/spec-013-opa-go-builtins-codegen.md`.
+
+### Added
+
+- **`--emit-opa` CLI flag** on `cmd/authzed-codegen` — opt-in; default off. When set, emits `opa.gen.go` per package alongside existing `<entity>.gen.go` files.
+- **`OPATemplate` embed** in `internal/templates/embed.go` backed by `internal/templates/opa.go.tmpl`.
+- **`Generator.GenerateOPASource(tmplStr string)` method** in `internal/generator/opa.go` (split from `generator.go` for separation of OPA-specific generator code) plus `OPAPackageView` struct + `groupByPackage` helper. Definitions and permissions sorted alphabetically per (Resource, Permission) for round-trip determinism.
+- **Per-package `SpiceDBBuiltins(engine authz.Engine, ctx context.Context) []func(*rego.Rego)`** in generated `opa.gen.go`. Returns OPA registration options for every Check / Lookup method in the package. Caller passes the result to `rego.New(opts...)`.
+- **Uniform builtin signatures** — Check is 3-arg `(subject string, resource_id string, caveat_context object) → bool`; Lookup is 2-arg `(subject string, caveat_context object) → []string`. `subject` is a `"type:id"` string. `caveat_context` is always required at the call site; pass `{}` when no caveat applies.
+- **Caveat-aware dispatch** — closure inspects `caveat_context`; empty → `Engine.CheckPermission` / `Engine.LookupResources`; non-empty → `*WithCaveat` variant via `structpb.NewStruct(m)` conversion.
+- **Engine-error mapping** — `authz.ErrPermissionDenied` / `authz.ErrConditionalPermission` map to `BooleanTerm(false)` (policy denial signals); any other engine error fails the Rego eval with `fmt.Errorf` (system error). Distinct from policy denial per SPEC-013 C4.
+- **Lookup result extraction** — returns `LookupResult.Definite` only as a Rego `[]string`. `Conditional` entries dropped silently with a Go doc comment naming the limitation.
+- **OPA dependency** — `github.com/open-policy-agent/opa v1.16.1` added to `go.mod` (latest stable v1.x as of 2026-05-10).
+- **e2e test** in `example/authzed/extsvc/extsvc_opa_test.go` — exercises no-caveat path, with-caveat match, with-caveat mismatch, and Lookup against a live SpiceDB testcontainer.
+- **Generated fixtures** — `example/authzed/{bookingsvc,menusvc,extsvc}/opa.gen.go` committed (round-trip regression bar).
+
+### Notes
+
+- **API divergence from SPEC-013**: The exported function is `SpiceDBBuiltins(engine, ctx) []func(*rego.Rego)` (returns options) rather than the SPEC's `RegisterSpiceDBBuiltins(r, engine, ctx)` (mutates r). The mutate-r approach silently failed at eval time because `rego.New` builds the AST compiler with `WithBuiltins(r.builtinDecls)` BEFORE post-construction `Function3(...)(r)` calls take effect. The options-slice form is the canonical Go-OPA pattern. Captured in `jobs/AUZ-019` Discoveries.
+- **Subject-argument format**: `"type:id"` string instead of separate type+id args. The existing typed `Check<X>` methods accept multi-subject-type Inputs structs and dispatch internally; the OPA binding bypasses that layer to call `Engine.CheckPermission` directly. SPEC's stated arity (3-arg Check, 2-arg Lookup) is preserved.
+- **OPA imports use the canonical `/v1/...` paths** — generated files import `github.com/open-policy-agent/opa/v1/{ast,rego,types}`. The legacy paths (`github.com/open-policy-agent/opa/{ast,rego,types}`) carry an upstream `Deprecated:` marker pointing at `/v1/...` as the recommended location. Symbols are identical; the legacy shim is a thin re-export. SPEC-013 C2 enumerated the legacy paths; the implementation flipped to canonical after the deprecation warning surfaced.
+- **Out of scope** for this release: `Create<Rel>Relations` builtins (writes don't fit Rego's pure-eval model), Conditional Lookup surfacing, build-tag opt-in, README documentation, `runtime.NewRuntime` HTTP server scaffolding, OPA decision-log / bundle-distribution wiring, CEL bindings (Pattern 2), Rego/HTTP helpers (Pattern 3). Each carries an explicit reason in `docs/scope-opa-go-builtins-codegen.md`.
+- **Caller migration** for users wanting OPA bindings: opt in with `--emit-opa`; commit the generated `opa.gen.go` files; pull `SpiceDBBuiltins` into `rego.New(opts...)`; write Rego policies that invoke `<package>.check_<resource>_<perm>` / `<package>.lookup_<resource>_<perm>_resources`. Without `--emit-opa`, behavior is unchanged.
+
 ## [1.13.0] - 2026-05-09
 
 Extends caveat parameter type coverage. SpiceDB's `duration`, `timestamp`, and `ipaddress` types now map to typed Go values on generated `<Caveat>Args` structs instead of falling back to `any`. Caller DX improves significantly for the common time-based caveat patterns (rate limiting, session expiry, deadlines) and IP-based access control.
