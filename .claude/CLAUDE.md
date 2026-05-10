@@ -9,6 +9,14 @@ generated code wraps a thin runtime in `pkg/authz/` so callers can
 `Create<Relation>Relations` against a SpiceDB engine without
 hand-writing per-resource boilerplate.
 
+The optional `--emit-opa` flag adds a per-package `opa.gen.go`
+exposing every `Check`/`Lookup` method as an OPA custom builtin
+(`SpiceDBBuiltins` per-instance + `RegisterSpiceDBBuiltinsGlobal`
+for `runtime.NewRuntime`) — Pattern 4 of the policy-engine
+integration in `docs/RFC-001-policy-engine-integration-patterns.md`.
+`example/opa-embed/` is a runnable demo of the all-embedded shape
+(SpiceDB + OPA's runtime + the generated builtins, one binary).
+
 ## Stack
 - Go 1.26+
 - `github.com/authzed/spicedb` v1.52+ (parser backend — `pkg/schemadsl/compiler`)
@@ -21,12 +29,14 @@ hand-writing per-resource boilerplate.
     cmd/authzed-codegen/      → main entry point; calls compiler.Compile + generator
     internal/generator/       → core codegen
        adapter.go             → proto → DefinitionView; rejects unsupported constructs
-       generator.go           → resolver + template execution
-    internal/templates/       → embedded text/template + per-object template
+       generator.go           → resolver + per-object/schema template execution
+       opa.go                 → --emit-opa: per-package opa.gen.go (OPA custom builtins)
+    internal/templates/       → embedded text/template (object / schema / opa)
     internal/utilstr/         → string-mangling helpers (PascalCase, package names)
     pkg/authz/                → runtime types (Type, Relation, Permission, Engine)
     pkg/authz/spicedb/        → SpiceDB engine implementation
-    example/                  → schema.zed + checked-in generated output (bookingsvc, menusvc, extsvc)
+    example/                  → schema.zed + checked-in generated output (bookingsvc, menusvc, extsvc); opa.gen.go committed
+    example/opa-embed/        → runnable all-embedded demo (SpiceDB + OPA runtime + generated builtins, one binary)
     docs/                     → ADRs, RFCs, scope notes, SPECs
     jobs/                     → job docs for `/job` workflow
 
@@ -44,7 +54,7 @@ No Makefile. The full verification loop:
     go build ./...
     go vet ./...
     go mod tidy
-    go run ./cmd/authzed-codegen --output example/authzed example/schema.zed
+    go run ./cmd/authzed-codegen --output example/authzed --emit-opa example/schema.zed
     git diff --quiet example/authzed/      # round-trip must be zero-diff
     go test ./pkg/authz/spicedb/... \
             ./example/authzed/bookingsvc/... \
@@ -53,7 +63,8 @@ No Makefile. The full verification loop:
 
 The fixture round-trip remains the codegen regression bar —
 `example/schema.zed` must regenerate `example/authzed/**.gen.go`
-byte-identical to the committed version.
+(including the `opa.gen.go` files — pass `--emit-opa`) byte-identical
+to the committed version.
 
 E2E coverage for the generated stubs lives in the four test packages
 above (added per AUZ-005). Each `TestMain` calls

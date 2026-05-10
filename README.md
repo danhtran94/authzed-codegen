@@ -345,6 +345,83 @@ if !drift.IsClean() {
 
 Server-side normalisation happens in SpiceDB's `DiffSchema` RPC — whitespace, comment formatting, and ordering don't false-positive. See `docs/spec-010-schema-drift-detection.md`.
 
+## OPA Integration
+
+The `--emit-opa` flag adds a per-package `opa.gen.go` exposing every `Check<Perm>` and `Lookup<Perm>Resources` method as an [OPA](https://www.openpolicyagent.org/) custom builtin invocable from Rego policies. A policy can then mix attribute checks with SpiceDB relationship checks in one place:
+
+```sh
+authzed-codegen --output example/authzed --emit-opa example/schema.zed
+```
+
+Each generated file declares two registration functions:
+
+```go
+// Per-instance — pass to rego.New(opts...). No global state.
+func SpiceDBBuiltins(engine authz.Engine, ctx context.Context) []func(*rego.Rego)
+
+// Process-global — runtime.NewRuntime and OPA's standard /v1/data endpoint
+// build their compiler from the global builtin registry, so they need this
+// rather than per-instance options. Call once at startup, before any
+// concurrent compilation (ast.RegisterBuiltin is not concurrency-safe).
+func RegisterSpiceDBBuiltinsGlobal(engine authz.Engine, ctx context.Context)
+```
+
+Builtin signatures, one pair per `definition` × `permission`:
+
+```
+<pkg>.check_<resource>_<perm>(subject, resource_id, caveat_context) -> bool
+<pkg>.lookup_<resource>_<perm>_resources(subject, caveat_context) -> []string
+```
+
+`subject` is an object keyed by SpiceDB subject type, value a string id or a list of string ids — `{"extsvc/user": "alice"}` or `{"extsvc/user": ["a","b"], "extsvc/group": ["g"]}`. Check is AND across present keys (every present subject type must be granted), matching the typed `Check<Perm>` method; Lookup uses the first present key. `caveat_context` is always required; pass `{}` when no caveat applies. `authz.ErrPermissionDenied` / `authz.ErrConditionalPermission` map to `false`; any other engine error fails the Rego eval. Lookup builtins return definite results only.
+
+A policy mixing RBAC and ReBAC:
+
+```rego
+package authz
+
+default allow := false
+
+# RBAC leg
+granted if input.user.role == "admin"
+
+# ReBAC leg — consult SpiceDB's relationship graph
+granted if extsvc.check_folder_browse({"extsvc/user": input.user.id}, input.resource.id, {})
+
+# deny override
+deny contains msg if {
+	input.user.id in data.blocklist
+	msg := "blocklisted"
+}
+
+allow if {
+	count(deny) == 0
+	granted
+}
+```
+
+Wire into OPA's runtime (the standard server — `/v1/data`, `/v1/policies`, `/health`):
+
+```go
+extsvc.RegisterSpiceDBBuiltinsGlobal(engine, ctx) // before NewRuntime
+rt, _ := runtime.NewRuntime(ctx, runtime.Params{Addrs: &[]string{":8181"}, Paths: []string{"policy"}})
+rt.Serve(ctx)
+```
+
+Or into a plain `rego.New` evaluation:
+
+```go
+opts := []func(*rego.Rego){rego.Query("data.authz.allow"), rego.Module("p.rego", policy), rego.Input(input)}
+opts = append(opts, extsvc.SpiceDBBuiltins(engine, ctx)...)
+rs, _ := rego.New(opts...).Eval(ctx)
+```
+
+`example/opa-embed/` is a runnable demo: one Go binary composing SpiceDB, OPA's runtime, and the generated builtins, serving policy decisions over OPA's standard HTTP API. Run `go run ./example/opa-embed` and `curl -X POST localhost:8181/v1/data/authz/allow -d '{"input":{...}}'`.
+
+The OPA bindings are opt-in. Without `--emit-opa`, codegen output is unchanged, and importing the generated package pulls in `github.com/open-policy-agent/opa` only when `opa.gen.go` is present. The generated `authz.Engine` works identically against embedded SpiceDB (in-process via `github.com/authzed/spicedb`) and remote SpiceDB — same code, swap the connection target.
+
+See [`docs/RFC-001-policy-engine-integration-patterns.md`](docs/RFC-001-policy-engine-integration-patterns.md) for the integration framework (embedded SpiceDB, CEL bindings, OPA Rego helpers, OPA Go builtins — and which require codegen work), [`docs/ADR-004-opa-go-builtins.md`](docs/ADR-004-opa-go-builtins.md) for why OPA Go builtins, and [`docs/spec-013-opa-go-builtins-codegen.md`](docs/spec-013-opa-go-builtins-codegen.md) for the codegen contract.
+
 ## Behavior Notes
 
 - **Permission chains.** `Check<Permission>Inputs` exposes the full set
