@@ -12,6 +12,12 @@ import (
 var ErrNoInput = fmt.Errorf("no input")
 var ErrPermissionDenied = fmt.Errorf("permission denied")
 
+// ErrEmptyRelationFilter is returned by Engine.DeleteRelationsMatching when
+// the supplied RelationFilter has no field set — a filter that would match,
+// and delete, every relationship in the datastore. SpiceDB rejects the
+// all-empty filter server-side too; this fails faster, before the call.
+var ErrEmptyRelationFilter = errors.New("empty relation filter")
+
 // ErrConditionalPermission is the sentinel returned (via wrapping) when
 // SpiceDB indicates PERMISSIONSHIP_CONDITIONAL_PERMISSION — the permission
 // would be granted IF the caller supplied additional caveat context.
@@ -173,6 +179,34 @@ type RelationTuple struct {
 	ExpiresAt     *time.Time
 }
 
+// RelationFilter selects relationships for Engine.DeleteRelationsMatching.
+// It mirrors the subset of SpiceDB's v1.RelationshipFilter the codegen
+// uses today.
+//
+// Set ResourceType + ResourceID for "all of one resource's relationships",
+// add Relation to scope to a single relation, or set ResourceType +
+// SubjectType + SubjectID for "all relationships where this subject appears
+// within one resource type". A filter with ONLY ResourceType set deletes
+// *every* relationship of that type in the datastore — the empty-everything
+// case (no field set) is rejected with ErrEmptyRelationFilter, but
+// dangerously-broad-but-non-empty filters are not (SpiceDB's underlying
+// RelationshipFilter carries the same hazard). Set ResourceType + ResourceID,
+// or ResourceType + SubjectID, unless you really mean the broad delete. A
+// filter with no ResourceType is accepted by SpiceDB but index-suboptimal.
+type RelationFilter struct {
+	ResourceType Type     // optional; recommended
+	ResourceID   ID       // optional
+	Relation     Relation // optional
+	SubjectType  Type     // optional
+	SubjectID    ID       // optional
+}
+
+// IsEmpty reports whether no field is set. DeleteRelationsMatching rejects
+// such a filter — it would match every relationship.
+func (f RelationFilter) IsEmpty() bool {
+	return f.ResourceType == "" && f.ResourceID == "" && f.Relation == "" && f.SubjectType == "" && f.SubjectID == ""
+}
+
 type Engine interface {
 	CreateRelations(ctx context.Context, to Resource, relation Relation, subject Type, ids []ID) error
 	CreateRelationsWithCaveat(ctx context.Context, to Resource, relation Relation, subject Type, ids []ID, caveatName string, caveatParams map[string]any) error
@@ -187,6 +221,12 @@ type Engine interface {
 	LookupSubjectsWithCaveat(ctx context.Context, on Resource, permission Permission, subject Type, caveatParams map[string]any) (LookupResult, error)
 	ReadRelations(ctx context.Context, from Resource, relation Relation, subject Type) ([]RelationTuple, error)
 	DeleteRelations(ctx context.Context, from Resource, relation Relation, subject Type, ids []ID) error
+	// DeleteRelationsMatching deletes every relationship matching f, in a
+	// single transaction. Returns ErrEmptyRelationFilter if f.IsEmpty().
+	// For very large result sets (millions of tuples) the underlying single
+	// transaction may time out — bounded/non-transactional deletion is not
+	// exposed here. See RelationFilter for the blast-radius caveat.
+	DeleteRelationsMatching(ctx context.Context, f RelationFilter) error
 	HasPublicRelation(ctx context.Context, on Resource, relation Relation, subject Type) (bool, error)
 	HasPublicSubject(ctx context.Context, on Resource, permission Permission, subject Type) (bool, error)
 	DiffSchema(ctx context.Context, comparisonSchema string) ([]*v1.ReflectionSchemaDiff, error)

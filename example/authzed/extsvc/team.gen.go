@@ -7,6 +7,8 @@ import (
 
   "context"
   "time"
+  "errors"
+  "fmt"
 )
 
 const TypeTeam authz.Type = "extsvc/team"
@@ -87,6 +89,18 @@ func (team Team) DeleteOwnerRelations(ctx context.Context, objects TeamOwnerObje
   return nil
 }
 
+// PurgeOwnerRelations deletes every owner relationship on this
+// Team, regardless of subject — clears the relation entirely. Unlike
+// DeleteOwnerRelations (which revokes the specific subjects you pass),
+// use this when owner as a whole no longer applies to this Team.
+func (team Team) PurgeOwnerRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeTeam,
+    ResourceID: authz.ID(team),
+    Relation: authz.Relation(TeamOwner),
+  })
+}
+
 func (team Team) DeleteManagerRelations(ctx context.Context, objects TeamManagerObjects) error {
   if len(objects.User) > 0 {
     err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
@@ -98,6 +112,50 @@ func (team Team) DeleteManagerRelations(ctx context.Context, objects TeamManager
     }
   }
   return nil
+}
+
+// PurgeManagerRelations deletes every manager relationship on this
+// Team, regardless of subject — clears the relation entirely. Unlike
+// DeleteManagerRelations (which revokes the specific subjects you pass),
+// use this when manager as a whole no longer applies to this Team.
+func (team Team) PurgeManagerRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeTeam,
+    ResourceID: authz.ID(team),
+    Relation: authz.Relation(TeamManager),
+  })
+}
+
+// PurgeRelations deletes every relationship on this Team — all relations,
+// any subject — in one transaction. Use it when this Team is deleted from
+// your store: it removes the Team's resource-side tuples. It does NOT
+// remove tuples where this Team appears as a *subject* of another
+// resource — for that, see PurgeRelationsAsSubject (emitted when Team is a
+// subject anywhere in the schema).
+func (team Team) PurgeRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeTeam,
+    ResourceID: authz.ID(team),
+  })
+}
+
+// PurgeRelationsAsSubject deletes every relationship where this Team is the
+// subject, across the resource types whose schema allows Team as a subject.
+// One transactional delete per referencing resource type; failures are
+// accumulated (errors.Join) and the rest still run — re-run on error
+// (idempotent). Use it when this Team is deleted from your store,
+// alongside PurgeRelations if Team also has relations.
+func (team Team) PurgeRelationsAsSubject(ctx context.Context) error {
+  eng := authz.GetEngine(ctx)
+  var errs []error
+  if err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: authz.Type("extsvc/folder"),
+    SubjectType: TypeTeam,
+    SubjectID: authz.ID(team),
+  }); err != nil {
+    errs = append(errs, fmt.Errorf("purge Team as subject of extsvc/folder: %w", err))
+  }
+  return errors.Join(errs...)
 }
 
 type TeamOwnerUserRelation struct {

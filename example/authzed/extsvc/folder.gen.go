@@ -7,6 +7,8 @@ import (
 
   "context"
   "time"
+  "errors"
+  "fmt"
 )
 
 const TypeFolder authz.Type = "extsvc/folder"
@@ -974,6 +976,18 @@ func (folder Folder) DeleteViewerRelations(ctx context.Context, objects FolderVi
   return nil
 }
 
+// PurgeViewerRelations deletes every viewer relationship on this
+// Folder, regardless of subject — clears the relation entirely. Unlike
+// DeleteViewerRelations (which revokes the specific subjects you pass),
+// use this when viewer as a whole no longer applies to this Folder.
+func (folder Folder) PurgeViewerRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeFolder,
+    ResourceID: authz.ID(folder),
+    Relation: authz.Relation(FolderViewer),
+  })
+}
+
 func (folder Folder) DeleteGuestRelations(ctx context.Context, objects FolderGuestObjects) error {
   if len(objects.User) > 0 {
     err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
@@ -996,6 +1010,18 @@ func (folder Folder) DeleteGuestRelations(ctx context.Context, objects FolderGue
   return nil
 }
 
+// PurgeGuestRelations deletes every guest relationship on this
+// Folder, regardless of subject — clears the relation entirely. Unlike
+// DeleteGuestRelations (which revokes the specific subjects you pass),
+// use this when guest as a whole no longer applies to this Folder.
+func (folder Folder) PurgeGuestRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeFolder,
+    ResourceID: authz.ID(folder),
+    Relation: authz.Relation(FolderGuest),
+  })
+}
+
 func (folder Folder) DeleteTenantedViewerRelations(ctx context.Context, objects FolderTenantedViewerObjects) error {
   if len(objects.User) > 0 {
     err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
@@ -1007,6 +1033,18 @@ func (folder Folder) DeleteTenantedViewerRelations(ctx context.Context, objects 
     }
   }
   return nil
+}
+
+// PurgeTenantedViewerRelations deletes every tenanted_viewer relationship on this
+// Folder, regardless of subject — clears the relation entirely. Unlike
+// DeleteTenantedViewerRelations (which revokes the specific subjects you pass),
+// use this when tenanted_viewer as a whole no longer applies to this Folder.
+func (folder Folder) PurgeTenantedViewerRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeFolder,
+    ResourceID: authz.ID(folder),
+    Relation: authz.Relation(FolderTenantedViewer),
+  })
 }
 
 func (folder Folder) DeleteGuardedViewerRelations(ctx context.Context, objects FolderGuardedViewerObjects) error {
@@ -1031,6 +1069,18 @@ func (folder Folder) DeleteGuardedViewerRelations(ctx context.Context, objects F
   return nil
 }
 
+// PurgeGuardedViewerRelations deletes every guarded_viewer relationship on this
+// Folder, regardless of subject — clears the relation entirely. Unlike
+// DeleteGuardedViewerRelations (which revokes the specific subjects you pass),
+// use this when guarded_viewer as a whole no longer applies to this Folder.
+func (folder Folder) PurgeGuardedViewerRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeFolder,
+    ResourceID: authz.ID(folder),
+    Relation: authz.Relation(FolderGuardedViewer),
+  })
+}
+
 func (folder Folder) DeleteActorRelations(ctx context.Context, objects FolderActorObjects) error {
   if len(objects.User) > 0 {
     err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
@@ -1042,6 +1092,18 @@ func (folder Folder) DeleteActorRelations(ctx context.Context, objects FolderAct
     }
   }
   return nil
+}
+
+// PurgeActorRelations deletes every actor relationship on this
+// Folder, regardless of subject — clears the relation entirely. Unlike
+// DeleteActorRelations (which revokes the specific subjects you pass),
+// use this when actor as a whole no longer applies to this Folder.
+func (folder Folder) PurgeActorRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeFolder,
+    ResourceID: authz.ID(folder),
+    Relation: authz.Relation(FolderActor),
+  })
 }
 
 func (folder Folder) DeleteCollaboratorRelations(ctx context.Context, objects FolderCollaboratorObjects) error {
@@ -1066,6 +1128,18 @@ func (folder Folder) DeleteCollaboratorRelations(ctx context.Context, objects Fo
   return nil
 }
 
+// PurgeCollaboratorRelations deletes every collaborator relationship on this
+// Folder, regardless of subject — clears the relation entirely. Unlike
+// DeleteCollaboratorRelations (which revokes the specific subjects you pass),
+// use this when collaborator as a whole no longer applies to this Folder.
+func (folder Folder) PurgeCollaboratorRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeFolder,
+    ResourceID: authz.ID(folder),
+    Relation: authz.Relation(FolderCollaborator),
+  })
+}
+
 func (folder Folder) DeleteRateLimitedRelations(ctx context.Context, objects FolderRateLimitedObjects) error {
   if len(objects.User) > 0 {
     err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
@@ -1077,6 +1151,18 @@ func (folder Folder) DeleteRateLimitedRelations(ctx context.Context, objects Fol
     }
   }
   return nil
+}
+
+// PurgeRateLimitedRelations deletes every rate_limited relationship on this
+// Folder, regardless of subject — clears the relation entirely. Unlike
+// DeleteRateLimitedRelations (which revokes the specific subjects you pass),
+// use this when rate_limited as a whole no longer applies to this Folder.
+func (folder Folder) PurgeRateLimitedRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeFolder,
+    ResourceID: authz.ID(folder),
+    Relation: authz.Relation(FolderRateLimited),
+  })
 }
 
 func (folder Folder) DeleteScoredViewerRelations(ctx context.Context, objects FolderScoredViewerObjects) error {
@@ -1092,6 +1178,18 @@ func (folder Folder) DeleteScoredViewerRelations(ctx context.Context, objects Fo
   return nil
 }
 
+// PurgeScoredViewerRelations deletes every scored_viewer relationship on this
+// Folder, regardless of subject — clears the relation entirely. Unlike
+// DeleteScoredViewerRelations (which revokes the specific subjects you pass),
+// use this when scored_viewer as a whole no longer applies to this Folder.
+func (folder Folder) PurgeScoredViewerRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeFolder,
+    ResourceID: authz.ID(folder),
+    Relation: authz.Relation(FolderScoredViewer),
+  })
+}
+
 func (folder Folder) DeleteTokenViewerRelations(ctx context.Context, objects FolderTokenViewerObjects) error {
   if len(objects.User) > 0 {
     err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
@@ -1103,6 +1201,18 @@ func (folder Folder) DeleteTokenViewerRelations(ctx context.Context, objects Fol
     }
   }
   return nil
+}
+
+// PurgeTokenViewerRelations deletes every token_viewer relationship on this
+// Folder, regardless of subject — clears the relation entirely. Unlike
+// DeleteTokenViewerRelations (which revokes the specific subjects you pass),
+// use this when token_viewer as a whole no longer applies to this Folder.
+func (folder Folder) PurgeTokenViewerRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeFolder,
+    ResourceID: authz.ID(folder),
+    Relation: authz.Relation(FolderTokenViewer),
+  })
 }
 
 func (folder Folder) DeleteVersionedViewerRelations(ctx context.Context, objects FolderVersionedViewerObjects) error {
@@ -1118,6 +1228,18 @@ func (folder Folder) DeleteVersionedViewerRelations(ctx context.Context, objects
   return nil
 }
 
+// PurgeVersionedViewerRelations deletes every versioned_viewer relationship on this
+// Folder, regardless of subject — clears the relation entirely. Unlike
+// DeleteVersionedViewerRelations (which revokes the specific subjects you pass),
+// use this when versioned_viewer as a whole no longer applies to this Folder.
+func (folder Folder) PurgeVersionedViewerRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeFolder,
+    ResourceID: authz.ID(folder),
+    Relation: authz.Relation(FolderVersionedViewer),
+  })
+}
+
 func (folder Folder) DeleteMatrixViewerRelations(ctx context.Context, objects FolderMatrixViewerObjects) error {
   if len(objects.User) > 0 {
     err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
@@ -1129,6 +1251,18 @@ func (folder Folder) DeleteMatrixViewerRelations(ctx context.Context, objects Fo
     }
   }
   return nil
+}
+
+// PurgeMatrixViewerRelations deletes every matrix_viewer relationship on this
+// Folder, regardless of subject — clears the relation entirely. Unlike
+// DeleteMatrixViewerRelations (which revokes the specific subjects you pass),
+// use this when matrix_viewer as a whole no longer applies to this Folder.
+func (folder Folder) PurgeMatrixViewerRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeFolder,
+    ResourceID: authz.ID(folder),
+    Relation: authz.Relation(FolderMatrixViewer),
+  })
 }
 
 func (folder Folder) DeleteDurationViewerRelations(ctx context.Context, objects FolderDurationViewerObjects) error {
@@ -1144,6 +1278,18 @@ func (folder Folder) DeleteDurationViewerRelations(ctx context.Context, objects 
   return nil
 }
 
+// PurgeDurationViewerRelations deletes every duration_viewer relationship on this
+// Folder, regardless of subject — clears the relation entirely. Unlike
+// DeleteDurationViewerRelations (which revokes the specific subjects you pass),
+// use this when duration_viewer as a whole no longer applies to this Folder.
+func (folder Folder) PurgeDurationViewerRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeFolder,
+    ResourceID: authz.ID(folder),
+    Relation: authz.Relation(FolderDurationViewer),
+  })
+}
+
 func (folder Folder) DeleteDeadlineViewerRelations(ctx context.Context, objects FolderDeadlineViewerObjects) error {
   if len(objects.User) > 0 {
     err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
@@ -1155,6 +1301,18 @@ func (folder Folder) DeleteDeadlineViewerRelations(ctx context.Context, objects 
     }
   }
   return nil
+}
+
+// PurgeDeadlineViewerRelations deletes every deadline_viewer relationship on this
+// Folder, regardless of subject — clears the relation entirely. Unlike
+// DeleteDeadlineViewerRelations (which revokes the specific subjects you pass),
+// use this when deadline_viewer as a whole no longer applies to this Folder.
+func (folder Folder) PurgeDeadlineViewerRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeFolder,
+    ResourceID: authz.ID(folder),
+    Relation: authz.Relation(FolderDeadlineViewer),
+  })
 }
 
 func (folder Folder) DeleteSubnetViewerRelations(ctx context.Context, objects FolderSubnetViewerObjects) error {
@@ -1170,6 +1328,18 @@ func (folder Folder) DeleteSubnetViewerRelations(ctx context.Context, objects Fo
   return nil
 }
 
+// PurgeSubnetViewerRelations deletes every subnet_viewer relationship on this
+// Folder, regardless of subject — clears the relation entirely. Unlike
+// DeleteSubnetViewerRelations (which revokes the specific subjects you pass),
+// use this when subnet_viewer as a whole no longer applies to this Folder.
+func (folder Folder) PurgeSubnetViewerRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeFolder,
+    ResourceID: authz.ID(folder),
+    Relation: authz.Relation(FolderSubnetViewer),
+  })
+}
+
 func (folder Folder) DeleteTenantedUserRelations(ctx context.Context, objects FolderTenantedUserObjects) error {
   if len(objects.User) > 0 {
     err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
@@ -1181,6 +1351,18 @@ func (folder Folder) DeleteTenantedUserRelations(ctx context.Context, objects Fo
     }
   }
   return nil
+}
+
+// PurgeTenantedUserRelations deletes every tenanted_user relationship on this
+// Folder, regardless of subject — clears the relation entirely. Unlike
+// DeleteTenantedUserRelations (which revokes the specific subjects you pass),
+// use this when tenanted_user as a whole no longer applies to this Folder.
+func (folder Folder) PurgeTenantedUserRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeFolder,
+    ResourceID: authz.ID(folder),
+    Relation: authz.Relation(FolderTenantedUser),
+  })
 }
 
 func (folder Folder) DeleteWindowedUserRelations(ctx context.Context, objects FolderWindowedUserObjects) error {
@@ -1196,6 +1378,18 @@ func (folder Folder) DeleteWindowedUserRelations(ctx context.Context, objects Fo
   return nil
 }
 
+// PurgeWindowedUserRelations deletes every windowed_user relationship on this
+// Folder, regardless of subject — clears the relation entirely. Unlike
+// DeleteWindowedUserRelations (which revokes the specific subjects you pass),
+// use this when windowed_user as a whole no longer applies to this Folder.
+func (folder Folder) PurgeWindowedUserRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeFolder,
+    ResourceID: authz.ID(folder),
+    Relation: authz.Relation(FolderWindowedUser),
+  })
+}
+
 func (folder Folder) DeleteGatedRootRelations(ctx context.Context, objects FolderGatedRootObjects) error {
   if len(objects.Folder) > 0 {
     err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
@@ -1207,6 +1401,18 @@ func (folder Folder) DeleteGatedRootRelations(ctx context.Context, objects Folde
     }
   }
   return nil
+}
+
+// PurgeGatedRootRelations deletes every gated_root relationship on this
+// Folder, regardless of subject — clears the relation entirely. Unlike
+// DeleteGatedRootRelations (which revokes the specific subjects you pass),
+// use this when gated_root as a whole no longer applies to this Folder.
+func (folder Folder) PurgeGatedRootRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeFolder,
+    ResourceID: authz.ID(folder),
+    Relation: authz.Relation(FolderGatedRoot),
+  })
 }
 
 func (folder Folder) DeleteExpiringViewerRelations(ctx context.Context, objects FolderExpiringViewerObjects) error {
@@ -1222,6 +1428,18 @@ func (folder Folder) DeleteExpiringViewerRelations(ctx context.Context, objects 
   return nil
 }
 
+// PurgeExpiringViewerRelations deletes every expiring_viewer relationship on this
+// Folder, regardless of subject — clears the relation entirely. Unlike
+// DeleteExpiringViewerRelations (which revokes the specific subjects you pass),
+// use this when expiring_viewer as a whole no longer applies to this Folder.
+func (folder Folder) PurgeExpiringViewerRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeFolder,
+    ResourceID: authz.ID(folder),
+    Relation: authz.Relation(FolderExpiringViewer),
+  })
+}
+
 func (folder Folder) DeleteGatedTokenRelations(ctx context.Context, objects FolderGatedTokenObjects) error {
   if len(objects.User) > 0 {
     err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
@@ -1233,6 +1451,18 @@ func (folder Folder) DeleteGatedTokenRelations(ctx context.Context, objects Fold
     }
   }
   return nil
+}
+
+// PurgeGatedTokenRelations deletes every gated_token relationship on this
+// Folder, regardless of subject — clears the relation entirely. Unlike
+// DeleteGatedTokenRelations (which revokes the specific subjects you pass),
+// use this when gated_token as a whole no longer applies to this Folder.
+func (folder Folder) PurgeGatedTokenRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeFolder,
+    ResourceID: authz.ID(folder),
+    Relation: authz.Relation(FolderGatedToken),
+  })
 }
 
 func (folder Folder) DeletePublicUntilRelations(ctx context.Context, objects FolderPublicUntilObjects) error {
@@ -1257,6 +1487,18 @@ func (folder Folder) DeletePublicUntilRelations(ctx context.Context, objects Fol
   return nil
 }
 
+// PurgePublicUntilRelations deletes every public_until relationship on this
+// Folder, regardless of subject — clears the relation entirely. Unlike
+// DeletePublicUntilRelations (which revokes the specific subjects you pass),
+// use this when public_until as a whole no longer applies to this Folder.
+func (folder Folder) PurgePublicUntilRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeFolder,
+    ResourceID: authz.ID(folder),
+    Relation: authz.Relation(FolderPublicUntil),
+  })
+}
+
 func (folder Folder) DeletePublicGatedRelations(ctx context.Context, objects FolderPublicGatedObjects) error {
   if len(objects.User) > 0 {
     err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
@@ -1279,6 +1521,18 @@ func (folder Folder) DeletePublicGatedRelations(ctx context.Context, objects Fol
   return nil
 }
 
+// PurgePublicGatedRelations deletes every public_gated relationship on this
+// Folder, regardless of subject — clears the relation entirely. Unlike
+// DeletePublicGatedRelations (which revokes the specific subjects you pass),
+// use this when public_gated as a whole no longer applies to this Folder.
+func (folder Folder) PurgePublicGatedRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeFolder,
+    ResourceID: authz.ID(folder),
+    Relation: authz.Relation(FolderPublicGated),
+  })
+}
+
 func (folder Folder) DeleteCollabRelations(ctx context.Context, objects FolderCollabObjects) error {
   if len(objects.TeamAdmin) > 0 {
     err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
@@ -1290,6 +1544,18 @@ func (folder Folder) DeleteCollabRelations(ctx context.Context, objects FolderCo
     }
   }
   return nil
+}
+
+// PurgeCollabRelations deletes every collab relationship on this
+// Folder, regardless of subject — clears the relation entirely. Unlike
+// DeleteCollabRelations (which revokes the specific subjects you pass),
+// use this when collab as a whole no longer applies to this Folder.
+func (folder Folder) PurgeCollabRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeFolder,
+    ResourceID: authz.ID(folder),
+    Relation: authz.Relation(FolderCollab),
+  })
 }
 
 func (folder Folder) DeleteMixedViewRelations(ctx context.Context, objects FolderMixedViewObjects) error {
@@ -1314,6 +1580,18 @@ func (folder Folder) DeleteMixedViewRelations(ctx context.Context, objects Folde
   return nil
 }
 
+// PurgeMixedViewRelations deletes every mixed_view relationship on this
+// Folder, regardless of subject — clears the relation entirely. Unlike
+// DeleteMixedViewRelations (which revokes the specific subjects you pass),
+// use this when mixed_view as a whole no longer applies to this Folder.
+func (folder Folder) PurgeMixedViewRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeFolder,
+    ResourceID: authz.ID(folder),
+    Relation: authz.Relation(FolderMixedView),
+  })
+}
+
 func (folder Folder) DeleteGatedCollabRelations(ctx context.Context, objects FolderGatedCollabObjects) error {
   if len(objects.TeamAdmin) > 0 {
     err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
@@ -1325,6 +1603,18 @@ func (folder Folder) DeleteGatedCollabRelations(ctx context.Context, objects Fol
     }
   }
   return nil
+}
+
+// PurgeGatedCollabRelations deletes every gated_collab relationship on this
+// Folder, regardless of subject — clears the relation entirely. Unlike
+// DeleteGatedCollabRelations (which revokes the specific subjects you pass),
+// use this when gated_collab as a whole no longer applies to this Folder.
+func (folder Folder) PurgeGatedCollabRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeFolder,
+    ResourceID: authz.ID(folder),
+    Relation: authz.Relation(FolderGatedCollab),
+  })
 }
 
 func (folder Folder) DeleteTempCollabRelations(ctx context.Context, objects FolderTempCollabObjects) error {
@@ -1340,6 +1630,18 @@ func (folder Folder) DeleteTempCollabRelations(ctx context.Context, objects Fold
   return nil
 }
 
+// PurgeTempCollabRelations deletes every temp_collab relationship on this
+// Folder, regardless of subject — clears the relation entirely. Unlike
+// DeleteTempCollabRelations (which revokes the specific subjects you pass),
+// use this when temp_collab as a whole no longer applies to this Folder.
+func (folder Folder) PurgeTempCollabRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeFolder,
+    ResourceID: authz.ID(folder),
+    Relation: authz.Relation(FolderTempCollab),
+  })
+}
+
 func (folder Folder) DeleteAnyParentRelations(ctx context.Context, objects FolderAnyParentObjects) error {
   if len(objects.Folder) > 0 {
     err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
@@ -1351,6 +1653,18 @@ func (folder Folder) DeleteAnyParentRelations(ctx context.Context, objects Folde
     }
   }
   return nil
+}
+
+// PurgeAnyParentRelations deletes every any_parent relationship on this
+// Folder, regardless of subject — clears the relation entirely. Unlike
+// DeleteAnyParentRelations (which revokes the specific subjects you pass),
+// use this when any_parent as a whole no longer applies to this Folder.
+func (folder Folder) PurgeAnyParentRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeFolder,
+    ResourceID: authz.ID(folder),
+    Relation: authz.Relation(FolderAnyParent),
+  })
 }
 
 func (folder Folder) DeleteAllParentRelations(ctx context.Context, objects FolderAllParentObjects) error {
@@ -1366,6 +1680,18 @@ func (folder Folder) DeleteAllParentRelations(ctx context.Context, objects Folde
   return nil
 }
 
+// PurgeAllParentRelations deletes every all_parent relationship on this
+// Folder, regardless of subject — clears the relation entirely. Unlike
+// DeleteAllParentRelations (which revokes the specific subjects you pass),
+// use this when all_parent as a whole no longer applies to this Folder.
+func (folder Folder) PurgeAllParentRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeFolder,
+    ResourceID: authz.ID(folder),
+    Relation: authz.Relation(FolderAllParent),
+  })
+}
+
 func (folder Folder) DeleteGatedParentRelations(ctx context.Context, objects FolderGatedParentObjects) error {
   if len(objects.Folder) > 0 {
     err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
@@ -1377,6 +1703,18 @@ func (folder Folder) DeleteGatedParentRelations(ctx context.Context, objects Fol
     }
   }
   return nil
+}
+
+// PurgeGatedParentRelations deletes every gated_parent relationship on this
+// Folder, regardless of subject — clears the relation entirely. Unlike
+// DeleteGatedParentRelations (which revokes the specific subjects you pass),
+// use this when gated_parent as a whole no longer applies to this Folder.
+func (folder Folder) PurgeGatedParentRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeFolder,
+    ResourceID: authz.ID(folder),
+    Relation: authz.Relation(FolderGatedParent),
+  })
 }
 
 func (folder Folder) DeleteDirectMemberRelations(ctx context.Context, objects FolderDirectMemberObjects) error {
@@ -1392,6 +1730,18 @@ func (folder Folder) DeleteDirectMemberRelations(ctx context.Context, objects Fo
   return nil
 }
 
+// PurgeDirectMemberRelations deletes every direct_member relationship on this
+// Folder, regardless of subject — clears the relation entirely. Unlike
+// DeleteDirectMemberRelations (which revokes the specific subjects you pass),
+// use this when direct_member as a whole no longer applies to this Folder.
+func (folder Folder) PurgeDirectMemberRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeFolder,
+    ResourceID: authz.ID(folder),
+    Relation: authz.Relation(FolderDirectMember),
+  })
+}
+
 func (folder Folder) DeleteParentForSelfRelations(ctx context.Context, objects FolderParentForSelfObjects) error {
   if len(objects.Folder) > 0 {
     err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
@@ -1403,6 +1753,64 @@ func (folder Folder) DeleteParentForSelfRelations(ctx context.Context, objects F
     }
   }
   return nil
+}
+
+// PurgeParentForSelfRelations deletes every parent_for_self relationship on this
+// Folder, regardless of subject — clears the relation entirely. Unlike
+// DeleteParentForSelfRelations (which revokes the specific subjects you pass),
+// use this when parent_for_self as a whole no longer applies to this Folder.
+func (folder Folder) PurgeParentForSelfRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeFolder,
+    ResourceID: authz.ID(folder),
+    Relation: authz.Relation(FolderParentForSelf),
+  })
+}
+
+// PurgeRelations deletes every relationship on this Folder — all relations,
+// any subject — in one transaction. Use it when this Folder is deleted from
+// your store: it removes the Folder's resource-side tuples. It does NOT
+// remove tuples where this Folder appears as a *subject* of another
+// resource — for that, see PurgeRelationsAsSubject (emitted when Folder is a
+// subject anywhere in the schema).
+func (folder Folder) PurgeRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeFolder,
+    ResourceID: authz.ID(folder),
+  })
+}
+
+// PurgeRelationsAsSubject deletes every relationship where this Folder is the
+// subject, across the resource types whose schema allows Folder as a subject.
+// One transactional delete per referencing resource type; failures are
+// accumulated (errors.Join) and the rest still run — re-run on error
+// (idempotent). Use it when this Folder is deleted from your store,
+// alongside PurgeRelations if Folder also has relations.
+func (folder Folder) PurgeRelationsAsSubject(ctx context.Context) error {
+  eng := authz.GetEngine(ctx)
+  var errs []error
+  if err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: authz.Type("extsvc/article"),
+    SubjectType: TypeFolder,
+    SubjectID: authz.ID(folder),
+  }); err != nil {
+    errs = append(errs, fmt.Errorf("purge Folder as subject of extsvc/article: %w", err))
+  }
+  if err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: authz.Type("extsvc/document"),
+    SubjectType: TypeFolder,
+    SubjectID: authz.ID(folder),
+  }); err != nil {
+    errs = append(errs, fmt.Errorf("purge Folder as subject of extsvc/document: %w", err))
+  }
+  if err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: authz.Type("extsvc/folder"),
+    SubjectType: TypeFolder,
+    SubjectID: authz.ID(folder),
+  }); err != nil {
+    errs = append(errs, fmt.Errorf("purge Folder as subject of extsvc/folder: %w", err))
+  }
+  return errors.Join(errs...)
 }
 
 type FolderViewerUserRelation struct {

@@ -87,6 +87,18 @@ func (article Article) DeleteAuthorRelations(ctx context.Context, objects Articl
   return nil
 }
 
+// PurgeAuthorRelations deletes every author relationship on this
+// Article, regardless of subject — clears the relation entirely. Unlike
+// DeleteAuthorRelations (which revokes the specific subjects you pass),
+// use this when author as a whole no longer applies to this Article.
+func (article Article) PurgeAuthorRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeArticle,
+    ResourceID: authz.ID(article),
+    Relation: authz.Relation(ArticleAuthor),
+  })
+}
+
 func (article Article) DeleteParentRelations(ctx context.Context, objects ArticleParentObjects) error {
   if len(objects.Folder) > 0 {
     err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
@@ -98,6 +110,31 @@ func (article Article) DeleteParentRelations(ctx context.Context, objects Articl
     }
   }
   return nil
+}
+
+// PurgeParentRelations deletes every parent relationship on this
+// Article, regardless of subject — clears the relation entirely. Unlike
+// DeleteParentRelations (which revokes the specific subjects you pass),
+// use this when parent as a whole no longer applies to this Article.
+func (article Article) PurgeParentRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeArticle,
+    ResourceID: authz.ID(article),
+    Relation: authz.Relation(ArticleParent),
+  })
+}
+
+// PurgeRelations deletes every relationship on this Article — all relations,
+// any subject — in one transaction. Use it when this Article is deleted from
+// your store: it removes the Article's resource-side tuples. It does NOT
+// remove tuples where this Article appears as a *subject* of another
+// resource — for that, see PurgeRelationsAsSubject (emitted when Article is a
+// subject anywhere in the schema).
+func (article Article) PurgeRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeArticle,
+    ResourceID: authz.ID(article),
+  })
 }
 
 type ArticleAuthorUserRelation struct {

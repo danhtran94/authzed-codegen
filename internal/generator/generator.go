@@ -102,11 +102,28 @@ func (g *Generator) GenerateObjectSource(name string) error {
 
 	permUsersets := collectPermUsersets(g.Definitions)
 
+	// subjRefs[objectTypeNamespace] = sorted list of definition namespaces
+	// that allow that object type as a subject of some relation. Drives the
+	// generated PurgeRelationsAsSubject methods (SPEC-014).
+	subjRefs := subjectReferences(g.Definitions)
+
 	var mapFuncs = template.FuncMap{
 		"upperFirst":    utilstr.UpperFirst,
 		"packageName":   utilstr.PackageName,
 		"snakeToPascal": utilstr.SnakeToPascal,
 		"typeName":      utilstr.TypeName,
+		// isSubjectType reports whether objType appears as a subject of some
+		// relation anywhere in the schema (→ emit PurgeRelationsAsSubject).
+		"isSubjectType": func(objType string) bool {
+			_, ok := subjRefs[objType]
+			return ok
+		},
+		// referencingDefinitions returns the sorted definition namespaces
+		// that allow objType as a subject (empty if objType is never a
+		// subject). PurgeRelationsAsSubject issues one delete per entry.
+		"referencingDefinitions": func(objType string) []string {
+			return subjRefs[objType]
+		},
 		"permissionInputTypes": func(objectType string, perm string) []string {
 			treename := fmt.Sprintf("%s/%s", objectType, perm)
 			if types, ok := tree[treename]; ok {
@@ -541,4 +558,40 @@ func resolvePermissionExpressionTypes(exprs []PermissionExpr, args ResolveArgs) 
 	}
 
 	return deduped
+}
+
+// subjectReferences returns, for each object type that appears as a subject
+// of some relation across all definitions, the sorted list of definition
+// namespaces that allow it as a subject. Built from
+// RelationView.AllowedTypes — each allowed type's Namespace is the subject
+// object type; SubRelation is irrelevant (a userset reference like
+// team#admin still counts extsvc/team as referenced). Drives the generated
+// PurgeRelationsAsSubject methods (SPEC-014): a method is emitted for an
+// object type iff it's a key here, and it issues one delete per entry.
+func subjectReferences(defs []*DefinitionView) map[string][]string {
+	set := map[string]map[string]struct{}{}
+	for _, d := range defs {
+		refBy := d.ObjectType.String()
+		for _, r := range d.Relations {
+			for _, at := range r.AllowedTypes {
+				if at.Namespace == "" {
+					continue
+				}
+				if set[at.Namespace] == nil {
+					set[at.Namespace] = map[string]struct{}{}
+				}
+				set[at.Namespace][refBy] = struct{}{}
+			}
+		}
+	}
+	out := make(map[string][]string, len(set))
+	for ns, refs := range set {
+		list := make([]string, 0, len(refs))
+		for r := range refs {
+			list = append(list, r)
+		}
+		sort.Strings(list)
+		out[ns] = list
+	}
+	return out
 }

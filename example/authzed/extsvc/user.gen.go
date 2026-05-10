@@ -5,7 +5,9 @@ package extsvc
 import (
   "github.com/danhtran94/authzed-codegen/pkg/authz"
 
-  
+  "context"
+  "errors"
+  "fmt"
 )
 
 const TypeUser authz.Type = "extsvc/user"
@@ -40,4 +42,44 @@ func (user User) ToList() []User {
   return []User{ user }
 }
 
+
+// PurgeRelationsAsSubject deletes every relationship where this User is the
+// subject, across the resource types whose schema allows User as a subject.
+// One transactional delete per referencing resource type; failures are
+// accumulated (errors.Join) and the rest still run — re-run on error
+// (idempotent). Use it when this User is deleted from your store,
+// alongside PurgeRelations if User also has relations.
+func (user User) PurgeRelationsAsSubject(ctx context.Context) error {
+  eng := authz.GetEngine(ctx)
+  var errs []error
+  if err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: authz.Type("extsvc/article"),
+    SubjectType: TypeUser,
+    SubjectID: authz.ID(user),
+  }); err != nil {
+    errs = append(errs, fmt.Errorf("purge User as subject of extsvc/article: %w", err))
+  }
+  if err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: authz.Type("extsvc/document"),
+    SubjectType: TypeUser,
+    SubjectID: authz.ID(user),
+  }); err != nil {
+    errs = append(errs, fmt.Errorf("purge User as subject of extsvc/document: %w", err))
+  }
+  if err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: authz.Type("extsvc/folder"),
+    SubjectType: TypeUser,
+    SubjectID: authz.ID(user),
+  }); err != nil {
+    errs = append(errs, fmt.Errorf("purge User as subject of extsvc/folder: %w", err))
+  }
+  if err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: authz.Type("extsvc/team"),
+    SubjectType: TypeUser,
+    SubjectID: authz.ID(user),
+  }); err != nil {
+    errs = append(errs, fmt.Errorf("purge User as subject of extsvc/team: %w", err))
+  }
+  return errors.Join(errs...)
+}
 

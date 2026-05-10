@@ -71,6 +71,31 @@ func (table Table) DeleteOwnerRelations(ctx context.Context, objects TableOwnerO
   return nil
 }
 
+// PurgeOwnerRelations deletes every owner relationship on this
+// Table, regardless of subject — clears the relation entirely. Unlike
+// DeleteOwnerRelations (which revokes the specific subjects you pass),
+// use this when owner as a whole no longer applies to this Table.
+func (table Table) PurgeOwnerRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeTable,
+    ResourceID: authz.ID(table),
+    Relation: authz.Relation(TableOwner),
+  })
+}
+
+// PurgeRelations deletes every relationship on this Table — all relations,
+// any subject — in one transaction. Use it when this Table is deleted from
+// your store: it removes the Table's resource-side tuples. It does NOT
+// remove tuples where this Table appears as a *subject* of another
+// resource — for that, see PurgeRelationsAsSubject (emitted when Table is a
+// subject anywhere in the schema).
+func (table Table) PurgeRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeTable,
+    ResourceID: authz.ID(table),
+  })
+}
+
 type TableOwnerCompanyRelation struct {
   ID            Company
   SubRelation   string

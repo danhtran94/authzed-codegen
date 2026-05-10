@@ -97,6 +97,18 @@ func (document Document) DeleteParentRelations(ctx context.Context, objects Docu
   return nil
 }
 
+// PurgeParentRelations deletes every parent relationship on this
+// Document, regardless of subject — clears the relation entirely. Unlike
+// DeleteParentRelations (which revokes the specific subjects you pass),
+// use this when parent as a whole no longer applies to this Document.
+func (document Document) PurgeParentRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeDocument,
+    ResourceID: authz.ID(document),
+    Relation: authz.Relation(DocumentParent),
+  })
+}
+
 func (document Document) DeleteOwnerRelations(ctx context.Context, objects DocumentOwnerObjects) error {
   if len(objects.User) > 0 {
     err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
@@ -117,6 +129,31 @@ func (document Document) DeleteOwnerRelations(ctx context.Context, objects Docum
     }
   }
   return nil
+}
+
+// PurgeOwnerRelations deletes every owner relationship on this
+// Document, regardless of subject — clears the relation entirely. Unlike
+// DeleteOwnerRelations (which revokes the specific subjects you pass),
+// use this when owner as a whole no longer applies to this Document.
+func (document Document) PurgeOwnerRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeDocument,
+    ResourceID: authz.ID(document),
+    Relation: authz.Relation(DocumentOwner),
+  })
+}
+
+// PurgeRelations deletes every relationship on this Document — all relations,
+// any subject — in one transaction. Use it when this Document is deleted from
+// your store: it removes the Document's resource-side tuples. It does NOT
+// remove tuples where this Document appears as a *subject* of another
+// resource — for that, see PurgeRelationsAsSubject (emitted when Document is a
+// subject anywhere in the schema).
+func (document Document) PurgeRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeDocument,
+    ResourceID: authz.ID(document),
+  })
 }
 
 type DocumentParentFolderRelation struct {

@@ -5,9 +5,11 @@ package {{ packageName .ObjectType.Prefix }}
 import (
   "github.com/danhtran94/authzed-codegen/pkg/authz"
 
-  {{ $countRels := len .Relations }}{{ if gt $countRels 0 }}"context"
-  "time"{{ end }}
-)
+  {{ $countRels := len .Relations }}{{ $isSubj := isSubjectType (print .ObjectType.Prefix "/" .ObjectType.Name) }}{{ if or (gt $countRels 0) $isSubj }}"context"
+{{ end }}{{ if gt $countRels 0 }}  "time"
+{{ end }}{{ if $isSubj }}  "errors"
+  "fmt"
+{{ end }})
 {{ $objectType := (print .ObjectType.Prefix "/" .ObjectType.Name) }}{{ $typeName := upperFirst .ObjectType.Name }}
 const Type{{ $typeName }} authz.Type = "{{ $objectType }}"
 type Relation{{ $typeName }} authz.Relation
@@ -125,6 +127,50 @@ func ({{ $var }} {{ $typeName }}) Delete{{ snakeToPascal $rel.Name}}Relations(ct
     }
   }
   {{ end }}{{ end }}return nil
+}
+
+// Purge{{ snakeToPascal $rel.Name }}Relations deletes every {{ $rel.Name }} relationship on this
+// {{ $typeName }}, regardless of subject — clears the relation entirely. Unlike
+// Delete{{ snakeToPascal $rel.Name }}Relations (which revokes the specific subjects you pass),
+// use this when {{ $rel.Name }} as a whole no longer applies to this {{ $typeName }}.
+func ({{ $var }} {{ $typeName }}) Purge{{ snakeToPascal $rel.Name }}Relations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: Type{{ $typeName }},
+    ResourceID: authz.ID({{ $var }}),
+    Relation: authz.Relation({{ $typeName }}{{ snakeToPascal $rel.Name }}),
+  })
+}
+{{ end }}{{ if gt $countRels 0 }}
+// PurgeRelations deletes every relationship on this {{ $typeName }} — all relations,
+// any subject — in one transaction. Use it when this {{ $typeName }} is deleted from
+// your store: it removes the {{ $typeName }}'s resource-side tuples. It does NOT
+// remove tuples where this {{ $typeName }} appears as a *subject* of another
+// resource — for that, see PurgeRelationsAsSubject (emitted when {{ $typeName }} is a
+// subject anywhere in the schema).
+func ({{ $var }} {{ $typeName }}) PurgeRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: Type{{ $typeName }},
+    ResourceID: authz.ID({{ $var }}),
+  })
+}
+{{ end }}{{ if $isSubj }}
+// PurgeRelationsAsSubject deletes every relationship where this {{ $typeName }} is the
+// subject, across the resource types whose schema allows {{ $typeName }} as a subject.
+// One transactional delete per referencing resource type; failures are
+// accumulated (errors.Join) and the rest still run — re-run on error
+// (idempotent). Use it when this {{ $typeName }} is deleted from your store,
+// alongside PurgeRelations if {{ $typeName }} also has relations.
+func ({{ $var }} {{ $typeName }}) PurgeRelationsAsSubject(ctx context.Context) error {
+  eng := authz.GetEngine(ctx)
+  var errs []error
+  {{ range $refDef := referencingDefinitions $objectType }}if err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: authz.Type("{{ $refDef }}"),
+    SubjectType: Type{{ $typeName }},
+    SubjectID: authz.ID({{ $var }}),
+  }); err != nil {
+    errs = append(errs, fmt.Errorf("purge {{ $typeName }} as subject of {{ $refDef }}: %w", err))
+  }
+  {{ end }}return errors.Join(errs...)
 }
 {{ end }}{{ range $rel := .Relations }}{{ range $idx, $relType := uniqueByNamespace $rel.AllowedTypes }}
 type {{ $typeName }}{{ snakeToPascal $rel.Name }}{{ typeName $relType.Namespace }}Relation struct {

@@ -5,8 +5,7 @@ package menusvc
 import (
   "github.com/danhtran94/authzed-codegen/pkg/authz"
 
-  
-)
+  )
 
 const TypeProduct authz.Type = "menusvc/product"
 type RelationProduct authz.Relation

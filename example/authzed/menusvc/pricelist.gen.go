@@ -71,6 +71,31 @@ func (pricelist Pricelist) DeleteOwnerRelations(ctx context.Context, objects Pri
   return nil
 }
 
+// PurgeOwnerRelations deletes every owner relationship on this
+// Pricelist, regardless of subject — clears the relation entirely. Unlike
+// DeleteOwnerRelations (which revokes the specific subjects you pass),
+// use this when owner as a whole no longer applies to this Pricelist.
+func (pricelist Pricelist) PurgeOwnerRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypePricelist,
+    ResourceID: authz.ID(pricelist),
+    Relation: authz.Relation(PricelistOwner),
+  })
+}
+
+// PurgeRelations deletes every relationship on this Pricelist — all relations,
+// any subject — in one transaction. Use it when this Pricelist is deleted from
+// your store: it removes the Pricelist's resource-side tuples. It does NOT
+// remove tuples where this Pricelist appears as a *subject* of another
+// resource — for that, see PurgeRelationsAsSubject (emitted when Pricelist is a
+// subject anywhere in the schema).
+func (pricelist Pricelist) PurgeRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypePricelist,
+    ResourceID: authz.ID(pricelist),
+  })
+}
+
 type PricelistOwnerCompanyRelation struct {
   ID            Company
   SubRelation   string

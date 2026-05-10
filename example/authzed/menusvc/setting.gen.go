@@ -71,6 +71,31 @@ func (setting Setting) DeleteOwnerRelations(ctx context.Context, objects Setting
   return nil
 }
 
+// PurgeOwnerRelations deletes every owner relationship on this
+// Setting, regardless of subject — clears the relation entirely. Unlike
+// DeleteOwnerRelations (which revokes the specific subjects you pass),
+// use this when owner as a whole no longer applies to this Setting.
+func (setting Setting) PurgeOwnerRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeSetting,
+    ResourceID: authz.ID(setting),
+    Relation: authz.Relation(SettingOwner),
+  })
+}
+
+// PurgeRelations deletes every relationship on this Setting — all relations,
+// any subject — in one transaction. Use it when this Setting is deleted from
+// your store: it removes the Setting's resource-side tuples. It does NOT
+// remove tuples where this Setting appears as a *subject* of another
+// resource — for that, see PurgeRelationsAsSubject (emitted when Setting is a
+// subject anywhere in the schema).
+func (setting Setting) PurgeRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeSetting,
+    ResourceID: authz.ID(setting),
+  })
+}
+
 type SettingOwnerCompanyRelation struct {
   ID            Company
   SubRelation   string

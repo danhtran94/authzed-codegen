@@ -5,7 +5,9 @@ package bookingsvc
 import (
   "github.com/danhtran94/authzed-codegen/pkg/authz"
 
-  
+  "context"
+  "errors"
+  "fmt"
 )
 
 const TypeCustomer authz.Type = "bookingsvc/customer"
@@ -40,4 +42,23 @@ func (customer Customer) ToList() []Customer {
   return []Customer{ customer }
 }
 
+
+// PurgeRelationsAsSubject deletes every relationship where this Customer is the
+// subject, across the resource types whose schema allows Customer as a subject.
+// One transactional delete per referencing resource type; failures are
+// accumulated (errors.Join) and the rest still run — re-run on error
+// (idempotent). Use it when this Customer is deleted from your store,
+// alongside PurgeRelations if Customer also has relations.
+func (customer Customer) PurgeRelationsAsSubject(ctx context.Context) error {
+  eng := authz.GetEngine(ctx)
+  var errs []error
+  if err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: authz.Type("bookingsvc/booking"),
+    SubjectType: TypeCustomer,
+    SubjectID: authz.ID(customer),
+  }); err != nil {
+    errs = append(errs, fmt.Errorf("purge Customer as subject of bookingsvc/booking: %w", err))
+  }
+  return errors.Join(errs...)
+}
 

@@ -128,6 +128,18 @@ func (booking Booking) DeleteOwnerRelations(ctx context.Context, objects Booking
   return nil
 }
 
+// PurgeOwnerRelations deletes every owner relationship on this
+// Booking, regardless of subject — clears the relation entirely. Unlike
+// DeleteOwnerRelations (which revokes the specific subjects you pass),
+// use this when owner as a whole no longer applies to this Booking.
+func (booking Booking) PurgeOwnerRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeBooking,
+    ResourceID: authz.ID(booking),
+    Relation: authz.Relation(BookingOwner),
+  })
+}
+
 func (booking Booking) DeleteCreatorRelations(ctx context.Context, objects BookingCreatorObjects) error {
   if len(objects.Employee) > 0 {
     err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
@@ -150,6 +162,18 @@ func (booking Booking) DeleteCreatorRelations(ctx context.Context, objects Booki
   return nil
 }
 
+// PurgeCreatorRelations deletes every creator relationship on this
+// Booking, regardless of subject — clears the relation entirely. Unlike
+// DeleteCreatorRelations (which revokes the specific subjects you pass),
+// use this when creator as a whole no longer applies to this Booking.
+func (booking Booking) PurgeCreatorRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeBooking,
+    ResourceID: authz.ID(booking),
+    Relation: authz.Relation(BookingCreator),
+  })
+}
+
 func (booking Booking) DeleteRegionalOwnerRelations(ctx context.Context, objects BookingRegionalOwnerObjects) error {
   if len(objects.Employee) > 0 {
     err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
@@ -161,6 +185,31 @@ func (booking Booking) DeleteRegionalOwnerRelations(ctx context.Context, objects
     }
   }
   return nil
+}
+
+// PurgeRegionalOwnerRelations deletes every regional_owner relationship on this
+// Booking, regardless of subject — clears the relation entirely. Unlike
+// DeleteRegionalOwnerRelations (which revokes the specific subjects you pass),
+// use this when regional_owner as a whole no longer applies to this Booking.
+func (booking Booking) PurgeRegionalOwnerRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeBooking,
+    ResourceID: authz.ID(booking),
+    Relation: authz.Relation(BookingRegionalOwner),
+  })
+}
+
+// PurgeRelations deletes every relationship on this Booking — all relations,
+// any subject — in one transaction. Use it when this Booking is deleted from
+// your store: it removes the Booking's resource-side tuples. It does NOT
+// remove tuples where this Booking appears as a *subject* of another
+// resource — for that, see PurgeRelationsAsSubject (emitted when Booking is a
+// subject anywhere in the schema).
+func (booking Booking) PurgeRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeBooking,
+    ResourceID: authz.ID(booking),
+  })
 }
 
 type BookingOwnerEmployeeRelation struct {

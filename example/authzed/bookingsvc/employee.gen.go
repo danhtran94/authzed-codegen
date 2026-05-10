@@ -7,6 +7,8 @@ import (
 
   "context"
   "time"
+  "errors"
+  "fmt"
 )
 
 const TypeEmployee authz.Type = "bookingsvc/employee"
@@ -116,6 +118,18 @@ func (employee Employee) DeleteAccountRelations(ctx context.Context, objects Emp
   return nil
 }
 
+// PurgeAccountRelations deletes every account relationship on this
+// Employee, regardless of subject — clears the relation entirely. Unlike
+// DeleteAccountRelations (which revokes the specific subjects you pass),
+// use this when account as a whole no longer applies to this Employee.
+func (employee Employee) PurgeAccountRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeEmployee,
+    ResourceID: authz.ID(employee),
+    Relation: authz.Relation(EmployeeAccount),
+  })
+}
+
 func (employee Employee) DeleteBelongsBrandRelations(ctx context.Context, objects EmployeeBelongsBrandObjects) error {
   if len(objects.Brand) > 0 {
     err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
@@ -127,6 +141,18 @@ func (employee Employee) DeleteBelongsBrandRelations(ctx context.Context, object
     }
   }
   return nil
+}
+
+// PurgeBelongsBrandRelations deletes every belongs_brand relationship on this
+// Employee, regardless of subject — clears the relation entirely. Unlike
+// DeleteBelongsBrandRelations (which revokes the specific subjects you pass),
+// use this when belongs_brand as a whole no longer applies to this Employee.
+func (employee Employee) PurgeBelongsBrandRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeEmployee,
+    ResourceID: authz.ID(employee),
+    Relation: authz.Relation(EmployeeBelongsBrand),
+  })
 }
 
 func (employee Employee) DeleteViewerRelations(ctx context.Context, objects EmployeeViewerObjects) error {
@@ -149,6 +175,57 @@ func (employee Employee) DeleteViewerRelations(ctx context.Context, objects Empl
     }
   }
   return nil
+}
+
+// PurgeViewerRelations deletes every viewer relationship on this
+// Employee, regardless of subject — clears the relation entirely. Unlike
+// DeleteViewerRelations (which revokes the specific subjects you pass),
+// use this when viewer as a whole no longer applies to this Employee.
+func (employee Employee) PurgeViewerRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeEmployee,
+    ResourceID: authz.ID(employee),
+    Relation: authz.Relation(EmployeeViewer),
+  })
+}
+
+// PurgeRelations deletes every relationship on this Employee — all relations,
+// any subject — in one transaction. Use it when this Employee is deleted from
+// your store: it removes the Employee's resource-side tuples. It does NOT
+// remove tuples where this Employee appears as a *subject* of another
+// resource — for that, see PurgeRelationsAsSubject (emitted when Employee is a
+// subject anywhere in the schema).
+func (employee Employee) PurgeRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeEmployee,
+    ResourceID: authz.ID(employee),
+  })
+}
+
+// PurgeRelationsAsSubject deletes every relationship where this Employee is the
+// subject, across the resource types whose schema allows Employee as a subject.
+// One transactional delete per referencing resource type; failures are
+// accumulated (errors.Join) and the rest still run — re-run on error
+// (idempotent). Use it when this Employee is deleted from your store,
+// alongside PurgeRelations if Employee also has relations.
+func (employee Employee) PurgeRelationsAsSubject(ctx context.Context) error {
+  eng := authz.GetEngine(ctx)
+  var errs []error
+  if err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: authz.Type("bookingsvc/booking"),
+    SubjectType: TypeEmployee,
+    SubjectID: authz.ID(employee),
+  }); err != nil {
+    errs = append(errs, fmt.Errorf("purge Employee as subject of bookingsvc/booking: %w", err))
+  }
+  if err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: authz.Type("bookingsvc/brand"),
+    SubjectType: TypeEmployee,
+    SubjectID: authz.ID(employee),
+  }); err != nil {
+    errs = append(errs, fmt.Errorf("purge Employee as subject of bookingsvc/brand: %w", err))
+  }
+  return errors.Join(errs...)
 }
 
 type EmployeeAccountUserRelation struct {

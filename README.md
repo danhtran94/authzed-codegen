@@ -434,6 +434,64 @@ See [`docs/RFC-001-policy-engine-integration-patterns.md`](docs/RFC-001-policy-e
   `viewer`) to avoid universal write access; the codegen does not enforce
   this — callers own the discipline.
 
+## Relationship Cleanup
+
+`Delete<Rel>Relations` revokes specific grants — you supply the subject IDs.
+For lifecycle cleanup (an object is gone, or a relation no longer applies) you
+want filter-based deletes that don't enumerate subjects first. Three generated
+verbs cover this:
+
+```go
+folder := extsvc.Folder("f-1")
+
+// One relation, every subject: "f-1 is no longer shared with anyone."
+folder.PurgeViewerRelations(ctx)
+
+// Every relation on this resource: "f-1 is deleted from our store."
+folder.PurgeRelations(ctx)
+
+// Wherever this object appears as a *subject* of another resource:
+// "user u-1 left the org — strip every grant they hold."
+extsvc.User("u-1").PurgeRelationsAsSubject(ctx)
+```
+
+`Purge<Rel>Relations` and `PurgeRelations` are emitted on every resource
+definition. `PurgeRelationsAsSubject` is emitted only on object types that
+appear as an allowed subject somewhere in the schema; under the hood it issues
+one filter-delete per referencing definition (deterministic order) and joins
+any errors with `errors.Join` — it is idempotent and best-effort, so re-run it
+on partial failure rather than treating it as transactional.
+
+**Why this matters — orphaned tuples are not harmless.** SpiceDB stores only
+relationships; it has no object lifecycle. If you delete an entity in your own
+store but leave its tuples behind:
+
+- `LookupResources` (and `LookupSubjects`) keep returning the dead object as a
+  ghost result — it satisfies the relationship graph even though the entity is
+  gone.
+- Object-ID **reuse** is the sharp edge: create a new `folder:f-1` and it
+  silently inherits every grant the old `f-1` ever had. Treat IDs as
+  non-reusable, or purge on delete.
+
+**Lifecycle pattern.** On object deletion, run two calls — `PurgeRelations`
+(resource-side) and, if the type is a subject anywhere, `PurgeRelationsAsSubject`
+(subject-side). They are independently idempotent, not jointly atomic; if your
+own delete runs inside a DB transaction, enqueue the purge as
+`OPERATION_DELETE`-style compensating work and retry until it succeeds.
+
+For hand-written callers, the same primitive is on the runtime interface:
+`authz.Engine.DeleteRelationsMatching(ctx, authz.RelationFilter{...})` — one
+transactional `DeleteRelationships` call against SpiceDB. An all-empty
+`RelationFilter` (which would match every tuple in the store) is rejected with
+`authz.ErrEmptyRelationFilter`; supply at least one field.
+
+This is deliberately a set of verbs, not a workflow — there is no
+`Delete<Type>()` that cascades to children or re-parents them. The codegen
+emits the primitives; deciding the cleanup order for a given schema is the
+caller's call. See `docs/scope-relationship-cleanup-verbs.md`,
+`docs/ADR-005-engine-filter-delete.md`, and
+`docs/spec-014-relationship-cleanup-codegen.md`.
+
 ## Verification
 
 Round-trip the fixture (regression bar for the codegen itself):

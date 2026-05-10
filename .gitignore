@@ -5,3 +5,7 @@ docs/.drafts/
 # `go test -c` artifacts
 *.test
 
+# `go build` binaries at repo root (CLI + example demos)
+/authzed-codegen
+/opa-embed
+

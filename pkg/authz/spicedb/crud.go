@@ -321,6 +321,40 @@ func (e *Engine) DeleteRelations(ctx context.Context, from authz.Resource, relat
 	return nil
 }
 
+func (e *Engine) DeleteRelationsMatching(ctx context.Context, f authz.RelationFilter) error {
+	if f.IsEmpty() {
+		return authz.ErrEmptyRelationFilter
+	}
+	e.debugLog("Deleting relations matching: resourceType=%v, resourceID=%v, relation=%v, subjectType=%v, subjectID=%v", f.ResourceType, f.ResourceID, f.Relation, f.SubjectType, f.SubjectID)
+
+	rf := &v1.RelationshipFilter{
+		ResourceType:       string(f.ResourceType),
+		OptionalResourceId: string(f.ResourceID),
+		OptionalRelation:   string(f.Relation),
+	}
+	if f.SubjectType != "" || f.SubjectID != "" {
+		rf.OptionalSubjectFilter = &v1.SubjectFilter{
+			SubjectType:       string(f.SubjectType),
+			OptionalSubjectId: string(f.SubjectID),
+			// OptionalRelation left nil — matches the subject across all
+			// sub-relations (team:t1 and team:t1#admin alike). Setting it
+			// to {Relation: ""} would match only the ellipsis.
+		}
+	}
+
+	res, err := e.client.DeleteRelationships(ctx, &v1.DeleteRelationshipsRequest{
+		RelationshipFilter: rf,
+		// OptionalLimit omitted (0) -> one transactional, unlimited delete.
+	})
+	if err != nil {
+		return err
+	}
+
+	e.setToken(res.DeletedAt.Token)
+
+	return nil
+}
+
 func (e *Engine) CheckPermissionWithCaveat(ctx context.Context, dest authz.Resource, has authz.Permission, subject authz.Type, audIDs []authz.ID, caveatParams map[string]any) error {
 	e.debugLog("Checking permission with caveat: dest=%v, has=%v, subject=%v, audIDs=%v, params=%v", dest, has, subject, audIDs, caveatParams)
 	consistency := e.getConsistencySnapshot(ctx)

@@ -5,7 +5,9 @@ package extsvc
 import (
   "github.com/danhtran94/authzed-codegen/pkg/authz"
 
-  
+  "context"
+  "errors"
+  "fmt"
 )
 
 const TypeRole authz.Type = "extsvc/role"
@@ -40,4 +42,23 @@ func (role Role) ToList() []Role {
   return []Role{ role }
 }
 
+
+// PurgeRelationsAsSubject deletes every relationship where this Role is the
+// subject, across the resource types whose schema allows Role as a subject.
+// One transactional delete per referencing resource type; failures are
+// accumulated (errors.Join) and the rest still run — re-run on error
+// (idempotent). Use it when this Role is deleted from your store,
+// alongside PurgeRelations if Role also has relations.
+func (role Role) PurgeRelationsAsSubject(ctx context.Context) error {
+  eng := authz.GetEngine(ctx)
+  var errs []error
+  if err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: authz.Type("extsvc/folder"),
+    SubjectType: TypeRole,
+    SubjectID: authz.ID(role),
+  }); err != nil {
+    errs = append(errs, fmt.Errorf("purge Role as subject of extsvc/folder: %w", err))
+  }
+  return errors.Join(errs...)
+}
 

@@ -106,6 +106,18 @@ func (order Order) DeleteCreatorRelations(ctx context.Context, objects OrderCrea
   return nil
 }
 
+// PurgeCreatorRelations deletes every creator relationship on this
+// Order, regardless of subject — clears the relation entirely. Unlike
+// DeleteCreatorRelations (which revokes the specific subjects you pass),
+// use this when creator as a whole no longer applies to this Order.
+func (order Order) PurgeCreatorRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeOrder,
+    ResourceID: authz.ID(order),
+    Relation: authz.Relation(OrderCreator),
+  })
+}
+
 func (order Order) DeleteBelongsCompanyRelations(ctx context.Context, objects OrderBelongsCompanyObjects) error {
   if len(objects.Company) > 0 {
     err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
@@ -117,6 +129,31 @@ func (order Order) DeleteBelongsCompanyRelations(ctx context.Context, objects Or
     }
   }
   return nil
+}
+
+// PurgeBelongsCompanyRelations deletes every belongs_company relationship on this
+// Order, regardless of subject — clears the relation entirely. Unlike
+// DeleteBelongsCompanyRelations (which revokes the specific subjects you pass),
+// use this when belongs_company as a whole no longer applies to this Order.
+func (order Order) PurgeBelongsCompanyRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeOrder,
+    ResourceID: authz.ID(order),
+    Relation: authz.Relation(OrderBelongsCompany),
+  })
+}
+
+// PurgeRelations deletes every relationship on this Order — all relations,
+// any subject — in one transaction. Use it when this Order is deleted from
+// your store: it removes the Order's resource-side tuples. It does NOT
+// remove tuples where this Order appears as a *subject* of another
+// resource — for that, see PurgeRelationsAsSubject (emitted when Order is a
+// subject anywhere in the schema).
+func (order Order) PurgeRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeOrder,
+    ResourceID: authz.ID(order),
+  })
 }
 
 type OrderCreatorUserRelation struct {

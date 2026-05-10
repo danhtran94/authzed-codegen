@@ -4,6 +4,33 @@ All notable changes to this project are documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.15.0] - 2026-05-10
+
+Adds filter-based relationship cleanup. SpiceDB stores relationships, not objects — deleting an entity in your own store leaves its tuples behind, and orphaned tuples make `LookupResources` return ghost results while object-ID reuse silently inherits dead grants. This release adds the verbs to clean up: a new `authz.Engine.DeleteRelationsMatching` primitive and three generated `Purge*` methods on the typed object handles. Deliberately verbs, not a workflow — no `Delete<Type>()` that cascades to or re-parents children; the codegen emits the primitives and the caller decides the cleanup order. See `docs/scope-relationship-cleanup-verbs.md`, `docs/ADR-005-engine-filter-delete.md`, `docs/spec-014-relationship-cleanup-codegen.md`.
+
+This is a **MINOR** release: `Engine.DeleteRelationsMatching` is an additive interface method, and the new runtime types and generated methods are additive — no existing signature changes.
+
+### Added
+
+- **`authz.RelationFilter` struct** in `pkg/authz/authz.go` — five fields (`ResourceType Type`, `ResourceID ID`, `Relation Relation`, `SubjectType Type`, `SubjectID ID`), each optional; an all-empty filter matches every tuple in the store and is rejected. `OptionalResourceIdPrefix` and a sub-relation-scoped subject filter are deliberately not included (additive later if a use case appears).
+- **`authz.RelationFilter.IsEmpty()` method** — true iff every field is the zero string.
+- **`authz.ErrEmptyRelationFilter` sentinel** — returned by `DeleteRelationsMatching` when given an all-empty filter.
+- **`Engine.DeleteRelationsMatching(ctx context.Context, f RelationFilter) error`** added to the `authz.Engine` interface (after `DeleteRelations`). One transactional delete of every tuple matching the filter; not a bounded/non-transactional batch loop (that variant is intentionally not exposed).
+- **`*spicedb.Engine.DeleteRelationsMatching`** in `pkg/authz/spicedb/crud.go` — translates `RelationFilter` to `v1.RelationshipFilter` (subject fields populate `OptionalSubjectFilter`; `OptionalSubjectFilter.OptionalRelation` left nil = match any sub-relation, which is what `PurgeRelationsAsSubject` wants), then `client.DeleteRelationships` with `OptionalLimit` unset (= 0 = transactional, unlimited). Rejects an empty filter with `authz.ErrEmptyRelationFilter` before touching the wire.
+- **`<Resource>.Purge<Rel>Relations(ctx) error`** — generated per relation. Filter-deletes every tuple of that one relation on this resource, regardless of subject. Contrast with `Delete<Rel>Relations(ctx, <Rel>Objects)`, which revokes only the subject IDs you pass.
+- **`<Resource>.PurgeRelations(ctx) error`** — generated per definition. Filter-deletes every relation on this resource in one transaction. The "this object was deleted from our store" hook. Does **not** touch tuples where this object appears as a *subject* — see `PurgeRelationsAsSubject`.
+- **`<Type>.PurgeRelationsAsSubject(ctx) error`** — generated only on object types that appear as an allowed subject somewhere in the schema. Issues one `DeleteRelationsMatching` call per referencing definition (deterministic, alphabetical order), collecting failures with `errors.Join`. Best-effort and idempotent — re-run on partial failure rather than treating it as transactional.
+- **`subjectReferences(defs []*DefinitionView) map[string][]string` generator helper** in `internal/generator/generator.go` — maps each object type appearing in any relation's allowed types to the sorted list of definition namespaces that reference it (a `team#admin` reference still counts `extsvc/team` as referenced). Exposed to the template as `isSubjectType` / `referencingDefinitions` funcs that gate emission and order of `PurgeRelationsAsSubject`.
+- **Template import guard** — `internal/templates/object.go.tmpl` now emits `context` / `errors` / `fmt` imports when a definition is a subject type even if it has zero relations, so empty-but-subject definitions (e.g. `extsvc/customer`) still compile with `PurgeRelationsAsSubject`.
+- **Generated fixtures** — `example/authzed/{bookingsvc,menusvc,extsvc}/*.gen.go` regenerated (round-trip regression bar) with the new `Purge*` methods.
+- **e2e tests** in `example/authzed/extsvc/extsvc_purge_test.go` — `Purge<Rel>Relations` clears one relation and leaves a sibling intact; `PurgeRelations` clears all; `PurgeRelationsAsSubject` removes a user from a folder's `viewer`; an all-empty `RelationFilter` returns `authz.ErrEmptyRelationFilter`. All run against a live SpiceDB testcontainer.
+
+### Notes
+
+- **`PurgeRelationsAsSubject` cross-prefix references**: `PurgeRelationsAsSubject` references each referencing definition by `authz.Type("prefix/def")` string literal rather than the typed `Type<...>` constant — so it works even when the referencing definition lives in a different generated package (a cross-prefix subject reference) without forcing a cross-package import in generated code. The fixture schema has no cross-prefix subject references today; the literal form is the robust choice regardless.
+- **Lifecycle pattern**: on object deletion, run two calls — `PurgeRelations` (resource-side) and, if the type is a subject anywhere, `PurgeRelationsAsSubject` (subject-side). They are independently idempotent, not jointly atomic; if your own delete runs inside a DB transaction, enqueue the purge as `OPERATION_DELETE`-style compensating work and retry until it succeeds. Documented in the README's new "Relationship Cleanup" section.
+- **Out of scope** (per `docs/scope-relationship-cleanup-verbs.md`): a `Delete<Type>()` that cascades to children or re-parents them, bounded/non-transactional batch deletes, write-precondition support, entity-CRUD. The codegen emits cleanup *verbs*; sequencing them for a given schema's semantics is the caller's decision.
+
 ## [1.14.0] - 2026-05-10
 
 Adds OPA Go builtins codegen. With the new `--emit-opa` CLI flag, the generator emits a per-package `opa.gen.go` exposing every `Check<Perm>` and `Lookup<Perm>Resources` method as an OPA custom builtin invocable from Rego policies. Pattern 4 of RFC-001's policy-engine integration tiers — embedded OPA in a Go-first stack with the existing `authz.Engine` gRPC connection reused for SpiceDB calls. See `docs/RFC-001`, `docs/ADR-004`, `docs/scope-opa-go-builtins-codegen.md`, `docs/spec-013-opa-go-builtins-codegen.md`.

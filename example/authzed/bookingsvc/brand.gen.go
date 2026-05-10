@@ -7,6 +7,8 @@ import (
 
   "context"
   "time"
+  "errors"
+  "fmt"
 )
 
 const TypeBrand authz.Type = "bookingsvc/brand"
@@ -103,6 +105,18 @@ func (brand Brand) DeleteAdminRelations(ctx context.Context, objects BrandAdminO
   return nil
 }
 
+// PurgeAdminRelations deletes every admin relationship on this
+// Brand, regardless of subject — clears the relation entirely. Unlike
+// DeleteAdminRelations (which revokes the specific subjects you pass),
+// use this when admin as a whole no longer applies to this Brand.
+func (brand Brand) PurgeAdminRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeBrand,
+    ResourceID: authz.ID(brand),
+    Relation: authz.Relation(BrandAdmin),
+  })
+}
+
 func (brand Brand) DeleteManagerRelations(ctx context.Context, objects BrandManagerObjects) error {
   if len(objects.Employee) > 0 {
     err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
@@ -116,6 +130,18 @@ func (brand Brand) DeleteManagerRelations(ctx context.Context, objects BrandMana
   return nil
 }
 
+// PurgeManagerRelations deletes every manager relationship on this
+// Brand, regardless of subject — clears the relation entirely. Unlike
+// DeleteManagerRelations (which revokes the specific subjects you pass),
+// use this when manager as a whole no longer applies to this Brand.
+func (brand Brand) PurgeManagerRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeBrand,
+    ResourceID: authz.ID(brand),
+    Relation: authz.Relation(BrandManager),
+  })
+}
+
 func (brand Brand) DeleteEmployeeRelations(ctx context.Context, objects BrandEmployeeObjects) error {
   if len(objects.Employee) > 0 {
     err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
@@ -127,6 +153,50 @@ func (brand Brand) DeleteEmployeeRelations(ctx context.Context, objects BrandEmp
     }
   }
   return nil
+}
+
+// PurgeEmployeeRelations deletes every employee relationship on this
+// Brand, regardless of subject — clears the relation entirely. Unlike
+// DeleteEmployeeRelations (which revokes the specific subjects you pass),
+// use this when employee as a whole no longer applies to this Brand.
+func (brand Brand) PurgeEmployeeRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeBrand,
+    ResourceID: authz.ID(brand),
+    Relation: authz.Relation(BrandEmployee),
+  })
+}
+
+// PurgeRelations deletes every relationship on this Brand — all relations,
+// any subject — in one transaction. Use it when this Brand is deleted from
+// your store: it removes the Brand's resource-side tuples. It does NOT
+// remove tuples where this Brand appears as a *subject* of another
+// resource — for that, see PurgeRelationsAsSubject (emitted when Brand is a
+// subject anywhere in the schema).
+func (brand Brand) PurgeRelations(ctx context.Context) error {
+  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: TypeBrand,
+    ResourceID: authz.ID(brand),
+  })
+}
+
+// PurgeRelationsAsSubject deletes every relationship where this Brand is the
+// subject, across the resource types whose schema allows Brand as a subject.
+// One transactional delete per referencing resource type; failures are
+// accumulated (errors.Join) and the rest still run — re-run on error
+// (idempotent). Use it when this Brand is deleted from your store,
+// alongside PurgeRelations if Brand also has relations.
+func (brand Brand) PurgeRelationsAsSubject(ctx context.Context) error {
+  eng := authz.GetEngine(ctx)
+  var errs []error
+  if err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
+    ResourceType: authz.Type("bookingsvc/employee"),
+    SubjectType: TypeBrand,
+    SubjectID: authz.ID(brand),
+  }); err != nil {
+    errs = append(errs, fmt.Errorf("purge Brand as subject of bookingsvc/employee: %w", err))
+  }
+  return errors.Join(errs...)
 }
 
 type BrandAdminUserRelation struct {
