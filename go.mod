@@ -4,7 +4,7 @@ go 1.26.6
 
 require (
 	github.com/authzed/authzed-go v1.10.0
-	github.com/authzed/grpcutil v0.0.0-20250221190651-1985b19b35b8
+	github.com/authzed/grpcutil v0.0.0-20260105210157-e237581949c2
 	github.com/authzed/spicedb v1.56.1
 	github.com/open-policy-agent/opa v1.16.1
 	github.com/stretchr/testify v1.12.0

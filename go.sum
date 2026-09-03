@@ -29,8 +29,8 @@ github.com/authzed/authzed-go v1.10.0 h1:GUPzYFnStk1PIBZOkQzqcYA3iHaOlVYVl1UnHIR
 github.com/authzed/authzed-go v1.10.0/go.mod h1:2DL7pg4iqMltwWOSw+wvbEzAK7uRt3545+bkcGYD8D8=
 github.com/authzed/cel-go v0.32.0 h1:1IQD9qFvem2DWdy3PyMNqbVJiyNCBUHbh7SjR9JfbPY=
 github.com/authzed/cel-go v0.32.0/go.mod h1:Jp4Wbt+Tbe8kiX6xz5xfIXy56qoqS0uB2R+mYn+MQnU=
-github.com/authzed/grpcutil v0.0.0-20250221190651-1985b19b35b8 h1:y17oq4U8n+k1OcIGGDsjYdIdp4QywGcE7ZphIvtfEbo=
-github.com/authzed/grpcutil v0.0.0-20250221190651-1985b19b35b8/go.mod h1:Pf1ZSi41EePvx1GC1DeEJw5dn35iUcxZHqpHuG1Rpic=
+github.com/authzed/grpcutil v0.0.0-20260105210157-e237581949c2 h1:ymPD1ugBsXVUpLIG/lnRn1ndgOrsrki/0ZX7uP/S1GI=
+github.com/authzed/grpcutil v0.0.0-20260105210157-e237581949c2/go.mod h1:FLssYBs1DrwuItfI411kzqcV8QSqGb/B7PC6snNhjvU=
 github.com/authzed/spicedb v1.56.1 h1:OuCMaxAJ0IhtEUJgO3fYf4oLHHU6sUiLyAoDxkArcEk=
 github.com/authzed/spicedb v1.56.1/go.mod h1:uYHmT/RHMeMbmanY7nBngKARwI3/ei+65kv2mVhfzIg=
 github.com/benbjohnson/clock v1.1.0/go.mod h1:J11/hYXuz8f4ySSvYwY0FKfm+ezbsZBKZxNJlLklBHA=
