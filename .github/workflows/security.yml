@@ -30,16 +30,7 @@ jobs:
       - name: Install govulncheck
         run: go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
 
-      # Non-blocking: as of this writing the only reachable findings are
-      # GO-2026-4887 / GO-2026-4883 (Moby AuthZ-plugin bugs, "Fixed in: N/A"
-      # — no upstream patch exists yet). Both are reached only via
-      # github.com/docker/docker, a transitive test-only dependency of
-      # testcontainers-go used by pkg/authz/spicedbtest to spin up ephemeral
-      # SpiceDB containers in tests — never part of the shipped codegen
-      # binary or the generated runtime code consumers import. Flip back to
-      # blocking once docker/docker ships a fix or these findings change.
       - name: Run govulncheck
-        continue-on-error: true
         run: govulncheck ./...
 
   sast:

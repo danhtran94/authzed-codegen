@@ -101,6 +101,16 @@ permission's `Check<Perm>Inputs`.
 | `ipaddress`    | `*string`              | caller passes pre-formatted IP string                      |
 | `map<K,V>`     | `any`                  | currently fall-back; no typed Go mapping yet               |
 
+> [!WARNING]
+> If your schema's `in_cidr` caveat function compares an `ipaddress`
+> parameter, run a SpiceDB server **≥ v1.56.0**. Earlier versions don't
+> match IPv4-mapped IPv6 forms (`::ffff:10.1.2.3`) against IPv4 CIDRs —
+> an allow-list caveat fails closed and a deny-style caveat fails open
+> for that address form ([GHSA-5784-6qcr-48fq](https://github.com/authzed/spicedb/security/advisories/GHSA-5784-6qcr-48fq)).
+> This is a server-side evaluation bug, not a codegen or client issue —
+> bumping this repo's `spicedb` Go dependency doesn't fix it for you;
+> the fix has to ship in the SpiceDB server binary/image you deploy.
+
 Scalar pointer fields let callers defer individual parameters to check
 time (nil at write, supplied at check). Container types are nilable
 directly.
