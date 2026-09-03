@@ -1,5 +1,11 @@
 # authzed-codegen
 
+[![CI](https://github.com/danhtran94/authzed-codegen/actions/workflows/ci.yml/badge.svg)](https://github.com/danhtran94/authzed-codegen/actions/workflows/ci.yml)
+[![Security](https://github.com/danhtran94/authzed-codegen/actions/workflows/security.yml/badge.svg)](https://github.com/danhtran94/authzed-codegen/actions/workflows/security.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/danhtran94/authzed-codegen/badge)](https://scorecard.dev/viewer/?uri=github.com/danhtran94/authzed-codegen)
+[![Go Reference](https://pkg.go.dev/badge/github.com/danhtran94/authzed-codegen.svg)](https://pkg.go.dev/github.com/danhtran94/authzed-codegen)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 Type-safe Go bindings for [AuthZED / SpiceDB](https://authzed.com/) schemas.
 Each `definition` block in a `.zed` file becomes a `.gen.go` with typed
 constructors, relation writers, and per-permission `Check` / `Lookup`
