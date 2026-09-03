@@ -3,45 +3,44 @@
 package bookingsvc
 
 import (
-  "github.com/danhtran94/authzed-codegen/pkg/authz"
+	"github.com/danhtran94/authzed-codegen/pkg/authz"
 
-  "context"
-  "errors"
-  "fmt"
+	"context"
+	"errors"
+	"fmt"
 )
 
 const TypeCustomer authz.Type = "bookingsvc/customer"
+
 type RelationCustomer authz.Relation
 type PermissionCustomer authz.Permission
-
 
 type Customer authz.ID
 
 type CustomerLookupResult struct {
-  Definite    []Customer
-  Conditional []CustomerConditionalLookupEntry
+	Definite    []Customer
+	Conditional []CustomerConditionalLookupEntry
 }
 type CustomerConditionalLookupEntry struct {
-  ID          Customer
-  MissingKeys []string
+	ID          Customer
+	MissingKeys []string
 }
 
 func CustomerStringer(id authz.StringConvertable) Customer {
-  return Customer(id.String())
+	return Customer(id.String())
 }
 
 func CustomerStringers(ids ...authz.StringConvertable) []Customer {
-  result := []Customer{}
-  for _, id := range ids {
-    result = append(result, Customer(id.String()))
-  }
-  return result
+	result := []Customer{}
+	for _, id := range ids {
+		result = append(result, Customer(id.String()))
+	}
+	return result
 }
 
 func (customer Customer) ToList() []Customer {
-  return []Customer{ customer }
+	return []Customer{customer}
 }
-
 
 // PurgeRelationsAsSubject deletes every relationship where this Customer is the
 // subject, across the resource types whose schema allows Customer as a subject.
@@ -50,15 +49,14 @@ func (customer Customer) ToList() []Customer {
 // (idempotent). Use it when this Customer is deleted from your store,
 // alongside PurgeRelations if Customer also has relations.
 func (customer Customer) PurgeRelationsAsSubject(ctx context.Context) error {
-  eng := authz.GetEngine(ctx)
-  var errs []error
-  if err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
-    ResourceType: authz.Type("bookingsvc/booking"),
-    SubjectType: TypeCustomer,
-    SubjectID: authz.ID(customer),
-  }); err != nil {
-    errs = append(errs, fmt.Errorf("purge Customer as subject of bookingsvc/booking: %w", err))
-  }
-  return errors.Join(errs...)
+	eng := authz.GetEngine(ctx)
+	var errs []error
+	if err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
+		ResourceType: authz.Type("bookingsvc/booking"),
+		SubjectType:  TypeCustomer,
+		SubjectID:    authz.ID(customer),
+	}); err != nil {
+		errs = append(errs, fmt.Errorf("purge Customer as subject of bookingsvc/booking: %w", err))
+	}
+	return errors.Join(errs...)
 }
-

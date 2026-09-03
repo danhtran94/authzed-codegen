@@ -3,106 +3,112 @@
 package menusvc
 
 import (
-  "github.com/danhtran94/authzed-codegen/pkg/authz"
+	"github.com/danhtran94/authzed-codegen/pkg/authz"
 
-  "context"
-  "time"
-  "errors"
-  "fmt"
+	"context"
+	"errors"
+	"fmt"
+	"time"
 )
 
 const TypeCompany authz.Type = "menusvc/company"
+
 type RelationCompany authz.Relation
 type PermissionCompany authz.Permission
 
 const CompanyAdmin RelationCompany = "admin"
+
 type CompanyAdminObjects struct {
-  User []User
+	User []User
 }
+
 const CompanyManager RelationCompany = "manager"
+
 type CompanyManagerObjects struct {
-  User []User
+	User []User
 }
+
 const CompanyEmployee RelationCompany = "employee"
+
 type CompanyEmployeeObjects struct {
-  User []User
+	User []User
 }
 
 type Company authz.ID
 
 type CompanyLookupResult struct {
-  Definite    []Company
-  Conditional []CompanyConditionalLookupEntry
+	Definite    []Company
+	Conditional []CompanyConditionalLookupEntry
 }
 type CompanyConditionalLookupEntry struct {
-  ID          Company
-  MissingKeys []string
+	ID          Company
+	MissingKeys []string
 }
 
 func CompanyStringer(id authz.StringConvertable) Company {
-  return Company(id.String())
+	return Company(id.String())
 }
 
 func CompanyStringers(ids ...authz.StringConvertable) []Company {
-  result := []Company{}
-  for _, id := range ids {
-    result = append(result, Company(id.String()))
-  }
-  return result
+	result := []Company{}
+	for _, id := range ids {
+		result = append(result, Company(id.String()))
+	}
+	return result
 }
 
 func (company Company) ToList() []Company {
-  return []Company{ company }
+	return []Company{company}
 }
 
 func (company Company) CreateAdminRelations(ctx context.Context, objects CompanyAdminObjects) error {
-  if len(objects.User) > 0 {
-    err := authz.GetEngine(ctx).CreateRelations(ctx, authz.Resource{
-      Type: TypeCompany,
-      ID: authz.ID(company),
-    }, authz.Relation(CompanyAdmin), TypeUser, authz.IDs(objects.User))
-    if err != nil {
-      return err
-    }
-  }
-  return nil
+	if len(objects.User) > 0 {
+		err := authz.GetEngine(ctx).CreateRelations(ctx, authz.Resource{
+			Type: TypeCompany,
+			ID:   authz.ID(company),
+		}, authz.Relation(CompanyAdmin), TypeUser, authz.IDs(objects.User))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 func (company Company) CreateManagerRelations(ctx context.Context, objects CompanyManagerObjects) error {
-  if len(objects.User) > 0 {
-    err := authz.GetEngine(ctx).CreateRelations(ctx, authz.Resource{
-      Type: TypeCompany,
-      ID: authz.ID(company),
-    }, authz.Relation(CompanyManager), TypeUser, authz.IDs(objects.User))
-    if err != nil {
-      return err
-    }
-  }
-  return nil
+	if len(objects.User) > 0 {
+		err := authz.GetEngine(ctx).CreateRelations(ctx, authz.Resource{
+			Type: TypeCompany,
+			ID:   authz.ID(company),
+		}, authz.Relation(CompanyManager), TypeUser, authz.IDs(objects.User))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 func (company Company) CreateEmployeeRelations(ctx context.Context, objects CompanyEmployeeObjects) error {
-  if len(objects.User) > 0 {
-    err := authz.GetEngine(ctx).CreateRelations(ctx, authz.Resource{
-      Type: TypeCompany,
-      ID: authz.ID(company),
-    }, authz.Relation(CompanyEmployee), TypeUser, authz.IDs(objects.User))
-    if err != nil {
-      return err
-    }
-  }
-  return nil
+	if len(objects.User) > 0 {
+		err := authz.GetEngine(ctx).CreateRelations(ctx, authz.Resource{
+			Type: TypeCompany,
+			ID:   authz.ID(company),
+		}, authz.Relation(CompanyEmployee), TypeUser, authz.IDs(objects.User))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (company Company) DeleteAdminRelations(ctx context.Context, objects CompanyAdminObjects) error {
-  if len(objects.User) > 0 {
-    err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
-      Type: TypeCompany,
-      ID: authz.ID(company),
-    }, authz.Relation(CompanyAdmin), TypeUser, authz.IDs(objects.User))
-    if err != nil {
-      return err
-    }
-  }
-  return nil
+	if len(objects.User) > 0 {
+		err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
+			Type: TypeCompany,
+			ID:   authz.ID(company),
+		}, authz.Relation(CompanyAdmin), TypeUser, authz.IDs(objects.User))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // PurgeAdminRelations deletes every admin relationship on this
@@ -110,24 +116,24 @@ func (company Company) DeleteAdminRelations(ctx context.Context, objects Company
 // DeleteAdminRelations (which revokes the specific subjects you pass),
 // use this when admin as a whole no longer applies to this Company.
 func (company Company) PurgeAdminRelations(ctx context.Context) error {
-  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
-    ResourceType: TypeCompany,
-    ResourceID: authz.ID(company),
-    Relation: authz.Relation(CompanyAdmin),
-  })
+	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+		ResourceType: TypeCompany,
+		ResourceID:   authz.ID(company),
+		Relation:     authz.Relation(CompanyAdmin),
+	})
 }
 
 func (company Company) DeleteManagerRelations(ctx context.Context, objects CompanyManagerObjects) error {
-  if len(objects.User) > 0 {
-    err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
-      Type: TypeCompany,
-      ID: authz.ID(company),
-    }, authz.Relation(CompanyManager), TypeUser, authz.IDs(objects.User))
-    if err != nil {
-      return err
-    }
-  }
-  return nil
+	if len(objects.User) > 0 {
+		err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
+			Type: TypeCompany,
+			ID:   authz.ID(company),
+		}, authz.Relation(CompanyManager), TypeUser, authz.IDs(objects.User))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // PurgeManagerRelations deletes every manager relationship on this
@@ -135,24 +141,24 @@ func (company Company) DeleteManagerRelations(ctx context.Context, objects Compa
 // DeleteManagerRelations (which revokes the specific subjects you pass),
 // use this when manager as a whole no longer applies to this Company.
 func (company Company) PurgeManagerRelations(ctx context.Context) error {
-  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
-    ResourceType: TypeCompany,
-    ResourceID: authz.ID(company),
-    Relation: authz.Relation(CompanyManager),
-  })
+	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+		ResourceType: TypeCompany,
+		ResourceID:   authz.ID(company),
+		Relation:     authz.Relation(CompanyManager),
+	})
 }
 
 func (company Company) DeleteEmployeeRelations(ctx context.Context, objects CompanyEmployeeObjects) error {
-  if len(objects.User) > 0 {
-    err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
-      Type: TypeCompany,
-      ID: authz.ID(company),
-    }, authz.Relation(CompanyEmployee), TypeUser, authz.IDs(objects.User))
-    if err != nil {
-      return err
-    }
-  }
-  return nil
+	if len(objects.User) > 0 {
+		err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
+			Type: TypeCompany,
+			ID:   authz.ID(company),
+		}, authz.Relation(CompanyEmployee), TypeUser, authz.IDs(objects.User))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // PurgeEmployeeRelations deletes every employee relationship on this
@@ -160,11 +166,11 @@ func (company Company) DeleteEmployeeRelations(ctx context.Context, objects Comp
 // DeleteEmployeeRelations (which revokes the specific subjects you pass),
 // use this when employee as a whole no longer applies to this Company.
 func (company Company) PurgeEmployeeRelations(ctx context.Context) error {
-  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
-    ResourceType: TypeCompany,
-    ResourceID: authz.ID(company),
-    Relation: authz.Relation(CompanyEmployee),
-  })
+	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+		ResourceType: TypeCompany,
+		ResourceID:   authz.ID(company),
+		Relation:     authz.Relation(CompanyEmployee),
+	})
 }
 
 // PurgeRelations deletes every relationship on this Company — all relations,
@@ -174,10 +180,10 @@ func (company Company) PurgeEmployeeRelations(ctx context.Context) error {
 // resource — for that, see PurgeRelationsAsSubject (emitted when Company is a
 // subject anywhere in the schema).
 func (company Company) PurgeRelations(ctx context.Context) error {
-  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
-    ResourceType: TypeCompany,
-    ResourceID: authz.ID(company),
-  })
+	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+		ResourceType: TypeCompany,
+		ResourceID:   authz.ID(company),
+	})
 }
 
 // PurgeRelationsAsSubject deletes every relationship where this Company is the
@@ -187,410 +193,415 @@ func (company Company) PurgeRelations(ctx context.Context) error {
 // (idempotent). Use it when this Company is deleted from your store,
 // alongside PurgeRelations if Company also has relations.
 func (company Company) PurgeRelationsAsSubject(ctx context.Context) error {
-  eng := authz.GetEngine(ctx)
-  var errs []error
-  if err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
-    ResourceType: authz.Type("menusvc/booking"),
-    SubjectType: TypeCompany,
-    SubjectID: authz.ID(company),
-  }); err != nil {
-    errs = append(errs, fmt.Errorf("purge Company as subject of menusvc/booking: %w", err))
-  }
-  if err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
-    ResourceType: authz.Type("menusvc/order"),
-    SubjectType: TypeCompany,
-    SubjectID: authz.ID(company),
-  }); err != nil {
-    errs = append(errs, fmt.Errorf("purge Company as subject of menusvc/order: %w", err))
-  }
-  if err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
-    ResourceType: authz.Type("menusvc/pricelist"),
-    SubjectType: TypeCompany,
-    SubjectID: authz.ID(company),
-  }); err != nil {
-    errs = append(errs, fmt.Errorf("purge Company as subject of menusvc/pricelist: %w", err))
-  }
-  if err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
-    ResourceType: authz.Type("menusvc/setting"),
-    SubjectType: TypeCompany,
-    SubjectID: authz.ID(company),
-  }); err != nil {
-    errs = append(errs, fmt.Errorf("purge Company as subject of menusvc/setting: %w", err))
-  }
-  if err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
-    ResourceType: authz.Type("menusvc/table"),
-    SubjectType: TypeCompany,
-    SubjectID: authz.ID(company),
-  }); err != nil {
-    errs = append(errs, fmt.Errorf("purge Company as subject of menusvc/table: %w", err))
-  }
-  if err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
-    ResourceType: authz.Type("menusvc/user"),
-    SubjectType: TypeCompany,
-    SubjectID: authz.ID(company),
-  }); err != nil {
-    errs = append(errs, fmt.Errorf("purge Company as subject of menusvc/user: %w", err))
-  }
-  return errors.Join(errs...)
+	eng := authz.GetEngine(ctx)
+	var errs []error
+	if err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
+		ResourceType: authz.Type("menusvc/booking"),
+		SubjectType:  TypeCompany,
+		SubjectID:    authz.ID(company),
+	}); err != nil {
+		errs = append(errs, fmt.Errorf("purge Company as subject of menusvc/booking: %w", err))
+	}
+	if err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
+		ResourceType: authz.Type("menusvc/order"),
+		SubjectType:  TypeCompany,
+		SubjectID:    authz.ID(company),
+	}); err != nil {
+		errs = append(errs, fmt.Errorf("purge Company as subject of menusvc/order: %w", err))
+	}
+	if err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
+		ResourceType: authz.Type("menusvc/pricelist"),
+		SubjectType:  TypeCompany,
+		SubjectID:    authz.ID(company),
+	}); err != nil {
+		errs = append(errs, fmt.Errorf("purge Company as subject of menusvc/pricelist: %w", err))
+	}
+	if err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
+		ResourceType: authz.Type("menusvc/setting"),
+		SubjectType:  TypeCompany,
+		SubjectID:    authz.ID(company),
+	}); err != nil {
+		errs = append(errs, fmt.Errorf("purge Company as subject of menusvc/setting: %w", err))
+	}
+	if err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
+		ResourceType: authz.Type("menusvc/table"),
+		SubjectType:  TypeCompany,
+		SubjectID:    authz.ID(company),
+	}); err != nil {
+		errs = append(errs, fmt.Errorf("purge Company as subject of menusvc/table: %w", err))
+	}
+	if err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
+		ResourceType: authz.Type("menusvc/user"),
+		SubjectType:  TypeCompany,
+		SubjectID:    authz.ID(company),
+	}); err != nil {
+		errs = append(errs, fmt.Errorf("purge Company as subject of menusvc/user: %w", err))
+	}
+	return errors.Join(errs...)
 }
 
 type CompanyAdminUserRelation struct {
-  ID            User
-  SubRelation   string
-  CaveatName    string
-  CaveatContext map[string]any
-  ExpiresAt     *time.Time
+	ID            User
+	SubRelation   string
+	CaveatName    string
+	CaveatContext map[string]any
+	ExpiresAt     *time.Time
 }
+
 func (r CompanyAdminUserRelation) RelationID() User { return r.ID }
 
 func (company Company) ReadAdminUserRelations(ctx context.Context) ([]CompanyAdminUserRelation, error) {
-  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
-    Type: TypeCompany,
-    ID: authz.ID(company),
-  }, authz.Relation(CompanyAdmin), TypeUser)
-  if err != nil {
-    return nil, err
-  }
+	tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+		Type: TypeCompany,
+		ID:   authz.ID(company),
+	}, authz.Relation(CompanyAdmin), TypeUser)
+	if err != nil {
+		return nil, err
+	}
 
-  rels := make([]CompanyAdminUserRelation, 0, len(tuples))
-  for _, t := range tuples {
-    if t.ID == authz.WildcardID {
-      continue
-    }
-    rels = append(rels, CompanyAdminUserRelation{
-      ID:            User(t.ID),
-      SubRelation:   t.SubRelation,
-      CaveatName:    t.CaveatName,
-      CaveatContext: t.CaveatContext,
-      ExpiresAt:     t.ExpiresAt,
-    })
-  }
-  return rels, nil
+	rels := make([]CompanyAdminUserRelation, 0, len(tuples))
+	for _, t := range tuples {
+		if t.ID == authz.WildcardID {
+			continue
+		}
+		rels = append(rels, CompanyAdminUserRelation{
+			ID:            User(t.ID),
+			SubRelation:   t.SubRelation,
+			CaveatName:    t.CaveatName,
+			CaveatContext: t.CaveatContext,
+			ExpiresAt:     t.ExpiresAt,
+		})
+	}
+	return rels, nil
 }
 
 type CompanyManagerUserRelation struct {
-  ID            User
-  SubRelation   string
-  CaveatName    string
-  CaveatContext map[string]any
-  ExpiresAt     *time.Time
+	ID            User
+	SubRelation   string
+	CaveatName    string
+	CaveatContext map[string]any
+	ExpiresAt     *time.Time
 }
+
 func (r CompanyManagerUserRelation) RelationID() User { return r.ID }
 
 func (company Company) ReadManagerUserRelations(ctx context.Context) ([]CompanyManagerUserRelation, error) {
-  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
-    Type: TypeCompany,
-    ID: authz.ID(company),
-  }, authz.Relation(CompanyManager), TypeUser)
-  if err != nil {
-    return nil, err
-  }
+	tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+		Type: TypeCompany,
+		ID:   authz.ID(company),
+	}, authz.Relation(CompanyManager), TypeUser)
+	if err != nil {
+		return nil, err
+	}
 
-  rels := make([]CompanyManagerUserRelation, 0, len(tuples))
-  for _, t := range tuples {
-    if t.ID == authz.WildcardID {
-      continue
-    }
-    rels = append(rels, CompanyManagerUserRelation{
-      ID:            User(t.ID),
-      SubRelation:   t.SubRelation,
-      CaveatName:    t.CaveatName,
-      CaveatContext: t.CaveatContext,
-      ExpiresAt:     t.ExpiresAt,
-    })
-  }
-  return rels, nil
+	rels := make([]CompanyManagerUserRelation, 0, len(tuples))
+	for _, t := range tuples {
+		if t.ID == authz.WildcardID {
+			continue
+		}
+		rels = append(rels, CompanyManagerUserRelation{
+			ID:            User(t.ID),
+			SubRelation:   t.SubRelation,
+			CaveatName:    t.CaveatName,
+			CaveatContext: t.CaveatContext,
+			ExpiresAt:     t.ExpiresAt,
+		})
+	}
+	return rels, nil
 }
 
 type CompanyEmployeeUserRelation struct {
-  ID            User
-  SubRelation   string
-  CaveatName    string
-  CaveatContext map[string]any
-  ExpiresAt     *time.Time
+	ID            User
+	SubRelation   string
+	CaveatName    string
+	CaveatContext map[string]any
+	ExpiresAt     *time.Time
 }
+
 func (r CompanyEmployeeUserRelation) RelationID() User { return r.ID }
 
 func (company Company) ReadEmployeeUserRelations(ctx context.Context) ([]CompanyEmployeeUserRelation, error) {
-  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
-    Type: TypeCompany,
-    ID: authz.ID(company),
-  }, authz.Relation(CompanyEmployee), TypeUser)
-  if err != nil {
-    return nil, err
-  }
+	tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+		Type: TypeCompany,
+		ID:   authz.ID(company),
+	}, authz.Relation(CompanyEmployee), TypeUser)
+	if err != nil {
+		return nil, err
+	}
 
-  rels := make([]CompanyEmployeeUserRelation, 0, len(tuples))
-  for _, t := range tuples {
-    if t.ID == authz.WildcardID {
-      continue
-    }
-    rels = append(rels, CompanyEmployeeUserRelation{
-      ID:            User(t.ID),
-      SubRelation:   t.SubRelation,
-      CaveatName:    t.CaveatName,
-      CaveatContext: t.CaveatContext,
-      ExpiresAt:     t.ExpiresAt,
-    })
-  }
-  return rels, nil
+	rels := make([]CompanyEmployeeUserRelation, 0, len(tuples))
+	for _, t := range tuples {
+		if t.ID == authz.WildcardID {
+			continue
+		}
+		rels = append(rels, CompanyEmployeeUserRelation{
+			ID:            User(t.ID),
+			SubRelation:   t.SubRelation,
+			CaveatName:    t.CaveatName,
+			CaveatContext: t.CaveatContext,
+			ExpiresAt:     t.ExpiresAt,
+		})
+	}
+	return rels, nil
 }
 
 const CompanyManage PermissionCompany = "manage"
 
 type CheckCompanyManageInputs struct {
-  User []User
+	User []User
 }
 
 func (company Company) CheckManage(ctx context.Context, input CheckCompanyManageInputs) (bool, error) {
-  if len(input.User) == 0 && true {
-    return false, authz.ErrNoInput
-  }
+	if len(input.User) == 0 && true {
+		return false, authz.ErrNoInput
+	}
 
-  if len(input.User) > 0 {
-    err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
-      Type: TypeCompany,
-      ID: authz.ID(company),
-    }, authz.Permission(CompanyManage), TypeUser, authz.IDs(input.User))
-    if err != nil {
-      return false, err
-    }
-  }
-  
-  return true, nil
+	if len(input.User) > 0 {
+		err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
+			Type: TypeCompany,
+			ID:   authz.ID(company),
+		}, authz.Permission(CompanyManage), TypeUser, authz.IDs(input.User))
+		if err != nil {
+			return false, err
+		}
+	}
+
+	return true, nil
 }
 
 func LookupManageCompanyResources(ctx context.Context, input CheckCompanyManageInputs) (CompanyLookupResult, error) {
 
-  if len(input.User) > 0 {
-    result, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeCompany, authz.Permission(CompanyManage),
-      TypeUser, authz.IDs(input.User),
-    )
-    if err != nil {
-      return CompanyLookupResult{}, err
-    }
+	if len(input.User) > 0 {
+		result, err := authz.GetEngine(ctx).LookupResources(ctx,
+			TypeCompany, authz.Permission(CompanyManage),
+			TypeUser, authz.IDs(input.User),
+		)
+		if err != nil {
+			return CompanyLookupResult{}, err
+		}
 
-    out := CompanyLookupResult{
-      Definite:    authz.FromIDs[Company](result.Definite),
-      Conditional: make([]CompanyConditionalLookupEntry, 0, len(result.Conditional)),
-    }
-    for _, c := range result.Conditional {
-      out.Conditional = append(out.Conditional, CompanyConditionalLookupEntry{
-        ID:          Company(c.ID),
-        MissingKeys: c.MissingKeys,
-      })
-    }
-    return out, nil
-  }
-  
-  return CompanyLookupResult{}, nil
+		out := CompanyLookupResult{
+			Definite:    authz.FromIDs[Company](result.Definite),
+			Conditional: make([]CompanyConditionalLookupEntry, 0, len(result.Conditional)),
+		}
+		for _, c := range result.Conditional {
+			out.Conditional = append(out.Conditional, CompanyConditionalLookupEntry{
+				ID:          Company(c.ID),
+				MissingKeys: c.MissingKeys,
+			})
+		}
+		return out, nil
+	}
+
+	return CompanyLookupResult{}, nil
 }
+
 const CompanyCreateBooking PermissionCompany = "create_booking"
 
 type CheckCompanyCreateBookingInputs struct {
-  User []User
+	User []User
 }
 
 func (company Company) CheckCreateBooking(ctx context.Context, input CheckCompanyCreateBookingInputs) (bool, error) {
-  if len(input.User) == 0 && true {
-    return false, authz.ErrNoInput
-  }
+	if len(input.User) == 0 && true {
+		return false, authz.ErrNoInput
+	}
 
-  if len(input.User) > 0 {
-    err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
-      Type: TypeCompany,
-      ID: authz.ID(company),
-    }, authz.Permission(CompanyCreateBooking), TypeUser, authz.IDs(input.User))
-    if err != nil {
-      return false, err
-    }
-  }
-  
-  return true, nil
+	if len(input.User) > 0 {
+		err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
+			Type: TypeCompany,
+			ID:   authz.ID(company),
+		}, authz.Permission(CompanyCreateBooking), TypeUser, authz.IDs(input.User))
+		if err != nil {
+			return false, err
+		}
+	}
+
+	return true, nil
 }
 
 func LookupCreateBookingCompanyResources(ctx context.Context, input CheckCompanyCreateBookingInputs) (CompanyLookupResult, error) {
 
-  if len(input.User) > 0 {
-    result, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeCompany, authz.Permission(CompanyCreateBooking),
-      TypeUser, authz.IDs(input.User),
-    )
-    if err != nil {
-      return CompanyLookupResult{}, err
-    }
+	if len(input.User) > 0 {
+		result, err := authz.GetEngine(ctx).LookupResources(ctx,
+			TypeCompany, authz.Permission(CompanyCreateBooking),
+			TypeUser, authz.IDs(input.User),
+		)
+		if err != nil {
+			return CompanyLookupResult{}, err
+		}
 
-    out := CompanyLookupResult{
-      Definite:    authz.FromIDs[Company](result.Definite),
-      Conditional: make([]CompanyConditionalLookupEntry, 0, len(result.Conditional)),
-    }
-    for _, c := range result.Conditional {
-      out.Conditional = append(out.Conditional, CompanyConditionalLookupEntry{
-        ID:          Company(c.ID),
-        MissingKeys: c.MissingKeys,
-      })
-    }
-    return out, nil
-  }
-  
-  return CompanyLookupResult{}, nil
+		out := CompanyLookupResult{
+			Definite:    authz.FromIDs[Company](result.Definite),
+			Conditional: make([]CompanyConditionalLookupEntry, 0, len(result.Conditional)),
+		}
+		for _, c := range result.Conditional {
+			out.Conditional = append(out.Conditional, CompanyConditionalLookupEntry{
+				ID:          Company(c.ID),
+				MissingKeys: c.MissingKeys,
+			})
+		}
+		return out, nil
+	}
+
+	return CompanyLookupResult{}, nil
 }
+
 const CompanyCreateOrder PermissionCompany = "create_order"
 
 type CheckCompanyCreateOrderInputs struct {
-  User []User
+	User []User
 }
 
 func (company Company) CheckCreateOrder(ctx context.Context, input CheckCompanyCreateOrderInputs) (bool, error) {
-  if len(input.User) == 0 && true {
-    return false, authz.ErrNoInput
-  }
+	if len(input.User) == 0 && true {
+		return false, authz.ErrNoInput
+	}
 
-  if len(input.User) > 0 {
-    err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
-      Type: TypeCompany,
-      ID: authz.ID(company),
-    }, authz.Permission(CompanyCreateOrder), TypeUser, authz.IDs(input.User))
-    if err != nil {
-      return false, err
-    }
-  }
-  
-  return true, nil
+	if len(input.User) > 0 {
+		err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
+			Type: TypeCompany,
+			ID:   authz.ID(company),
+		}, authz.Permission(CompanyCreateOrder), TypeUser, authz.IDs(input.User))
+		if err != nil {
+			return false, err
+		}
+	}
+
+	return true, nil
 }
 
 func LookupCreateOrderCompanyResources(ctx context.Context, input CheckCompanyCreateOrderInputs) (CompanyLookupResult, error) {
 
-  if len(input.User) > 0 {
-    result, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeCompany, authz.Permission(CompanyCreateOrder),
-      TypeUser, authz.IDs(input.User),
-    )
-    if err != nil {
-      return CompanyLookupResult{}, err
-    }
+	if len(input.User) > 0 {
+		result, err := authz.GetEngine(ctx).LookupResources(ctx,
+			TypeCompany, authz.Permission(CompanyCreateOrder),
+			TypeUser, authz.IDs(input.User),
+		)
+		if err != nil {
+			return CompanyLookupResult{}, err
+		}
 
-    out := CompanyLookupResult{
-      Definite:    authz.FromIDs[Company](result.Definite),
-      Conditional: make([]CompanyConditionalLookupEntry, 0, len(result.Conditional)),
-    }
-    for _, c := range result.Conditional {
-      out.Conditional = append(out.Conditional, CompanyConditionalLookupEntry{
-        ID:          Company(c.ID),
-        MissingKeys: c.MissingKeys,
-      })
-    }
-    return out, nil
-  }
-  
-  return CompanyLookupResult{}, nil
+		out := CompanyLookupResult{
+			Definite:    authz.FromIDs[Company](result.Definite),
+			Conditional: make([]CompanyConditionalLookupEntry, 0, len(result.Conditional)),
+		}
+		for _, c := range result.Conditional {
+			out.Conditional = append(out.Conditional, CompanyConditionalLookupEntry{
+				ID:          Company(c.ID),
+				MissingKeys: c.MissingKeys,
+			})
+		}
+		return out, nil
+	}
+
+	return CompanyLookupResult{}, nil
 }
 
 func (company Company) LookupManageUserSubjects(ctx context.Context) (UserLookupResult, error) {
 
-  result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
-    authz.Resource{
-      Type: TypeCompany,
-      ID: authz.ID(company),
-    },
-    authz.Permission(CompanyManage), TypeUser,
-  )
-  if err != nil {
-    return UserLookupResult{}, err
-  }
+	result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+		authz.Resource{
+			Type: TypeCompany,
+			ID:   authz.ID(company),
+		},
+		authz.Permission(CompanyManage), TypeUser,
+	)
+	if err != nil {
+		return UserLookupResult{}, err
+	}
 
-  out := UserLookupResult{
-    Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
-    Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
-  }
-  for _, c := range result.Conditional {
-    out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
-      ID:          User(c.ID),
-      MissingKeys: c.MissingKeys,
-    })
-  }
-  return out, nil
+	out := UserLookupResult{
+		Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
+		Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
+	}
+	for _, c := range result.Conditional {
+		out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
+			ID:          User(c.ID),
+			MissingKeys: c.MissingKeys,
+		})
+	}
+	return out, nil
 }
 
 func (company Company) LookupManageUserWildcardSubjects(ctx context.Context) (bool, error) {
-  return authz.GetEngine(ctx).HasPublicSubject(ctx,
-    authz.Resource{
-      Type: TypeCompany,
-      ID: authz.ID(company),
-    },
-    authz.Permission(CompanyManage), TypeUser,
-  )
+	return authz.GetEngine(ctx).HasPublicSubject(ctx,
+		authz.Resource{
+			Type: TypeCompany,
+			ID:   authz.ID(company),
+		},
+		authz.Permission(CompanyManage), TypeUser,
+	)
 }
 
 func (company Company) LookupCreateBookingUserSubjects(ctx context.Context) (UserLookupResult, error) {
 
-  result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
-    authz.Resource{
-      Type: TypeCompany,
-      ID: authz.ID(company),
-    },
-    authz.Permission(CompanyCreateBooking), TypeUser,
-  )
-  if err != nil {
-    return UserLookupResult{}, err
-  }
+	result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+		authz.Resource{
+			Type: TypeCompany,
+			ID:   authz.ID(company),
+		},
+		authz.Permission(CompanyCreateBooking), TypeUser,
+	)
+	if err != nil {
+		return UserLookupResult{}, err
+	}
 
-  out := UserLookupResult{
-    Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
-    Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
-  }
-  for _, c := range result.Conditional {
-    out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
-      ID:          User(c.ID),
-      MissingKeys: c.MissingKeys,
-    })
-  }
-  return out, nil
+	out := UserLookupResult{
+		Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
+		Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
+	}
+	for _, c := range result.Conditional {
+		out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
+			ID:          User(c.ID),
+			MissingKeys: c.MissingKeys,
+		})
+	}
+	return out, nil
 }
 
 func (company Company) LookupCreateBookingUserWildcardSubjects(ctx context.Context) (bool, error) {
-  return authz.GetEngine(ctx).HasPublicSubject(ctx,
-    authz.Resource{
-      Type: TypeCompany,
-      ID: authz.ID(company),
-    },
-    authz.Permission(CompanyCreateBooking), TypeUser,
-  )
+	return authz.GetEngine(ctx).HasPublicSubject(ctx,
+		authz.Resource{
+			Type: TypeCompany,
+			ID:   authz.ID(company),
+		},
+		authz.Permission(CompanyCreateBooking), TypeUser,
+	)
 }
 
 func (company Company) LookupCreateOrderUserSubjects(ctx context.Context) (UserLookupResult, error) {
 
-  result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
-    authz.Resource{
-      Type: TypeCompany,
-      ID: authz.ID(company),
-    },
-    authz.Permission(CompanyCreateOrder), TypeUser,
-  )
-  if err != nil {
-    return UserLookupResult{}, err
-  }
+	result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+		authz.Resource{
+			Type: TypeCompany,
+			ID:   authz.ID(company),
+		},
+		authz.Permission(CompanyCreateOrder), TypeUser,
+	)
+	if err != nil {
+		return UserLookupResult{}, err
+	}
 
-  out := UserLookupResult{
-    Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
-    Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
-  }
-  for _, c := range result.Conditional {
-    out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
-      ID:          User(c.ID),
-      MissingKeys: c.MissingKeys,
-    })
-  }
-  return out, nil
+	out := UserLookupResult{
+		Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
+		Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
+	}
+	for _, c := range result.Conditional {
+		out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
+			ID:          User(c.ID),
+			MissingKeys: c.MissingKeys,
+		})
+	}
+	return out, nil
 }
 
 func (company Company) LookupCreateOrderUserWildcardSubjects(ctx context.Context) (bool, error) {
-  return authz.GetEngine(ctx).HasPublicSubject(ctx,
-    authz.Resource{
-      Type: TypeCompany,
-      ID: authz.ID(company),
-    },
-    authz.Permission(CompanyCreateOrder), TypeUser,
-  )
+	return authz.GetEngine(ctx).HasPublicSubject(ctx,
+		authz.Resource{
+			Type: TypeCompany,
+			ID:   authz.ID(company),
+		},
+		authz.Permission(CompanyCreateOrder), TypeUser,
+	)
 }

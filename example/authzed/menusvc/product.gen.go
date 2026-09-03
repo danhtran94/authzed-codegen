@@ -3,40 +3,37 @@
 package menusvc
 
 import (
-  "github.com/danhtran94/authzed-codegen/pkg/authz"
-
-  )
+	"github.com/danhtran94/authzed-codegen/pkg/authz"
+)
 
 const TypeProduct authz.Type = "menusvc/product"
+
 type RelationProduct authz.Relation
 type PermissionProduct authz.Permission
-
 
 type Product authz.ID
 
 type ProductLookupResult struct {
-  Definite    []Product
-  Conditional []ProductConditionalLookupEntry
+	Definite    []Product
+	Conditional []ProductConditionalLookupEntry
 }
 type ProductConditionalLookupEntry struct {
-  ID          Product
-  MissingKeys []string
+	ID          Product
+	MissingKeys []string
 }
 
 func ProductStringer(id authz.StringConvertable) Product {
-  return Product(id.String())
+	return Product(id.String())
 }
 
 func ProductStringers(ids ...authz.StringConvertable) []Product {
-  result := []Product{}
-  for _, id := range ids {
-    result = append(result, Product(id.String()))
-  }
-  return result
+	result := []Product{}
+	for _, id := range ids {
+		result = append(result, Product(id.String()))
+	}
+	return result
 }
 
 func (product Product) ToList() []Product {
-  return []Product{ product }
+	return []Product{product}
 }
-
-

@@ -3,6 +3,7 @@ package generator
 import (
 	"bytes"
 	"fmt"
+	"go/format"
 	"os"
 	"sort"
 	"strings"
@@ -73,11 +74,16 @@ func (g *Generator) GenerateOPASource(tmplStr string) error {
 			return fmt.Errorf("execute opa template for %s: %w", pkgName, err)
 		}
 
+		formatted, err := format.Source(buf.Bytes())
+		if err != nil {
+			return fmt.Errorf("gofmt opa.gen.go for %s: %w", pkgName, err)
+		}
+
 		dir := fmt.Sprintf("%s/%s", g.OutputPath, pkgName)
 		if err := os.MkdirAll(dir, os.ModePerm); err != nil {
 			return err
 		}
-		if err := os.WriteFile(fmt.Sprintf("%s/opa.gen.go", dir), buf.Bytes(), os.ModePerm); err != nil {
+		if err := os.WriteFile(fmt.Sprintf("%s/opa.gen.go", dir), formatted, os.ModePerm); err != nil {
 			return err
 		}
 	}

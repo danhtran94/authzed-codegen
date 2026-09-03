@@ -3,90 +3,94 @@
 package extsvc
 
 import (
-  "github.com/danhtran94/authzed-codegen/pkg/authz"
+	"github.com/danhtran94/authzed-codegen/pkg/authz"
 
-  "context"
-  "time"
-  "errors"
-  "fmt"
+	"context"
+	"errors"
+	"fmt"
+	"time"
 )
 
 const TypeTeam authz.Type = "extsvc/team"
+
 type RelationTeam authz.Relation
 type PermissionTeam authz.Permission
 
 const TeamOwner RelationTeam = "owner"
+
 type TeamOwnerObjects struct {
-  User []User
+	User []User
 }
+
 const TeamManager RelationTeam = "manager"
+
 type TeamManagerObjects struct {
-  User []User
+	User []User
 }
 
 type Team authz.ID
 
 type TeamLookupResult struct {
-  Definite    []Team
-  Conditional []TeamConditionalLookupEntry
+	Definite    []Team
+	Conditional []TeamConditionalLookupEntry
 }
 type TeamConditionalLookupEntry struct {
-  ID          Team
-  MissingKeys []string
+	ID          Team
+	MissingKeys []string
 }
 
 func TeamStringer(id authz.StringConvertable) Team {
-  return Team(id.String())
+	return Team(id.String())
 }
 
 func TeamStringers(ids ...authz.StringConvertable) []Team {
-  result := []Team{}
-  for _, id := range ids {
-    result = append(result, Team(id.String()))
-  }
-  return result
+	result := []Team{}
+	for _, id := range ids {
+		result = append(result, Team(id.String()))
+	}
+	return result
 }
 
 func (team Team) ToList() []Team {
-  return []Team{ team }
+	return []Team{team}
 }
 
 func (team Team) CreateOwnerRelations(ctx context.Context, objects TeamOwnerObjects) error {
-  if len(objects.User) > 0 {
-    err := authz.GetEngine(ctx).CreateRelations(ctx, authz.Resource{
-      Type: TypeTeam,
-      ID: authz.ID(team),
-    }, authz.Relation(TeamOwner), TypeUser, authz.IDs(objects.User))
-    if err != nil {
-      return err
-    }
-  }
-  return nil
+	if len(objects.User) > 0 {
+		err := authz.GetEngine(ctx).CreateRelations(ctx, authz.Resource{
+			Type: TypeTeam,
+			ID:   authz.ID(team),
+		}, authz.Relation(TeamOwner), TypeUser, authz.IDs(objects.User))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 func (team Team) CreateManagerRelations(ctx context.Context, objects TeamManagerObjects) error {
-  if len(objects.User) > 0 {
-    err := authz.GetEngine(ctx).CreateRelations(ctx, authz.Resource{
-      Type: TypeTeam,
-      ID: authz.ID(team),
-    }, authz.Relation(TeamManager), TypeUser, authz.IDs(objects.User))
-    if err != nil {
-      return err
-    }
-  }
-  return nil
+	if len(objects.User) > 0 {
+		err := authz.GetEngine(ctx).CreateRelations(ctx, authz.Resource{
+			Type: TypeTeam,
+			ID:   authz.ID(team),
+		}, authz.Relation(TeamManager), TypeUser, authz.IDs(objects.User))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (team Team) DeleteOwnerRelations(ctx context.Context, objects TeamOwnerObjects) error {
-  if len(objects.User) > 0 {
-    err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
-      Type: TypeTeam,
-      ID: authz.ID(team),
-    }, authz.Relation(TeamOwner), TypeUser, authz.IDs(objects.User))
-    if err != nil {
-      return err
-    }
-  }
-  return nil
+	if len(objects.User) > 0 {
+		err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
+			Type: TypeTeam,
+			ID:   authz.ID(team),
+		}, authz.Relation(TeamOwner), TypeUser, authz.IDs(objects.User))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // PurgeOwnerRelations deletes every owner relationship on this
@@ -94,24 +98,24 @@ func (team Team) DeleteOwnerRelations(ctx context.Context, objects TeamOwnerObje
 // DeleteOwnerRelations (which revokes the specific subjects you pass),
 // use this when owner as a whole no longer applies to this Team.
 func (team Team) PurgeOwnerRelations(ctx context.Context) error {
-  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
-    ResourceType: TypeTeam,
-    ResourceID: authz.ID(team),
-    Relation: authz.Relation(TeamOwner),
-  })
+	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+		ResourceType: TypeTeam,
+		ResourceID:   authz.ID(team),
+		Relation:     authz.Relation(TeamOwner),
+	})
 }
 
 func (team Team) DeleteManagerRelations(ctx context.Context, objects TeamManagerObjects) error {
-  if len(objects.User) > 0 {
-    err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
-      Type: TypeTeam,
-      ID: authz.ID(team),
-    }, authz.Relation(TeamManager), TypeUser, authz.IDs(objects.User))
-    if err != nil {
-      return err
-    }
-  }
-  return nil
+	if len(objects.User) > 0 {
+		err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
+			Type: TypeTeam,
+			ID:   authz.ID(team),
+		}, authz.Relation(TeamManager), TypeUser, authz.IDs(objects.User))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // PurgeManagerRelations deletes every manager relationship on this
@@ -119,11 +123,11 @@ func (team Team) DeleteManagerRelations(ctx context.Context, objects TeamManager
 // DeleteManagerRelations (which revokes the specific subjects you pass),
 // use this when manager as a whole no longer applies to this Team.
 func (team Team) PurgeManagerRelations(ctx context.Context) error {
-  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
-    ResourceType: TypeTeam,
-    ResourceID: authz.ID(team),
-    Relation: authz.Relation(TeamManager),
-  })
+	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+		ResourceType: TypeTeam,
+		ResourceID:   authz.ID(team),
+		Relation:     authz.Relation(TeamManager),
+	})
 }
 
 // PurgeRelations deletes every relationship on this Team — all relations,
@@ -133,10 +137,10 @@ func (team Team) PurgeManagerRelations(ctx context.Context) error {
 // resource — for that, see PurgeRelationsAsSubject (emitted when Team is a
 // subject anywhere in the schema).
 func (team Team) PurgeRelations(ctx context.Context) error {
-  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
-    ResourceType: TypeTeam,
-    ResourceID: authz.ID(team),
-  })
+	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+		ResourceType: TypeTeam,
+		ResourceID:   authz.ID(team),
+	})
 }
 
 // PurgeRelationsAsSubject deletes every relationship where this Team is the
@@ -146,169 +150,171 @@ func (team Team) PurgeRelations(ctx context.Context) error {
 // (idempotent). Use it when this Team is deleted from your store,
 // alongside PurgeRelations if Team also has relations.
 func (team Team) PurgeRelationsAsSubject(ctx context.Context) error {
-  eng := authz.GetEngine(ctx)
-  var errs []error
-  if err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
-    ResourceType: authz.Type("extsvc/folder"),
-    SubjectType: TypeTeam,
-    SubjectID: authz.ID(team),
-  }); err != nil {
-    errs = append(errs, fmt.Errorf("purge Team as subject of extsvc/folder: %w", err))
-  }
-  return errors.Join(errs...)
+	eng := authz.GetEngine(ctx)
+	var errs []error
+	if err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
+		ResourceType: authz.Type("extsvc/folder"),
+		SubjectType:  TypeTeam,
+		SubjectID:    authz.ID(team),
+	}); err != nil {
+		errs = append(errs, fmt.Errorf("purge Team as subject of extsvc/folder: %w", err))
+	}
+	return errors.Join(errs...)
 }
 
 type TeamOwnerUserRelation struct {
-  ID            User
-  SubRelation   string
-  CaveatName    string
-  CaveatContext map[string]any
-  ExpiresAt     *time.Time
+	ID            User
+	SubRelation   string
+	CaveatName    string
+	CaveatContext map[string]any
+	ExpiresAt     *time.Time
 }
+
 func (r TeamOwnerUserRelation) RelationID() User { return r.ID }
 
 func (team Team) ReadOwnerUserRelations(ctx context.Context) ([]TeamOwnerUserRelation, error) {
-  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
-    Type: TypeTeam,
-    ID: authz.ID(team),
-  }, authz.Relation(TeamOwner), TypeUser)
-  if err != nil {
-    return nil, err
-  }
+	tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+		Type: TypeTeam,
+		ID:   authz.ID(team),
+	}, authz.Relation(TeamOwner), TypeUser)
+	if err != nil {
+		return nil, err
+	}
 
-  rels := make([]TeamOwnerUserRelation, 0, len(tuples))
-  for _, t := range tuples {
-    if t.ID == authz.WildcardID {
-      continue
-    }
-    rels = append(rels, TeamOwnerUserRelation{
-      ID:            User(t.ID),
-      SubRelation:   t.SubRelation,
-      CaveatName:    t.CaveatName,
-      CaveatContext: t.CaveatContext,
-      ExpiresAt:     t.ExpiresAt,
-    })
-  }
-  return rels, nil
+	rels := make([]TeamOwnerUserRelation, 0, len(tuples))
+	for _, t := range tuples {
+		if t.ID == authz.WildcardID {
+			continue
+		}
+		rels = append(rels, TeamOwnerUserRelation{
+			ID:            User(t.ID),
+			SubRelation:   t.SubRelation,
+			CaveatName:    t.CaveatName,
+			CaveatContext: t.CaveatContext,
+			ExpiresAt:     t.ExpiresAt,
+		})
+	}
+	return rels, nil
 }
 
 type TeamManagerUserRelation struct {
-  ID            User
-  SubRelation   string
-  CaveatName    string
-  CaveatContext map[string]any
-  ExpiresAt     *time.Time
+	ID            User
+	SubRelation   string
+	CaveatName    string
+	CaveatContext map[string]any
+	ExpiresAt     *time.Time
 }
+
 func (r TeamManagerUserRelation) RelationID() User { return r.ID }
 
 func (team Team) ReadManagerUserRelations(ctx context.Context) ([]TeamManagerUserRelation, error) {
-  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
-    Type: TypeTeam,
-    ID: authz.ID(team),
-  }, authz.Relation(TeamManager), TypeUser)
-  if err != nil {
-    return nil, err
-  }
+	tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+		Type: TypeTeam,
+		ID:   authz.ID(team),
+	}, authz.Relation(TeamManager), TypeUser)
+	if err != nil {
+		return nil, err
+	}
 
-  rels := make([]TeamManagerUserRelation, 0, len(tuples))
-  for _, t := range tuples {
-    if t.ID == authz.WildcardID {
-      continue
-    }
-    rels = append(rels, TeamManagerUserRelation{
-      ID:            User(t.ID),
-      SubRelation:   t.SubRelation,
-      CaveatName:    t.CaveatName,
-      CaveatContext: t.CaveatContext,
-      ExpiresAt:     t.ExpiresAt,
-    })
-  }
-  return rels, nil
+	rels := make([]TeamManagerUserRelation, 0, len(tuples))
+	for _, t := range tuples {
+		if t.ID == authz.WildcardID {
+			continue
+		}
+		rels = append(rels, TeamManagerUserRelation{
+			ID:            User(t.ID),
+			SubRelation:   t.SubRelation,
+			CaveatName:    t.CaveatName,
+			CaveatContext: t.CaveatContext,
+			ExpiresAt:     t.ExpiresAt,
+		})
+	}
+	return rels, nil
 }
 
 const TeamAdmin PermissionTeam = "admin"
 
 type CheckTeamAdminInputs struct {
-  User []User
+	User []User
 }
 
 func (team Team) CheckAdmin(ctx context.Context, input CheckTeamAdminInputs) (bool, error) {
-  if len(input.User) == 0 && true {
-    return false, authz.ErrNoInput
-  }
+	if len(input.User) == 0 && true {
+		return false, authz.ErrNoInput
+	}
 
-  if len(input.User) > 0 {
-    err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
-      Type: TypeTeam,
-      ID: authz.ID(team),
-    }, authz.Permission(TeamAdmin), TypeUser, authz.IDs(input.User))
-    if err != nil {
-      return false, err
-    }
-  }
-  
-  return true, nil
+	if len(input.User) > 0 {
+		err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
+			Type: TypeTeam,
+			ID:   authz.ID(team),
+		}, authz.Permission(TeamAdmin), TypeUser, authz.IDs(input.User))
+		if err != nil {
+			return false, err
+		}
+	}
+
+	return true, nil
 }
 
 func LookupAdminTeamResources(ctx context.Context, input CheckTeamAdminInputs) (TeamLookupResult, error) {
 
-  if len(input.User) > 0 {
-    result, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeTeam, authz.Permission(TeamAdmin),
-      TypeUser, authz.IDs(input.User),
-    )
-    if err != nil {
-      return TeamLookupResult{}, err
-    }
+	if len(input.User) > 0 {
+		result, err := authz.GetEngine(ctx).LookupResources(ctx,
+			TypeTeam, authz.Permission(TeamAdmin),
+			TypeUser, authz.IDs(input.User),
+		)
+		if err != nil {
+			return TeamLookupResult{}, err
+		}
 
-    out := TeamLookupResult{
-      Definite:    authz.FromIDs[Team](result.Definite),
-      Conditional: make([]TeamConditionalLookupEntry, 0, len(result.Conditional)),
-    }
-    for _, c := range result.Conditional {
-      out.Conditional = append(out.Conditional, TeamConditionalLookupEntry{
-        ID:          Team(c.ID),
-        MissingKeys: c.MissingKeys,
-      })
-    }
-    return out, nil
-  }
-  
-  return TeamLookupResult{}, nil
+		out := TeamLookupResult{
+			Definite:    authz.FromIDs[Team](result.Definite),
+			Conditional: make([]TeamConditionalLookupEntry, 0, len(result.Conditional)),
+		}
+		for _, c := range result.Conditional {
+			out.Conditional = append(out.Conditional, TeamConditionalLookupEntry{
+				ID:          Team(c.ID),
+				MissingKeys: c.MissingKeys,
+			})
+		}
+		return out, nil
+	}
+
+	return TeamLookupResult{}, nil
 }
 
 func (team Team) LookupAdminUserSubjects(ctx context.Context) (UserLookupResult, error) {
 
-  result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
-    authz.Resource{
-      Type: TypeTeam,
-      ID: authz.ID(team),
-    },
-    authz.Permission(TeamAdmin), TypeUser,
-  )
-  if err != nil {
-    return UserLookupResult{}, err
-  }
+	result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+		authz.Resource{
+			Type: TypeTeam,
+			ID:   authz.ID(team),
+		},
+		authz.Permission(TeamAdmin), TypeUser,
+	)
+	if err != nil {
+		return UserLookupResult{}, err
+	}
 
-  out := UserLookupResult{
-    Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
-    Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
-  }
-  for _, c := range result.Conditional {
-    out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
-      ID:          User(c.ID),
-      MissingKeys: c.MissingKeys,
-    })
-  }
-  return out, nil
+	out := UserLookupResult{
+		Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
+		Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
+	}
+	for _, c := range result.Conditional {
+		out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
+			ID:          User(c.ID),
+			MissingKeys: c.MissingKeys,
+		})
+	}
+	return out, nil
 }
 
 func (team Team) LookupAdminUserWildcardSubjects(ctx context.Context) (bool, error) {
-  return authz.GetEngine(ctx).HasPublicSubject(ctx,
-    authz.Resource{
-      Type: TypeTeam,
-      ID: authz.ID(team),
-    },
-    authz.Permission(TeamAdmin), TypeUser,
-  )
+	return authz.GetEngine(ctx).HasPublicSubject(ctx,
+		authz.Resource{
+			Type: TypeTeam,
+			ID:   authz.ID(team),
+		},
+		authz.Permission(TeamAdmin), TypeUser,
+	)
 }

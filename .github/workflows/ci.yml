@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: gofmt
+        run: |
+          diff="$(gofmt -l .)"
+          if [ -n "$diff" ]; then
+            echo "$diff"
+            echo "::error::gofmt found unformatted files (see above) — run 'gofmt -w' or regenerate via the codegen"
+            exit 1
+          fi
+
+      - name: go mod tidy (no drift)
+        run: |
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+
+      - name: Regenerate example fixtures (round-trip must be zero-diff)
+        run: |
+          go run ./cmd/authzed-codegen --output example/authzed --emit-opa example/schema.zed
+          git diff --exit-code -- example/authzed/
+
+      - name: Test
+        run: go test ./...

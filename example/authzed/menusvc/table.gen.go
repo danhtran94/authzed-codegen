@@ -3,72 +3,74 @@
 package menusvc
 
 import (
-  "github.com/danhtran94/authzed-codegen/pkg/authz"
+	"github.com/danhtran94/authzed-codegen/pkg/authz"
 
-  "context"
-  "time"
+	"context"
+	"time"
 )
 
 const TypeTable authz.Type = "menusvc/table"
+
 type RelationTable authz.Relation
 type PermissionTable authz.Permission
 
 const TableOwner RelationTable = "owner"
+
 type TableOwnerObjects struct {
-  Company []Company
+	Company []Company
 }
 
 type Table authz.ID
 
 type TableLookupResult struct {
-  Definite    []Table
-  Conditional []TableConditionalLookupEntry
+	Definite    []Table
+	Conditional []TableConditionalLookupEntry
 }
 type TableConditionalLookupEntry struct {
-  ID          Table
-  MissingKeys []string
+	ID          Table
+	MissingKeys []string
 }
 
 func TableStringer(id authz.StringConvertable) Table {
-  return Table(id.String())
+	return Table(id.String())
 }
 
 func TableStringers(ids ...authz.StringConvertable) []Table {
-  result := []Table{}
-  for _, id := range ids {
-    result = append(result, Table(id.String()))
-  }
-  return result
+	result := []Table{}
+	for _, id := range ids {
+		result = append(result, Table(id.String()))
+	}
+	return result
 }
 
 func (table Table) ToList() []Table {
-  return []Table{ table }
+	return []Table{table}
 }
 
 func (table Table) CreateOwnerRelations(ctx context.Context, objects TableOwnerObjects) error {
-  if len(objects.Company) > 0 {
-    err := authz.GetEngine(ctx).CreateRelations(ctx, authz.Resource{
-      Type: TypeTable,
-      ID: authz.ID(table),
-    }, authz.Relation(TableOwner), TypeCompany, authz.IDs(objects.Company))
-    if err != nil {
-      return err
-    }
-  }
-  return nil
+	if len(objects.Company) > 0 {
+		err := authz.GetEngine(ctx).CreateRelations(ctx, authz.Resource{
+			Type: TypeTable,
+			ID:   authz.ID(table),
+		}, authz.Relation(TableOwner), TypeCompany, authz.IDs(objects.Company))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (table Table) DeleteOwnerRelations(ctx context.Context, objects TableOwnerObjects) error {
-  if len(objects.Company) > 0 {
-    err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
-      Type: TypeTable,
-      ID: authz.ID(table),
-    }, authz.Relation(TableOwner), TypeCompany, authz.IDs(objects.Company))
-    if err != nil {
-      return err
-    }
-  }
-  return nil
+	if len(objects.Company) > 0 {
+		err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
+			Type: TypeTable,
+			ID:   authz.ID(table),
+		}, authz.Relation(TableOwner), TypeCompany, authz.IDs(objects.Company))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // PurgeOwnerRelations deletes every owner relationship on this
@@ -76,11 +78,11 @@ func (table Table) DeleteOwnerRelations(ctx context.Context, objects TableOwnerO
 // DeleteOwnerRelations (which revokes the specific subjects you pass),
 // use this when owner as a whole no longer applies to this Table.
 func (table Table) PurgeOwnerRelations(ctx context.Context) error {
-  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
-    ResourceType: TypeTable,
-    ResourceID: authz.ID(table),
-    Relation: authz.Relation(TableOwner),
-  })
+	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+		ResourceType: TypeTable,
+		ResourceID:   authz.ID(table),
+		Relation:     authz.Relation(TableOwner),
+	})
 }
 
 // PurgeRelations deletes every relationship on this Table — all relations,
@@ -90,129 +92,130 @@ func (table Table) PurgeOwnerRelations(ctx context.Context) error {
 // resource — for that, see PurgeRelationsAsSubject (emitted when Table is a
 // subject anywhere in the schema).
 func (table Table) PurgeRelations(ctx context.Context) error {
-  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
-    ResourceType: TypeTable,
-    ResourceID: authz.ID(table),
-  })
+	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+		ResourceType: TypeTable,
+		ResourceID:   authz.ID(table),
+	})
 }
 
 type TableOwnerCompanyRelation struct {
-  ID            Company
-  SubRelation   string
-  CaveatName    string
-  CaveatContext map[string]any
-  ExpiresAt     *time.Time
+	ID            Company
+	SubRelation   string
+	CaveatName    string
+	CaveatContext map[string]any
+	ExpiresAt     *time.Time
 }
+
 func (r TableOwnerCompanyRelation) RelationID() Company { return r.ID }
 
 func (table Table) ReadOwnerCompanyRelations(ctx context.Context) ([]TableOwnerCompanyRelation, error) {
-  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
-    Type: TypeTable,
-    ID: authz.ID(table),
-  }, authz.Relation(TableOwner), TypeCompany)
-  if err != nil {
-    return nil, err
-  }
+	tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+		Type: TypeTable,
+		ID:   authz.ID(table),
+	}, authz.Relation(TableOwner), TypeCompany)
+	if err != nil {
+		return nil, err
+	}
 
-  rels := make([]TableOwnerCompanyRelation, 0, len(tuples))
-  for _, t := range tuples {
-    if t.ID == authz.WildcardID {
-      continue
-    }
-    rels = append(rels, TableOwnerCompanyRelation{
-      ID:            Company(t.ID),
-      SubRelation:   t.SubRelation,
-      CaveatName:    t.CaveatName,
-      CaveatContext: t.CaveatContext,
-      ExpiresAt:     t.ExpiresAt,
-    })
-  }
-  return rels, nil
+	rels := make([]TableOwnerCompanyRelation, 0, len(tuples))
+	for _, t := range tuples {
+		if t.ID == authz.WildcardID {
+			continue
+		}
+		rels = append(rels, TableOwnerCompanyRelation{
+			ID:            Company(t.ID),
+			SubRelation:   t.SubRelation,
+			CaveatName:    t.CaveatName,
+			CaveatContext: t.CaveatContext,
+			ExpiresAt:     t.ExpiresAt,
+		})
+	}
+	return rels, nil
 }
 
 const TableWrite PermissionTable = "write"
 
 type CheckTableWriteInputs struct {
-  User []User
+	User []User
 }
 
 func (table Table) CheckWrite(ctx context.Context, input CheckTableWriteInputs) (bool, error) {
-  if len(input.User) == 0 && true {
-    return false, authz.ErrNoInput
-  }
+	if len(input.User) == 0 && true {
+		return false, authz.ErrNoInput
+	}
 
-  if len(input.User) > 0 {
-    err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
-      Type: TypeTable,
-      ID: authz.ID(table),
-    }, authz.Permission(TableWrite), TypeUser, authz.IDs(input.User))
-    if err != nil {
-      return false, err
-    }
-  }
-  
-  return true, nil
+	if len(input.User) > 0 {
+		err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
+			Type: TypeTable,
+			ID:   authz.ID(table),
+		}, authz.Permission(TableWrite), TypeUser, authz.IDs(input.User))
+		if err != nil {
+			return false, err
+		}
+	}
+
+	return true, nil
 }
 
 func LookupWriteTableResources(ctx context.Context, input CheckTableWriteInputs) (TableLookupResult, error) {
 
-  if len(input.User) > 0 {
-    result, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeTable, authz.Permission(TableWrite),
-      TypeUser, authz.IDs(input.User),
-    )
-    if err != nil {
-      return TableLookupResult{}, err
-    }
+	if len(input.User) > 0 {
+		result, err := authz.GetEngine(ctx).LookupResources(ctx,
+			TypeTable, authz.Permission(TableWrite),
+			TypeUser, authz.IDs(input.User),
+		)
+		if err != nil {
+			return TableLookupResult{}, err
+		}
 
-    out := TableLookupResult{
-      Definite:    authz.FromIDs[Table](result.Definite),
-      Conditional: make([]TableConditionalLookupEntry, 0, len(result.Conditional)),
-    }
-    for _, c := range result.Conditional {
-      out.Conditional = append(out.Conditional, TableConditionalLookupEntry{
-        ID:          Table(c.ID),
-        MissingKeys: c.MissingKeys,
-      })
-    }
-    return out, nil
-  }
-  
-  return TableLookupResult{}, nil
+		out := TableLookupResult{
+			Definite:    authz.FromIDs[Table](result.Definite),
+			Conditional: make([]TableConditionalLookupEntry, 0, len(result.Conditional)),
+		}
+		for _, c := range result.Conditional {
+			out.Conditional = append(out.Conditional, TableConditionalLookupEntry{
+				ID:          Table(c.ID),
+				MissingKeys: c.MissingKeys,
+			})
+		}
+		return out, nil
+	}
+
+	return TableLookupResult{}, nil
 }
 
 func (table Table) LookupWriteUserSubjects(ctx context.Context) (UserLookupResult, error) {
 
-  result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
-    authz.Resource{
-      Type: TypeTable,
-      ID: authz.ID(table),
-    },
-    authz.Permission(TableWrite), TypeUser,
-  )
-  if err != nil {
-    return UserLookupResult{}, err
-  }
+	result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+		authz.Resource{
+			Type: TypeTable,
+			ID:   authz.ID(table),
+		},
+		authz.Permission(TableWrite), TypeUser,
+	)
+	if err != nil {
+		return UserLookupResult{}, err
+	}
 
-  out := UserLookupResult{
-    Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
-    Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
-  }
-  for _, c := range result.Conditional {
-    out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
-      ID:          User(c.ID),
-      MissingKeys: c.MissingKeys,
-    })
-  }
-  return out, nil
+	out := UserLookupResult{
+		Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
+		Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
+	}
+	for _, c := range result.Conditional {
+		out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
+			ID:          User(c.ID),
+			MissingKeys: c.MissingKeys,
+		})
+	}
+	return out, nil
 }
 
 func (table Table) LookupWriteUserWildcardSubjects(ctx context.Context) (bool, error) {
-  return authz.GetEngine(ctx).HasPublicSubject(ctx,
-    authz.Resource{
-      Type: TypeTable,
-      ID: authz.ID(table),
-    },
-    authz.Permission(TableWrite), TypeUser,
-  )
+	return authz.GetEngine(ctx).HasPublicSubject(ctx,
+		authz.Resource{
+			Type: TypeTable,
+			ID:   authz.ID(table),
+		},
+		authz.Permission(TableWrite), TypeUser,
+	)
 }

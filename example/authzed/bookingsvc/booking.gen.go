@@ -3,129 +3,134 @@
 package bookingsvc
 
 import (
-  "github.com/danhtran94/authzed-codegen/pkg/authz"
+	"github.com/danhtran94/authzed-codegen/pkg/authz"
 
-  "context"
-  "time"
+	"context"
+	"time"
 )
 
 const TypeBooking authz.Type = "bookingsvc/booking"
+
 type RelationBooking authz.Relation
 type PermissionBooking authz.Permission
 
 const BookingOwner RelationBooking = "owner"
+
 type BookingOwnerObjects struct {
-  Employee []Employee
-}
-const BookingCreator RelationBooking = "creator"
-type BookingCreatorObjects struct {
-  Employee []Employee
-  Customer []Customer
-}
-const BookingRegionalOwner RelationBooking = "regional_owner"
-type BookingRegionalOwnerObjects struct {
-  Employee []Employee
-  Caveats BookingRegionalOwnerCaveats
-}
-type BookingRegionalOwnerCaveats struct {
-  Employee *RegionMatchArgs
-}
-type RegionMatchArgs struct {
-  Region *string
+	Employee []Employee
 }
 
+const BookingCreator RelationBooking = "creator"
+
+type BookingCreatorObjects struct {
+	Employee []Employee
+	Customer []Customer
+}
+
+const BookingRegionalOwner RelationBooking = "regional_owner"
+
+type BookingRegionalOwnerObjects struct {
+	Employee []Employee
+	Caveats  BookingRegionalOwnerCaveats
+}
+type BookingRegionalOwnerCaveats struct {
+	Employee *RegionMatchArgs
+}
+type RegionMatchArgs struct {
+	Region *string
+}
 
 type Booking authz.ID
 
 type BookingLookupResult struct {
-  Definite    []Booking
-  Conditional []BookingConditionalLookupEntry
+	Definite    []Booking
+	Conditional []BookingConditionalLookupEntry
 }
 type BookingConditionalLookupEntry struct {
-  ID          Booking
-  MissingKeys []string
+	ID          Booking
+	MissingKeys []string
 }
 
 func BookingStringer(id authz.StringConvertable) Booking {
-  return Booking(id.String())
+	return Booking(id.String())
 }
 
 func BookingStringers(ids ...authz.StringConvertable) []Booking {
-  result := []Booking{}
-  for _, id := range ids {
-    result = append(result, Booking(id.String()))
-  }
-  return result
+	result := []Booking{}
+	for _, id := range ids {
+		result = append(result, Booking(id.String()))
+	}
+	return result
 }
 
 func (booking Booking) ToList() []Booking {
-  return []Booking{ booking }
+	return []Booking{booking}
 }
 
 func (booking Booking) CreateOwnerRelations(ctx context.Context, objects BookingOwnerObjects) error {
-  if len(objects.Employee) > 0 {
-    err := authz.GetEngine(ctx).CreateRelations(ctx, authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    }, authz.Relation(BookingOwner), TypeEmployee, authz.IDs(objects.Employee))
-    if err != nil {
-      return err
-    }
-  }
-  return nil
+	if len(objects.Employee) > 0 {
+		err := authz.GetEngine(ctx).CreateRelations(ctx, authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		}, authz.Relation(BookingOwner), TypeEmployee, authz.IDs(objects.Employee))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 func (booking Booking) CreateCreatorRelations(ctx context.Context, objects BookingCreatorObjects) error {
-  if len(objects.Employee) > 0 {
-    err := authz.GetEngine(ctx).CreateRelations(ctx, authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    }, authz.Relation(BookingCreator), TypeEmployee, authz.IDs(objects.Employee))
-    if err != nil {
-      return err
-    }
-  }
-  if len(objects.Customer) > 0 {
-    err := authz.GetEngine(ctx).CreateRelations(ctx, authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    }, authz.Relation(BookingCreator), TypeCustomer, authz.IDs(objects.Customer))
-    if err != nil {
-      return err
-    }
-  }
-  return nil
+	if len(objects.Employee) > 0 {
+		err := authz.GetEngine(ctx).CreateRelations(ctx, authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		}, authz.Relation(BookingCreator), TypeEmployee, authz.IDs(objects.Employee))
+		if err != nil {
+			return err
+		}
+	}
+	if len(objects.Customer) > 0 {
+		err := authz.GetEngine(ctx).CreateRelations(ctx, authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		}, authz.Relation(BookingCreator), TypeCustomer, authz.IDs(objects.Customer))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 func (booking Booking) CreateRegionalOwnerRelations(ctx context.Context, objects BookingRegionalOwnerObjects) error {
-  if len(objects.Employee) > 0 {
-    var caveatCtx map[string]any
-    if c := objects.Caveats.Employee; c != nil {
-      caveatCtx = map[string]any{}
-      if c.Region != nil {
-        caveatCtx["region"] = *c.Region
-      }
-    }
-    err := authz.GetEngine(ctx).CreateRelationsWithCaveat(ctx, authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    }, authz.Relation(BookingRegionalOwner), TypeEmployee, authz.IDs(objects.Employee), "bookingsvc/region_match", caveatCtx)
-    if err != nil {
-      return err
-    }
-  }
-  return nil
+	if len(objects.Employee) > 0 {
+		var caveatCtx map[string]any
+		if c := objects.Caveats.Employee; c != nil {
+			caveatCtx = map[string]any{}
+			if c.Region != nil {
+				caveatCtx["region"] = *c.Region
+			}
+		}
+		err := authz.GetEngine(ctx).CreateRelationsWithCaveat(ctx, authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		}, authz.Relation(BookingRegionalOwner), TypeEmployee, authz.IDs(objects.Employee), "bookingsvc/region_match", caveatCtx)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (booking Booking) DeleteOwnerRelations(ctx context.Context, objects BookingOwnerObjects) error {
-  if len(objects.Employee) > 0 {
-    err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    }, authz.Relation(BookingOwner), TypeEmployee, authz.IDs(objects.Employee))
-    if err != nil {
-      return err
-    }
-  }
-  return nil
+	if len(objects.Employee) > 0 {
+		err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		}, authz.Relation(BookingOwner), TypeEmployee, authz.IDs(objects.Employee))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // PurgeOwnerRelations deletes every owner relationship on this
@@ -133,33 +138,33 @@ func (booking Booking) DeleteOwnerRelations(ctx context.Context, objects Booking
 // DeleteOwnerRelations (which revokes the specific subjects you pass),
 // use this when owner as a whole no longer applies to this Booking.
 func (booking Booking) PurgeOwnerRelations(ctx context.Context) error {
-  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
-    ResourceType: TypeBooking,
-    ResourceID: authz.ID(booking),
-    Relation: authz.Relation(BookingOwner),
-  })
+	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+		ResourceType: TypeBooking,
+		ResourceID:   authz.ID(booking),
+		Relation:     authz.Relation(BookingOwner),
+	})
 }
 
 func (booking Booking) DeleteCreatorRelations(ctx context.Context, objects BookingCreatorObjects) error {
-  if len(objects.Employee) > 0 {
-    err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    }, authz.Relation(BookingCreator), TypeEmployee, authz.IDs(objects.Employee))
-    if err != nil {
-      return err
-    }
-  }
-  if len(objects.Customer) > 0 {
-    err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    }, authz.Relation(BookingCreator), TypeCustomer, authz.IDs(objects.Customer))
-    if err != nil {
-      return err
-    }
-  }
-  return nil
+	if len(objects.Employee) > 0 {
+		err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		}, authz.Relation(BookingCreator), TypeEmployee, authz.IDs(objects.Employee))
+		if err != nil {
+			return err
+		}
+	}
+	if len(objects.Customer) > 0 {
+		err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		}, authz.Relation(BookingCreator), TypeCustomer, authz.IDs(objects.Customer))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // PurgeCreatorRelations deletes every creator relationship on this
@@ -167,24 +172,24 @@ func (booking Booking) DeleteCreatorRelations(ctx context.Context, objects Booki
 // DeleteCreatorRelations (which revokes the specific subjects you pass),
 // use this when creator as a whole no longer applies to this Booking.
 func (booking Booking) PurgeCreatorRelations(ctx context.Context) error {
-  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
-    ResourceType: TypeBooking,
-    ResourceID: authz.ID(booking),
-    Relation: authz.Relation(BookingCreator),
-  })
+	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+		ResourceType: TypeBooking,
+		ResourceID:   authz.ID(booking),
+		Relation:     authz.Relation(BookingCreator),
+	})
 }
 
 func (booking Booking) DeleteRegionalOwnerRelations(ctx context.Context, objects BookingRegionalOwnerObjects) error {
-  if len(objects.Employee) > 0 {
-    err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    }, authz.Relation(BookingRegionalOwner), TypeEmployee, authz.IDs(objects.Employee))
-    if err != nil {
-      return err
-    }
-  }
-  return nil
+	if len(objects.Employee) > 0 {
+		err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		}, authz.Relation(BookingRegionalOwner), TypeEmployee, authz.IDs(objects.Employee))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // PurgeRegionalOwnerRelations deletes every regional_owner relationship on this
@@ -192,11 +197,11 @@ func (booking Booking) DeleteRegionalOwnerRelations(ctx context.Context, objects
 // DeleteRegionalOwnerRelations (which revokes the specific subjects you pass),
 // use this when regional_owner as a whole no longer applies to this Booking.
 func (booking Booking) PurgeRegionalOwnerRelations(ctx context.Context) error {
-  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
-    ResourceType: TypeBooking,
-    ResourceID: authz.ID(booking),
-    Relation: authz.Relation(BookingRegionalOwner),
-  })
+	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+		ResourceType: TypeBooking,
+		ResourceID:   authz.ID(booking),
+		Relation:     authz.Relation(BookingRegionalOwner),
+	})
 }
 
 // PurgeRelations deletes every relationship on this Booking — all relations,
@@ -206,700 +211,706 @@ func (booking Booking) PurgeRegionalOwnerRelations(ctx context.Context) error {
 // resource — for that, see PurgeRelationsAsSubject (emitted when Booking is a
 // subject anywhere in the schema).
 func (booking Booking) PurgeRelations(ctx context.Context) error {
-  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
-    ResourceType: TypeBooking,
-    ResourceID: authz.ID(booking),
-  })
+	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+		ResourceType: TypeBooking,
+		ResourceID:   authz.ID(booking),
+	})
 }
 
 type BookingOwnerEmployeeRelation struct {
-  ID            Employee
-  SubRelation   string
-  CaveatName    string
-  CaveatContext map[string]any
-  ExpiresAt     *time.Time
+	ID            Employee
+	SubRelation   string
+	CaveatName    string
+	CaveatContext map[string]any
+	ExpiresAt     *time.Time
 }
+
 func (r BookingOwnerEmployeeRelation) RelationID() Employee { return r.ID }
 
 func (booking Booking) ReadOwnerEmployeeRelations(ctx context.Context) ([]BookingOwnerEmployeeRelation, error) {
-  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
-    Type: TypeBooking,
-    ID: authz.ID(booking),
-  }, authz.Relation(BookingOwner), TypeEmployee)
-  if err != nil {
-    return nil, err
-  }
+	tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+		Type: TypeBooking,
+		ID:   authz.ID(booking),
+	}, authz.Relation(BookingOwner), TypeEmployee)
+	if err != nil {
+		return nil, err
+	}
 
-  rels := make([]BookingOwnerEmployeeRelation, 0, len(tuples))
-  for _, t := range tuples {
-    if t.ID == authz.WildcardID {
-      continue
-    }
-    rels = append(rels, BookingOwnerEmployeeRelation{
-      ID:            Employee(t.ID),
-      SubRelation:   t.SubRelation,
-      CaveatName:    t.CaveatName,
-      CaveatContext: t.CaveatContext,
-      ExpiresAt:     t.ExpiresAt,
-    })
-  }
-  return rels, nil
+	rels := make([]BookingOwnerEmployeeRelation, 0, len(tuples))
+	for _, t := range tuples {
+		if t.ID == authz.WildcardID {
+			continue
+		}
+		rels = append(rels, BookingOwnerEmployeeRelation{
+			ID:            Employee(t.ID),
+			SubRelation:   t.SubRelation,
+			CaveatName:    t.CaveatName,
+			CaveatContext: t.CaveatContext,
+			ExpiresAt:     t.ExpiresAt,
+		})
+	}
+	return rels, nil
 }
 
 type BookingCreatorEmployeeRelation struct {
-  ID            Employee
-  SubRelation   string
-  CaveatName    string
-  CaveatContext map[string]any
-  ExpiresAt     *time.Time
+	ID            Employee
+	SubRelation   string
+	CaveatName    string
+	CaveatContext map[string]any
+	ExpiresAt     *time.Time
 }
+
 func (r BookingCreatorEmployeeRelation) RelationID() Employee { return r.ID }
 
 func (booking Booking) ReadCreatorEmployeeRelations(ctx context.Context) ([]BookingCreatorEmployeeRelation, error) {
-  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
-    Type: TypeBooking,
-    ID: authz.ID(booking),
-  }, authz.Relation(BookingCreator), TypeEmployee)
-  if err != nil {
-    return nil, err
-  }
+	tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+		Type: TypeBooking,
+		ID:   authz.ID(booking),
+	}, authz.Relation(BookingCreator), TypeEmployee)
+	if err != nil {
+		return nil, err
+	}
 
-  rels := make([]BookingCreatorEmployeeRelation, 0, len(tuples))
-  for _, t := range tuples {
-    if t.ID == authz.WildcardID {
-      continue
-    }
-    rels = append(rels, BookingCreatorEmployeeRelation{
-      ID:            Employee(t.ID),
-      SubRelation:   t.SubRelation,
-      CaveatName:    t.CaveatName,
-      CaveatContext: t.CaveatContext,
-      ExpiresAt:     t.ExpiresAt,
-    })
-  }
-  return rels, nil
+	rels := make([]BookingCreatorEmployeeRelation, 0, len(tuples))
+	for _, t := range tuples {
+		if t.ID == authz.WildcardID {
+			continue
+		}
+		rels = append(rels, BookingCreatorEmployeeRelation{
+			ID:            Employee(t.ID),
+			SubRelation:   t.SubRelation,
+			CaveatName:    t.CaveatName,
+			CaveatContext: t.CaveatContext,
+			ExpiresAt:     t.ExpiresAt,
+		})
+	}
+	return rels, nil
 }
 
 type BookingCreatorCustomerRelation struct {
-  ID            Customer
-  SubRelation   string
-  CaveatName    string
-  CaveatContext map[string]any
-  ExpiresAt     *time.Time
+	ID            Customer
+	SubRelation   string
+	CaveatName    string
+	CaveatContext map[string]any
+	ExpiresAt     *time.Time
 }
+
 func (r BookingCreatorCustomerRelation) RelationID() Customer { return r.ID }
 
 func (booking Booking) ReadCreatorCustomerRelations(ctx context.Context) ([]BookingCreatorCustomerRelation, error) {
-  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
-    Type: TypeBooking,
-    ID: authz.ID(booking),
-  }, authz.Relation(BookingCreator), TypeCustomer)
-  if err != nil {
-    return nil, err
-  }
+	tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+		Type: TypeBooking,
+		ID:   authz.ID(booking),
+	}, authz.Relation(BookingCreator), TypeCustomer)
+	if err != nil {
+		return nil, err
+	}
 
-  rels := make([]BookingCreatorCustomerRelation, 0, len(tuples))
-  for _, t := range tuples {
-    if t.ID == authz.WildcardID {
-      continue
-    }
-    rels = append(rels, BookingCreatorCustomerRelation{
-      ID:            Customer(t.ID),
-      SubRelation:   t.SubRelation,
-      CaveatName:    t.CaveatName,
-      CaveatContext: t.CaveatContext,
-      ExpiresAt:     t.ExpiresAt,
-    })
-  }
-  return rels, nil
+	rels := make([]BookingCreatorCustomerRelation, 0, len(tuples))
+	for _, t := range tuples {
+		if t.ID == authz.WildcardID {
+			continue
+		}
+		rels = append(rels, BookingCreatorCustomerRelation{
+			ID:            Customer(t.ID),
+			SubRelation:   t.SubRelation,
+			CaveatName:    t.CaveatName,
+			CaveatContext: t.CaveatContext,
+			ExpiresAt:     t.ExpiresAt,
+		})
+	}
+	return rels, nil
 }
 
 type BookingRegionalOwnerEmployeeRelation struct {
-  ID            Employee
-  SubRelation   string
-  CaveatName    string
-  CaveatContext map[string]any
-  ExpiresAt     *time.Time
+	ID            Employee
+	SubRelation   string
+	CaveatName    string
+	CaveatContext map[string]any
+	ExpiresAt     *time.Time
 }
+
 func (r BookingRegionalOwnerEmployeeRelation) RelationID() Employee { return r.ID }
 
 func (booking Booking) ReadRegionalOwnerEmployeeRelations(ctx context.Context) ([]BookingRegionalOwnerEmployeeRelation, error) {
-  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
-    Type: TypeBooking,
-    ID: authz.ID(booking),
-  }, authz.Relation(BookingRegionalOwner), TypeEmployee)
-  if err != nil {
-    return nil, err
-  }
+	tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+		Type: TypeBooking,
+		ID:   authz.ID(booking),
+	}, authz.Relation(BookingRegionalOwner), TypeEmployee)
+	if err != nil {
+		return nil, err
+	}
 
-  rels := make([]BookingRegionalOwnerEmployeeRelation, 0, len(tuples))
-  for _, t := range tuples {
-    if t.ID == authz.WildcardID {
-      continue
-    }
-    rels = append(rels, BookingRegionalOwnerEmployeeRelation{
-      ID:            Employee(t.ID),
-      SubRelation:   t.SubRelation,
-      CaveatName:    t.CaveatName,
-      CaveatContext: t.CaveatContext,
-      ExpiresAt:     t.ExpiresAt,
-    })
-  }
-  return rels, nil
+	rels := make([]BookingRegionalOwnerEmployeeRelation, 0, len(tuples))
+	for _, t := range tuples {
+		if t.ID == authz.WildcardID {
+			continue
+		}
+		rels = append(rels, BookingRegionalOwnerEmployeeRelation{
+			ID:            Employee(t.ID),
+			SubRelation:   t.SubRelation,
+			CaveatName:    t.CaveatName,
+			CaveatContext: t.CaveatContext,
+			ExpiresAt:     t.ExpiresAt,
+		})
+	}
+	return rels, nil
 }
 
 const BookingWrite PermissionBooking = "write"
 
 type CheckBookingWriteInputs struct {
-  Employee []Employee
-  Customer []Customer
-  User []User
+	Employee []Employee
+	Customer []Customer
+	User     []User
 }
 
 func (booking Booking) CheckWrite(ctx context.Context, input CheckBookingWriteInputs) (bool, error) {
-  if len(input.Employee) == 0 && len(input.Customer) == 0 && len(input.User) == 0 && true {
-    return false, authz.ErrNoInput
-  }
+	if len(input.Employee) == 0 && len(input.Customer) == 0 && len(input.User) == 0 && true {
+		return false, authz.ErrNoInput
+	}
 
-  if len(input.Employee) > 0 {
-    err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    }, authz.Permission(BookingWrite), TypeEmployee, authz.IDs(input.Employee))
-    if err != nil {
-      return false, err
-    }
-  }
-  if len(input.Customer) > 0 {
-    err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    }, authz.Permission(BookingWrite), TypeCustomer, authz.IDs(input.Customer))
-    if err != nil {
-      return false, err
-    }
-  }
-  if len(input.User) > 0 {
-    err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    }, authz.Permission(BookingWrite), TypeUser, authz.IDs(input.User))
-    if err != nil {
-      return false, err
-    }
-  }
-  
-  return true, nil
+	if len(input.Employee) > 0 {
+		err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		}, authz.Permission(BookingWrite), TypeEmployee, authz.IDs(input.Employee))
+		if err != nil {
+			return false, err
+		}
+	}
+	if len(input.Customer) > 0 {
+		err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		}, authz.Permission(BookingWrite), TypeCustomer, authz.IDs(input.Customer))
+		if err != nil {
+			return false, err
+		}
+	}
+	if len(input.User) > 0 {
+		err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		}, authz.Permission(BookingWrite), TypeUser, authz.IDs(input.User))
+		if err != nil {
+			return false, err
+		}
+	}
+
+	return true, nil
 }
 
 func LookupWriteBookingResources(ctx context.Context, input CheckBookingWriteInputs) (BookingLookupResult, error) {
 
-  if len(input.Employee) > 0 {
-    result, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeBooking, authz.Permission(BookingWrite),
-      TypeEmployee, authz.IDs(input.Employee),
-    )
-    if err != nil {
-      return BookingLookupResult{}, err
-    }
+	if len(input.Employee) > 0 {
+		result, err := authz.GetEngine(ctx).LookupResources(ctx,
+			TypeBooking, authz.Permission(BookingWrite),
+			TypeEmployee, authz.IDs(input.Employee),
+		)
+		if err != nil {
+			return BookingLookupResult{}, err
+		}
 
-    out := BookingLookupResult{
-      Definite:    authz.FromIDs[Booking](result.Definite),
-      Conditional: make([]BookingConditionalLookupEntry, 0, len(result.Conditional)),
-    }
-    for _, c := range result.Conditional {
-      out.Conditional = append(out.Conditional, BookingConditionalLookupEntry{
-        ID:          Booking(c.ID),
-        MissingKeys: c.MissingKeys,
-      })
-    }
-    return out, nil
-  }
-  if len(input.Customer) > 0 {
-    result, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeBooking, authz.Permission(BookingWrite),
-      TypeCustomer, authz.IDs(input.Customer),
-    )
-    if err != nil {
-      return BookingLookupResult{}, err
-    }
+		out := BookingLookupResult{
+			Definite:    authz.FromIDs[Booking](result.Definite),
+			Conditional: make([]BookingConditionalLookupEntry, 0, len(result.Conditional)),
+		}
+		for _, c := range result.Conditional {
+			out.Conditional = append(out.Conditional, BookingConditionalLookupEntry{
+				ID:          Booking(c.ID),
+				MissingKeys: c.MissingKeys,
+			})
+		}
+		return out, nil
+	}
+	if len(input.Customer) > 0 {
+		result, err := authz.GetEngine(ctx).LookupResources(ctx,
+			TypeBooking, authz.Permission(BookingWrite),
+			TypeCustomer, authz.IDs(input.Customer),
+		)
+		if err != nil {
+			return BookingLookupResult{}, err
+		}
 
-    out := BookingLookupResult{
-      Definite:    authz.FromIDs[Booking](result.Definite),
-      Conditional: make([]BookingConditionalLookupEntry, 0, len(result.Conditional)),
-    }
-    for _, c := range result.Conditional {
-      out.Conditional = append(out.Conditional, BookingConditionalLookupEntry{
-        ID:          Booking(c.ID),
-        MissingKeys: c.MissingKeys,
-      })
-    }
-    return out, nil
-  }
-  if len(input.User) > 0 {
-    result, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeBooking, authz.Permission(BookingWrite),
-      TypeUser, authz.IDs(input.User),
-    )
-    if err != nil {
-      return BookingLookupResult{}, err
-    }
+		out := BookingLookupResult{
+			Definite:    authz.FromIDs[Booking](result.Definite),
+			Conditional: make([]BookingConditionalLookupEntry, 0, len(result.Conditional)),
+		}
+		for _, c := range result.Conditional {
+			out.Conditional = append(out.Conditional, BookingConditionalLookupEntry{
+				ID:          Booking(c.ID),
+				MissingKeys: c.MissingKeys,
+			})
+		}
+		return out, nil
+	}
+	if len(input.User) > 0 {
+		result, err := authz.GetEngine(ctx).LookupResources(ctx,
+			TypeBooking, authz.Permission(BookingWrite),
+			TypeUser, authz.IDs(input.User),
+		)
+		if err != nil {
+			return BookingLookupResult{}, err
+		}
 
-    out := BookingLookupResult{
-      Definite:    authz.FromIDs[Booking](result.Definite),
-      Conditional: make([]BookingConditionalLookupEntry, 0, len(result.Conditional)),
-    }
-    for _, c := range result.Conditional {
-      out.Conditional = append(out.Conditional, BookingConditionalLookupEntry{
-        ID:          Booking(c.ID),
-        MissingKeys: c.MissingKeys,
-      })
-    }
-    return out, nil
-  }
-  
-  return BookingLookupResult{}, nil
+		out := BookingLookupResult{
+			Definite:    authz.FromIDs[Booking](result.Definite),
+			Conditional: make([]BookingConditionalLookupEntry, 0, len(result.Conditional)),
+		}
+		for _, c := range result.Conditional {
+			out.Conditional = append(out.Conditional, BookingConditionalLookupEntry{
+				ID:          Booking(c.ID),
+				MissingKeys: c.MissingKeys,
+			})
+		}
+		return out, nil
+	}
+
+	return BookingLookupResult{}, nil
 }
+
 const BookingChangeOwner PermissionBooking = "change_owner"
 
 type CheckBookingChangeOwnerInputs struct {
-  Employee []Employee
-  Customer []Customer
-  User []User
+	Employee []Employee
+	Customer []Customer
+	User     []User
 }
 
 func (booking Booking) CheckChangeOwner(ctx context.Context, input CheckBookingChangeOwnerInputs) (bool, error) {
-  if len(input.Employee) == 0 && len(input.Customer) == 0 && len(input.User) == 0 && true {
-    return false, authz.ErrNoInput
-  }
+	if len(input.Employee) == 0 && len(input.Customer) == 0 && len(input.User) == 0 && true {
+		return false, authz.ErrNoInput
+	}
 
-  if len(input.Employee) > 0 {
-    err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    }, authz.Permission(BookingChangeOwner), TypeEmployee, authz.IDs(input.Employee))
-    if err != nil {
-      return false, err
-    }
-  }
-  if len(input.Customer) > 0 {
-    err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    }, authz.Permission(BookingChangeOwner), TypeCustomer, authz.IDs(input.Customer))
-    if err != nil {
-      return false, err
-    }
-  }
-  if len(input.User) > 0 {
-    err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    }, authz.Permission(BookingChangeOwner), TypeUser, authz.IDs(input.User))
-    if err != nil {
-      return false, err
-    }
-  }
-  
-  return true, nil
+	if len(input.Employee) > 0 {
+		err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		}, authz.Permission(BookingChangeOwner), TypeEmployee, authz.IDs(input.Employee))
+		if err != nil {
+			return false, err
+		}
+	}
+	if len(input.Customer) > 0 {
+		err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		}, authz.Permission(BookingChangeOwner), TypeCustomer, authz.IDs(input.Customer))
+		if err != nil {
+			return false, err
+		}
+	}
+	if len(input.User) > 0 {
+		err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		}, authz.Permission(BookingChangeOwner), TypeUser, authz.IDs(input.User))
+		if err != nil {
+			return false, err
+		}
+	}
+
+	return true, nil
 }
 
 func LookupChangeOwnerBookingResources(ctx context.Context, input CheckBookingChangeOwnerInputs) (BookingLookupResult, error) {
 
-  if len(input.Employee) > 0 {
-    result, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeBooking, authz.Permission(BookingChangeOwner),
-      TypeEmployee, authz.IDs(input.Employee),
-    )
-    if err != nil {
-      return BookingLookupResult{}, err
-    }
+	if len(input.Employee) > 0 {
+		result, err := authz.GetEngine(ctx).LookupResources(ctx,
+			TypeBooking, authz.Permission(BookingChangeOwner),
+			TypeEmployee, authz.IDs(input.Employee),
+		)
+		if err != nil {
+			return BookingLookupResult{}, err
+		}
 
-    out := BookingLookupResult{
-      Definite:    authz.FromIDs[Booking](result.Definite),
-      Conditional: make([]BookingConditionalLookupEntry, 0, len(result.Conditional)),
-    }
-    for _, c := range result.Conditional {
-      out.Conditional = append(out.Conditional, BookingConditionalLookupEntry{
-        ID:          Booking(c.ID),
-        MissingKeys: c.MissingKeys,
-      })
-    }
-    return out, nil
-  }
-  if len(input.Customer) > 0 {
-    result, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeBooking, authz.Permission(BookingChangeOwner),
-      TypeCustomer, authz.IDs(input.Customer),
-    )
-    if err != nil {
-      return BookingLookupResult{}, err
-    }
+		out := BookingLookupResult{
+			Definite:    authz.FromIDs[Booking](result.Definite),
+			Conditional: make([]BookingConditionalLookupEntry, 0, len(result.Conditional)),
+		}
+		for _, c := range result.Conditional {
+			out.Conditional = append(out.Conditional, BookingConditionalLookupEntry{
+				ID:          Booking(c.ID),
+				MissingKeys: c.MissingKeys,
+			})
+		}
+		return out, nil
+	}
+	if len(input.Customer) > 0 {
+		result, err := authz.GetEngine(ctx).LookupResources(ctx,
+			TypeBooking, authz.Permission(BookingChangeOwner),
+			TypeCustomer, authz.IDs(input.Customer),
+		)
+		if err != nil {
+			return BookingLookupResult{}, err
+		}
 
-    out := BookingLookupResult{
-      Definite:    authz.FromIDs[Booking](result.Definite),
-      Conditional: make([]BookingConditionalLookupEntry, 0, len(result.Conditional)),
-    }
-    for _, c := range result.Conditional {
-      out.Conditional = append(out.Conditional, BookingConditionalLookupEntry{
-        ID:          Booking(c.ID),
-        MissingKeys: c.MissingKeys,
-      })
-    }
-    return out, nil
-  }
-  if len(input.User) > 0 {
-    result, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeBooking, authz.Permission(BookingChangeOwner),
-      TypeUser, authz.IDs(input.User),
-    )
-    if err != nil {
-      return BookingLookupResult{}, err
-    }
+		out := BookingLookupResult{
+			Definite:    authz.FromIDs[Booking](result.Definite),
+			Conditional: make([]BookingConditionalLookupEntry, 0, len(result.Conditional)),
+		}
+		for _, c := range result.Conditional {
+			out.Conditional = append(out.Conditional, BookingConditionalLookupEntry{
+				ID:          Booking(c.ID),
+				MissingKeys: c.MissingKeys,
+			})
+		}
+		return out, nil
+	}
+	if len(input.User) > 0 {
+		result, err := authz.GetEngine(ctx).LookupResources(ctx,
+			TypeBooking, authz.Permission(BookingChangeOwner),
+			TypeUser, authz.IDs(input.User),
+		)
+		if err != nil {
+			return BookingLookupResult{}, err
+		}
 
-    out := BookingLookupResult{
-      Definite:    authz.FromIDs[Booking](result.Definite),
-      Conditional: make([]BookingConditionalLookupEntry, 0, len(result.Conditional)),
-    }
-    for _, c := range result.Conditional {
-      out.Conditional = append(out.Conditional, BookingConditionalLookupEntry{
-        ID:          Booking(c.ID),
-        MissingKeys: c.MissingKeys,
-      })
-    }
-    return out, nil
-  }
-  
-  return BookingLookupResult{}, nil
+		out := BookingLookupResult{
+			Definite:    authz.FromIDs[Booking](result.Definite),
+			Conditional: make([]BookingConditionalLookupEntry, 0, len(result.Conditional)),
+		}
+		for _, c := range result.Conditional {
+			out.Conditional = append(out.Conditional, BookingConditionalLookupEntry{
+				ID:          Booking(c.ID),
+				MissingKeys: c.MissingKeys,
+			})
+		}
+		return out, nil
+	}
+
+	return BookingLookupResult{}, nil
 }
+
 const BookingRegionalWrite PermissionBooking = "regional_write"
 
 type CheckBookingRegionalWriteInputs struct {
-  Employee []Employee
-  Caveats CheckBookingRegionalWriteCaveats
+	Employee []Employee
+	Caveats  CheckBookingRegionalWriteCaveats
 }
 type CheckBookingRegionalWriteCaveats struct {
-  RegionMatch *RegionMatchArgs
+	RegionMatch *RegionMatchArgs
 }
 
 func (booking Booking) CheckRegionalWrite(ctx context.Context, input CheckBookingRegionalWriteInputs) (bool, error) {
-  if len(input.Employee) == 0 && true {
-    return false, authz.ErrNoInput
-  }
+	if len(input.Employee) == 0 && true {
+		return false, authz.ErrNoInput
+	}
 
-  var caveatCtx map[string]any
-  if c := input.Caveats.RegionMatch; c != nil {
-    caveatCtx = map[string]any{}
+	var caveatCtx map[string]any
+	if c := input.Caveats.RegionMatch; c != nil {
+		caveatCtx = map[string]any{}
 
-    if c.Region != nil {
-      caveatCtx["region"] = *c.Region
-    }
-  }
+		if c.Region != nil {
+			caveatCtx["region"] = *c.Region
+		}
+	}
 
-  if len(input.Employee) > 0 {
-    err := authz.GetEngine(ctx).CheckPermissionWithCaveat(ctx, authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    }, authz.Permission(BookingRegionalWrite), TypeEmployee, authz.IDs(input.Employee), caveatCtx)
-    if err != nil {
-      return false, err
-    }
-  }
-  
-  return true, nil
+	if len(input.Employee) > 0 {
+		err := authz.GetEngine(ctx).CheckPermissionWithCaveat(ctx, authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		}, authz.Permission(BookingRegionalWrite), TypeEmployee, authz.IDs(input.Employee), caveatCtx)
+		if err != nil {
+			return false, err
+		}
+	}
+
+	return true, nil
 }
 
 func LookupRegionalWriteBookingResources(ctx context.Context, input CheckBookingRegionalWriteInputs) (BookingLookupResult, error) {
 
-  var caveatCtx map[string]any
-  if c := input.Caveats.RegionMatch; c != nil {
-    caveatCtx = map[string]any{}
+	var caveatCtx map[string]any
+	if c := input.Caveats.RegionMatch; c != nil {
+		caveatCtx = map[string]any{}
 
-    if c.Region != nil {
-      caveatCtx["region"] = *c.Region
-    }
-  }
+		if c.Region != nil {
+			caveatCtx["region"] = *c.Region
+		}
+	}
 
-  if len(input.Employee) > 0 {
-    result, err := authz.GetEngine(ctx).LookupResourcesWithCaveat(ctx,
-      TypeBooking, authz.Permission(BookingRegionalWrite),
-      TypeEmployee, authz.IDs(input.Employee),
-      caveatCtx,
-    )
-    if err != nil {
-      return BookingLookupResult{}, err
-    }
+	if len(input.Employee) > 0 {
+		result, err := authz.GetEngine(ctx).LookupResourcesWithCaveat(ctx,
+			TypeBooking, authz.Permission(BookingRegionalWrite),
+			TypeEmployee, authz.IDs(input.Employee),
+			caveatCtx,
+		)
+		if err != nil {
+			return BookingLookupResult{}, err
+		}
 
-    out := BookingLookupResult{
-      Definite:    authz.FromIDs[Booking](result.Definite),
-      Conditional: make([]BookingConditionalLookupEntry, 0, len(result.Conditional)),
-    }
-    for _, c := range result.Conditional {
-      out.Conditional = append(out.Conditional, BookingConditionalLookupEntry{
-        ID:          Booking(c.ID),
-        MissingKeys: c.MissingKeys,
-      })
-    }
-    return out, nil
-  }
-  
-  return BookingLookupResult{}, nil
+		out := BookingLookupResult{
+			Definite:    authz.FromIDs[Booking](result.Definite),
+			Conditional: make([]BookingConditionalLookupEntry, 0, len(result.Conditional)),
+		}
+		for _, c := range result.Conditional {
+			out.Conditional = append(out.Conditional, BookingConditionalLookupEntry{
+				ID:          Booking(c.ID),
+				MissingKeys: c.MissingKeys,
+			})
+		}
+		return out, nil
+	}
+
+	return BookingLookupResult{}, nil
 }
 
 func (booking Booking) LookupWriteEmployeeSubjects(ctx context.Context) (EmployeeLookupResult, error) {
 
-  result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
-    authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    },
-    authz.Permission(BookingWrite), TypeEmployee,
-  )
-  if err != nil {
-    return EmployeeLookupResult{}, err
-  }
+	result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+		authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		},
+		authz.Permission(BookingWrite), TypeEmployee,
+	)
+	if err != nil {
+		return EmployeeLookupResult{}, err
+	}
 
-  out := EmployeeLookupResult{
-    Definite:    authz.FromIDsExcludingWildcard[Employee](result.Definite),
-    Conditional: make([]EmployeeConditionalLookupEntry, 0, len(result.Conditional)),
-  }
-  for _, c := range result.Conditional {
-    out.Conditional = append(out.Conditional, EmployeeConditionalLookupEntry{
-      ID:          Employee(c.ID),
-      MissingKeys: c.MissingKeys,
-    })
-  }
-  return out, nil
+	out := EmployeeLookupResult{
+		Definite:    authz.FromIDsExcludingWildcard[Employee](result.Definite),
+		Conditional: make([]EmployeeConditionalLookupEntry, 0, len(result.Conditional)),
+	}
+	for _, c := range result.Conditional {
+		out.Conditional = append(out.Conditional, EmployeeConditionalLookupEntry{
+			ID:          Employee(c.ID),
+			MissingKeys: c.MissingKeys,
+		})
+	}
+	return out, nil
 }
 
 func (booking Booking) LookupWriteEmployeeWildcardSubjects(ctx context.Context) (bool, error) {
-  return authz.GetEngine(ctx).HasPublicSubject(ctx,
-    authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    },
-    authz.Permission(BookingWrite), TypeEmployee,
-  )
+	return authz.GetEngine(ctx).HasPublicSubject(ctx,
+		authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		},
+		authz.Permission(BookingWrite), TypeEmployee,
+	)
 }
 func (booking Booking) LookupWriteCustomerSubjects(ctx context.Context) (CustomerLookupResult, error) {
 
-  result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
-    authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    },
-    authz.Permission(BookingWrite), TypeCustomer,
-  )
-  if err != nil {
-    return CustomerLookupResult{}, err
-  }
+	result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+		authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		},
+		authz.Permission(BookingWrite), TypeCustomer,
+	)
+	if err != nil {
+		return CustomerLookupResult{}, err
+	}
 
-  out := CustomerLookupResult{
-    Definite:    authz.FromIDsExcludingWildcard[Customer](result.Definite),
-    Conditional: make([]CustomerConditionalLookupEntry, 0, len(result.Conditional)),
-  }
-  for _, c := range result.Conditional {
-    out.Conditional = append(out.Conditional, CustomerConditionalLookupEntry{
-      ID:          Customer(c.ID),
-      MissingKeys: c.MissingKeys,
-    })
-  }
-  return out, nil
+	out := CustomerLookupResult{
+		Definite:    authz.FromIDsExcludingWildcard[Customer](result.Definite),
+		Conditional: make([]CustomerConditionalLookupEntry, 0, len(result.Conditional)),
+	}
+	for _, c := range result.Conditional {
+		out.Conditional = append(out.Conditional, CustomerConditionalLookupEntry{
+			ID:          Customer(c.ID),
+			MissingKeys: c.MissingKeys,
+		})
+	}
+	return out, nil
 }
 
 func (booking Booking) LookupWriteCustomerWildcardSubjects(ctx context.Context) (bool, error) {
-  return authz.GetEngine(ctx).HasPublicSubject(ctx,
-    authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    },
-    authz.Permission(BookingWrite), TypeCustomer,
-  )
+	return authz.GetEngine(ctx).HasPublicSubject(ctx,
+		authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		},
+		authz.Permission(BookingWrite), TypeCustomer,
+	)
 }
 func (booking Booking) LookupWriteUserSubjects(ctx context.Context) (UserLookupResult, error) {
 
-  result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
-    authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    },
-    authz.Permission(BookingWrite), TypeUser,
-  )
-  if err != nil {
-    return UserLookupResult{}, err
-  }
+	result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+		authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		},
+		authz.Permission(BookingWrite), TypeUser,
+	)
+	if err != nil {
+		return UserLookupResult{}, err
+	}
 
-  out := UserLookupResult{
-    Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
-    Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
-  }
-  for _, c := range result.Conditional {
-    out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
-      ID:          User(c.ID),
-      MissingKeys: c.MissingKeys,
-    })
-  }
-  return out, nil
+	out := UserLookupResult{
+		Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
+		Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
+	}
+	for _, c := range result.Conditional {
+		out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
+			ID:          User(c.ID),
+			MissingKeys: c.MissingKeys,
+		})
+	}
+	return out, nil
 }
 
 func (booking Booking) LookupWriteUserWildcardSubjects(ctx context.Context) (bool, error) {
-  return authz.GetEngine(ctx).HasPublicSubject(ctx,
-    authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    },
-    authz.Permission(BookingWrite), TypeUser,
-  )
+	return authz.GetEngine(ctx).HasPublicSubject(ctx,
+		authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		},
+		authz.Permission(BookingWrite), TypeUser,
+	)
 }
 
 func (booking Booking) LookupChangeOwnerEmployeeSubjects(ctx context.Context) (EmployeeLookupResult, error) {
 
-  result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
-    authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    },
-    authz.Permission(BookingChangeOwner), TypeEmployee,
-  )
-  if err != nil {
-    return EmployeeLookupResult{}, err
-  }
+	result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+		authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		},
+		authz.Permission(BookingChangeOwner), TypeEmployee,
+	)
+	if err != nil {
+		return EmployeeLookupResult{}, err
+	}
 
-  out := EmployeeLookupResult{
-    Definite:    authz.FromIDsExcludingWildcard[Employee](result.Definite),
-    Conditional: make([]EmployeeConditionalLookupEntry, 0, len(result.Conditional)),
-  }
-  for _, c := range result.Conditional {
-    out.Conditional = append(out.Conditional, EmployeeConditionalLookupEntry{
-      ID:          Employee(c.ID),
-      MissingKeys: c.MissingKeys,
-    })
-  }
-  return out, nil
+	out := EmployeeLookupResult{
+		Definite:    authz.FromIDsExcludingWildcard[Employee](result.Definite),
+		Conditional: make([]EmployeeConditionalLookupEntry, 0, len(result.Conditional)),
+	}
+	for _, c := range result.Conditional {
+		out.Conditional = append(out.Conditional, EmployeeConditionalLookupEntry{
+			ID:          Employee(c.ID),
+			MissingKeys: c.MissingKeys,
+		})
+	}
+	return out, nil
 }
 
 func (booking Booking) LookupChangeOwnerEmployeeWildcardSubjects(ctx context.Context) (bool, error) {
-  return authz.GetEngine(ctx).HasPublicSubject(ctx,
-    authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    },
-    authz.Permission(BookingChangeOwner), TypeEmployee,
-  )
+	return authz.GetEngine(ctx).HasPublicSubject(ctx,
+		authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		},
+		authz.Permission(BookingChangeOwner), TypeEmployee,
+	)
 }
 func (booking Booking) LookupChangeOwnerCustomerSubjects(ctx context.Context) (CustomerLookupResult, error) {
 
-  result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
-    authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    },
-    authz.Permission(BookingChangeOwner), TypeCustomer,
-  )
-  if err != nil {
-    return CustomerLookupResult{}, err
-  }
+	result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+		authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		},
+		authz.Permission(BookingChangeOwner), TypeCustomer,
+	)
+	if err != nil {
+		return CustomerLookupResult{}, err
+	}
 
-  out := CustomerLookupResult{
-    Definite:    authz.FromIDsExcludingWildcard[Customer](result.Definite),
-    Conditional: make([]CustomerConditionalLookupEntry, 0, len(result.Conditional)),
-  }
-  for _, c := range result.Conditional {
-    out.Conditional = append(out.Conditional, CustomerConditionalLookupEntry{
-      ID:          Customer(c.ID),
-      MissingKeys: c.MissingKeys,
-    })
-  }
-  return out, nil
+	out := CustomerLookupResult{
+		Definite:    authz.FromIDsExcludingWildcard[Customer](result.Definite),
+		Conditional: make([]CustomerConditionalLookupEntry, 0, len(result.Conditional)),
+	}
+	for _, c := range result.Conditional {
+		out.Conditional = append(out.Conditional, CustomerConditionalLookupEntry{
+			ID:          Customer(c.ID),
+			MissingKeys: c.MissingKeys,
+		})
+	}
+	return out, nil
 }
 
 func (booking Booking) LookupChangeOwnerCustomerWildcardSubjects(ctx context.Context) (bool, error) {
-  return authz.GetEngine(ctx).HasPublicSubject(ctx,
-    authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    },
-    authz.Permission(BookingChangeOwner), TypeCustomer,
-  )
+	return authz.GetEngine(ctx).HasPublicSubject(ctx,
+		authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		},
+		authz.Permission(BookingChangeOwner), TypeCustomer,
+	)
 }
 func (booking Booking) LookupChangeOwnerUserSubjects(ctx context.Context) (UserLookupResult, error) {
 
-  result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
-    authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    },
-    authz.Permission(BookingChangeOwner), TypeUser,
-  )
-  if err != nil {
-    return UserLookupResult{}, err
-  }
+	result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+		authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		},
+		authz.Permission(BookingChangeOwner), TypeUser,
+	)
+	if err != nil {
+		return UserLookupResult{}, err
+	}
 
-  out := UserLookupResult{
-    Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
-    Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
-  }
-  for _, c := range result.Conditional {
-    out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
-      ID:          User(c.ID),
-      MissingKeys: c.MissingKeys,
-    })
-  }
-  return out, nil
+	out := UserLookupResult{
+		Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
+		Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
+	}
+	for _, c := range result.Conditional {
+		out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
+			ID:          User(c.ID),
+			MissingKeys: c.MissingKeys,
+		})
+	}
+	return out, nil
 }
 
 func (booking Booking) LookupChangeOwnerUserWildcardSubjects(ctx context.Context) (bool, error) {
-  return authz.GetEngine(ctx).HasPublicSubject(ctx,
-    authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    },
-    authz.Permission(BookingChangeOwner), TypeUser,
-  )
+	return authz.GetEngine(ctx).HasPublicSubject(ctx,
+		authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		},
+		authz.Permission(BookingChangeOwner), TypeUser,
+	)
 }
 
 func (booking Booking) LookupRegionalWriteEmployeeSubjects(ctx context.Context, caveats CheckBookingRegionalWriteCaveats) (EmployeeLookupResult, error) {
 
-  var caveatCtx map[string]any
-  if c := caveats.RegionMatch; c != nil {
-    caveatCtx = map[string]any{}
+	var caveatCtx map[string]any
+	if c := caveats.RegionMatch; c != nil {
+		caveatCtx = map[string]any{}
 
-    if c.Region != nil {
-      caveatCtx["region"] = *c.Region
-    }
-  }
+		if c.Region != nil {
+			caveatCtx["region"] = *c.Region
+		}
+	}
 
-  result, err := authz.GetEngine(ctx).LookupSubjectsWithCaveat(ctx,
-    authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    },
-    authz.Permission(BookingRegionalWrite), TypeEmployee,
-    caveatCtx,
-  )
-  if err != nil {
-    return EmployeeLookupResult{}, err
-  }
+	result, err := authz.GetEngine(ctx).LookupSubjectsWithCaveat(ctx,
+		authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		},
+		authz.Permission(BookingRegionalWrite), TypeEmployee,
+		caveatCtx,
+	)
+	if err != nil {
+		return EmployeeLookupResult{}, err
+	}
 
-  out := EmployeeLookupResult{
-    Definite:    authz.FromIDsExcludingWildcard[Employee](result.Definite),
-    Conditional: make([]EmployeeConditionalLookupEntry, 0, len(result.Conditional)),
-  }
-  for _, c := range result.Conditional {
-    out.Conditional = append(out.Conditional, EmployeeConditionalLookupEntry{
-      ID:          Employee(c.ID),
-      MissingKeys: c.MissingKeys,
-    })
-  }
-  return out, nil
+	out := EmployeeLookupResult{
+		Definite:    authz.FromIDsExcludingWildcard[Employee](result.Definite),
+		Conditional: make([]EmployeeConditionalLookupEntry, 0, len(result.Conditional)),
+	}
+	for _, c := range result.Conditional {
+		out.Conditional = append(out.Conditional, EmployeeConditionalLookupEntry{
+			ID:          Employee(c.ID),
+			MissingKeys: c.MissingKeys,
+		})
+	}
+	return out, nil
 }
 
 func (booking Booking) LookupRegionalWriteEmployeeWildcardSubjects(ctx context.Context) (bool, error) {
-  return authz.GetEngine(ctx).HasPublicSubject(ctx,
-    authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    },
-    authz.Permission(BookingRegionalWrite), TypeEmployee,
-  )
+	return authz.GetEngine(ctx).HasPublicSubject(ctx,
+		authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		},
+		authz.Permission(BookingRegionalWrite), TypeEmployee,
+	)
 }

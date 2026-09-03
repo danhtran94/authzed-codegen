@@ -3,98 +3,102 @@
 package extsvc
 
 import (
-  "github.com/danhtran94/authzed-codegen/pkg/authz"
+	"github.com/danhtran94/authzed-codegen/pkg/authz"
 
-  "context"
-  "time"
+	"context"
+	"time"
 )
 
 const TypeDocument authz.Type = "extsvc/document"
+
 type RelationDocument authz.Relation
 type PermissionDocument authz.Permission
 
 const DocumentParent RelationDocument = "parent"
+
 type DocumentParentObjects struct {
-  Folder []Folder
+	Folder []Folder
 }
+
 const DocumentOwner RelationDocument = "owner"
+
 type DocumentOwnerObjects struct {
-  User []User
-  Group []Group
+	User  []User
+	Group []Group
 }
 
 type Document authz.ID
 
 type DocumentLookupResult struct {
-  Definite    []Document
-  Conditional []DocumentConditionalLookupEntry
+	Definite    []Document
+	Conditional []DocumentConditionalLookupEntry
 }
 type DocumentConditionalLookupEntry struct {
-  ID          Document
-  MissingKeys []string
+	ID          Document
+	MissingKeys []string
 }
 
 func DocumentStringer(id authz.StringConvertable) Document {
-  return Document(id.String())
+	return Document(id.String())
 }
 
 func DocumentStringers(ids ...authz.StringConvertable) []Document {
-  result := []Document{}
-  for _, id := range ids {
-    result = append(result, Document(id.String()))
-  }
-  return result
+	result := []Document{}
+	for _, id := range ids {
+		result = append(result, Document(id.String()))
+	}
+	return result
 }
 
 func (document Document) ToList() []Document {
-  return []Document{ document }
+	return []Document{document}
 }
 
 func (document Document) CreateParentRelations(ctx context.Context, objects DocumentParentObjects) error {
-  if len(objects.Folder) > 0 {
-    err := authz.GetEngine(ctx).CreateRelations(ctx, authz.Resource{
-      Type: TypeDocument,
-      ID: authz.ID(document),
-    }, authz.Relation(DocumentParent), TypeFolder, authz.IDs(objects.Folder))
-    if err != nil {
-      return err
-    }
-  }
-  return nil
+	if len(objects.Folder) > 0 {
+		err := authz.GetEngine(ctx).CreateRelations(ctx, authz.Resource{
+			Type: TypeDocument,
+			ID:   authz.ID(document),
+		}, authz.Relation(DocumentParent), TypeFolder, authz.IDs(objects.Folder))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 func (document Document) CreateOwnerRelations(ctx context.Context, objects DocumentOwnerObjects) error {
-  if len(objects.User) > 0 {
-    err := authz.GetEngine(ctx).CreateRelations(ctx, authz.Resource{
-      Type: TypeDocument,
-      ID: authz.ID(document),
-    }, authz.Relation(DocumentOwner), TypeUser, authz.IDs(objects.User))
-    if err != nil {
-      return err
-    }
-  }
-  if len(objects.Group) > 0 {
-    err := authz.GetEngine(ctx).CreateRelations(ctx, authz.Resource{
-      Type: TypeDocument,
-      ID: authz.ID(document),
-    }, authz.Relation(DocumentOwner), TypeGroup, authz.IDs(objects.Group))
-    if err != nil {
-      return err
-    }
-  }
-  return nil
+	if len(objects.User) > 0 {
+		err := authz.GetEngine(ctx).CreateRelations(ctx, authz.Resource{
+			Type: TypeDocument,
+			ID:   authz.ID(document),
+		}, authz.Relation(DocumentOwner), TypeUser, authz.IDs(objects.User))
+		if err != nil {
+			return err
+		}
+	}
+	if len(objects.Group) > 0 {
+		err := authz.GetEngine(ctx).CreateRelations(ctx, authz.Resource{
+			Type: TypeDocument,
+			ID:   authz.ID(document),
+		}, authz.Relation(DocumentOwner), TypeGroup, authz.IDs(objects.Group))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (document Document) DeleteParentRelations(ctx context.Context, objects DocumentParentObjects) error {
-  if len(objects.Folder) > 0 {
-    err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
-      Type: TypeDocument,
-      ID: authz.ID(document),
-    }, authz.Relation(DocumentParent), TypeFolder, authz.IDs(objects.Folder))
-    if err != nil {
-      return err
-    }
-  }
-  return nil
+	if len(objects.Folder) > 0 {
+		err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
+			Type: TypeDocument,
+			ID:   authz.ID(document),
+		}, authz.Relation(DocumentParent), TypeFolder, authz.IDs(objects.Folder))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // PurgeParentRelations deletes every parent relationship on this
@@ -102,33 +106,33 @@ func (document Document) DeleteParentRelations(ctx context.Context, objects Docu
 // DeleteParentRelations (which revokes the specific subjects you pass),
 // use this when parent as a whole no longer applies to this Document.
 func (document Document) PurgeParentRelations(ctx context.Context) error {
-  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
-    ResourceType: TypeDocument,
-    ResourceID: authz.ID(document),
-    Relation: authz.Relation(DocumentParent),
-  })
+	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+		ResourceType: TypeDocument,
+		ResourceID:   authz.ID(document),
+		Relation:     authz.Relation(DocumentParent),
+	})
 }
 
 func (document Document) DeleteOwnerRelations(ctx context.Context, objects DocumentOwnerObjects) error {
-  if len(objects.User) > 0 {
-    err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
-      Type: TypeDocument,
-      ID: authz.ID(document),
-    }, authz.Relation(DocumentOwner), TypeUser, authz.IDs(objects.User))
-    if err != nil {
-      return err
-    }
-  }
-  if len(objects.Group) > 0 {
-    err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
-      Type: TypeDocument,
-      ID: authz.ID(document),
-    }, authz.Relation(DocumentOwner), TypeGroup, authz.IDs(objects.Group))
-    if err != nil {
-      return err
-    }
-  }
-  return nil
+	if len(objects.User) > 0 {
+		err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
+			Type: TypeDocument,
+			ID:   authz.ID(document),
+		}, authz.Relation(DocumentOwner), TypeUser, authz.IDs(objects.User))
+		if err != nil {
+			return err
+		}
+	}
+	if len(objects.Group) > 0 {
+		err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
+			Type: TypeDocument,
+			ID:   authz.ID(document),
+		}, authz.Relation(DocumentOwner), TypeGroup, authz.IDs(objects.Group))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // PurgeOwnerRelations deletes every owner relationship on this
@@ -136,11 +140,11 @@ func (document Document) DeleteOwnerRelations(ctx context.Context, objects Docum
 // DeleteOwnerRelations (which revokes the specific subjects you pass),
 // use this when owner as a whole no longer applies to this Document.
 func (document Document) PurgeOwnerRelations(ctx context.Context) error {
-  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
-    ResourceType: TypeDocument,
-    ResourceID: authz.ID(document),
-    Relation: authz.Relation(DocumentOwner),
-  })
+	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+		ResourceType: TypeDocument,
+		ResourceID:   authz.ID(document),
+		Relation:     authz.Relation(DocumentOwner),
+	})
 }
 
 // PurgeRelations deletes every relationship on this Document — all relations,
@@ -150,851 +154,857 @@ func (document Document) PurgeOwnerRelations(ctx context.Context) error {
 // resource — for that, see PurgeRelationsAsSubject (emitted when Document is a
 // subject anywhere in the schema).
 func (document Document) PurgeRelations(ctx context.Context) error {
-  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
-    ResourceType: TypeDocument,
-    ResourceID: authz.ID(document),
-  })
+	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+		ResourceType: TypeDocument,
+		ResourceID:   authz.ID(document),
+	})
 }
 
 type DocumentParentFolderRelation struct {
-  ID            Folder
-  SubRelation   string
-  CaveatName    string
-  CaveatContext map[string]any
-  ExpiresAt     *time.Time
+	ID            Folder
+	SubRelation   string
+	CaveatName    string
+	CaveatContext map[string]any
+	ExpiresAt     *time.Time
 }
+
 func (r DocumentParentFolderRelation) RelationID() Folder { return r.ID }
 
 func (document Document) ReadParentFolderRelations(ctx context.Context) ([]DocumentParentFolderRelation, error) {
-  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
-    Type: TypeDocument,
-    ID: authz.ID(document),
-  }, authz.Relation(DocumentParent), TypeFolder)
-  if err != nil {
-    return nil, err
-  }
+	tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+		Type: TypeDocument,
+		ID:   authz.ID(document),
+	}, authz.Relation(DocumentParent), TypeFolder)
+	if err != nil {
+		return nil, err
+	}
 
-  rels := make([]DocumentParentFolderRelation, 0, len(tuples))
-  for _, t := range tuples {
-    if t.ID == authz.WildcardID {
-      continue
-    }
-    rels = append(rels, DocumentParentFolderRelation{
-      ID:            Folder(t.ID),
-      SubRelation:   t.SubRelation,
-      CaveatName:    t.CaveatName,
-      CaveatContext: t.CaveatContext,
-      ExpiresAt:     t.ExpiresAt,
-    })
-  }
-  return rels, nil
+	rels := make([]DocumentParentFolderRelation, 0, len(tuples))
+	for _, t := range tuples {
+		if t.ID == authz.WildcardID {
+			continue
+		}
+		rels = append(rels, DocumentParentFolderRelation{
+			ID:            Folder(t.ID),
+			SubRelation:   t.SubRelation,
+			CaveatName:    t.CaveatName,
+			CaveatContext: t.CaveatContext,
+			ExpiresAt:     t.ExpiresAt,
+		})
+	}
+	return rels, nil
 }
 
 type DocumentOwnerUserRelation struct {
-  ID            User
-  SubRelation   string
-  CaveatName    string
-  CaveatContext map[string]any
-  ExpiresAt     *time.Time
+	ID            User
+	SubRelation   string
+	CaveatName    string
+	CaveatContext map[string]any
+	ExpiresAt     *time.Time
 }
+
 func (r DocumentOwnerUserRelation) RelationID() User { return r.ID }
 
 func (document Document) ReadOwnerUserRelations(ctx context.Context) ([]DocumentOwnerUserRelation, error) {
-  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
-    Type: TypeDocument,
-    ID: authz.ID(document),
-  }, authz.Relation(DocumentOwner), TypeUser)
-  if err != nil {
-    return nil, err
-  }
+	tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+		Type: TypeDocument,
+		ID:   authz.ID(document),
+	}, authz.Relation(DocumentOwner), TypeUser)
+	if err != nil {
+		return nil, err
+	}
 
-  rels := make([]DocumentOwnerUserRelation, 0, len(tuples))
-  for _, t := range tuples {
-    if t.ID == authz.WildcardID {
-      continue
-    }
-    rels = append(rels, DocumentOwnerUserRelation{
-      ID:            User(t.ID),
-      SubRelation:   t.SubRelation,
-      CaveatName:    t.CaveatName,
-      CaveatContext: t.CaveatContext,
-      ExpiresAt:     t.ExpiresAt,
-    })
-  }
-  return rels, nil
+	rels := make([]DocumentOwnerUserRelation, 0, len(tuples))
+	for _, t := range tuples {
+		if t.ID == authz.WildcardID {
+			continue
+		}
+		rels = append(rels, DocumentOwnerUserRelation{
+			ID:            User(t.ID),
+			SubRelation:   t.SubRelation,
+			CaveatName:    t.CaveatName,
+			CaveatContext: t.CaveatContext,
+			ExpiresAt:     t.ExpiresAt,
+		})
+	}
+	return rels, nil
 }
 
 type DocumentOwnerGroupRelation struct {
-  ID            Group
-  SubRelation   string
-  CaveatName    string
-  CaveatContext map[string]any
-  ExpiresAt     *time.Time
+	ID            Group
+	SubRelation   string
+	CaveatName    string
+	CaveatContext map[string]any
+	ExpiresAt     *time.Time
 }
+
 func (r DocumentOwnerGroupRelation) RelationID() Group { return r.ID }
 
 func (document Document) ReadOwnerGroupRelations(ctx context.Context) ([]DocumentOwnerGroupRelation, error) {
-  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
-    Type: TypeDocument,
-    ID: authz.ID(document),
-  }, authz.Relation(DocumentOwner), TypeGroup)
-  if err != nil {
-    return nil, err
-  }
+	tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+		Type: TypeDocument,
+		ID:   authz.ID(document),
+	}, authz.Relation(DocumentOwner), TypeGroup)
+	if err != nil {
+		return nil, err
+	}
 
-  rels := make([]DocumentOwnerGroupRelation, 0, len(tuples))
-  for _, t := range tuples {
-    if t.ID == authz.WildcardID {
-      continue
-    }
-    rels = append(rels, DocumentOwnerGroupRelation{
-      ID:            Group(t.ID),
-      SubRelation:   t.SubRelation,
-      CaveatName:    t.CaveatName,
-      CaveatContext: t.CaveatContext,
-      ExpiresAt:     t.ExpiresAt,
-    })
-  }
-  return rels, nil
+	rels := make([]DocumentOwnerGroupRelation, 0, len(tuples))
+	for _, t := range tuples {
+		if t.ID == authz.WildcardID {
+			continue
+		}
+		rels = append(rels, DocumentOwnerGroupRelation{
+			ID:            Group(t.ID),
+			SubRelation:   t.SubRelation,
+			CaveatName:    t.CaveatName,
+			CaveatContext: t.CaveatContext,
+			ExpiresAt:     t.ExpiresAt,
+		})
+	}
+	return rels, nil
 }
 
 const DocumentView PermissionDocument = "view"
 
 type CheckDocumentViewInputs struct {
-  User []User
-  Group []Group
-  Role []Role
+	User  []User
+	Group []Group
+	Role  []Role
 }
 
 func (document Document) CheckView(ctx context.Context, input CheckDocumentViewInputs) (bool, error) {
-  if len(input.User) == 0 && len(input.Group) == 0 && len(input.Role) == 0 && true {
-    return false, authz.ErrNoInput
-  }
+	if len(input.User) == 0 && len(input.Group) == 0 && len(input.Role) == 0 && true {
+		return false, authz.ErrNoInput
+	}
 
-  if len(input.User) > 0 {
-    err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
-      Type: TypeDocument,
-      ID: authz.ID(document),
-    }, authz.Permission(DocumentView), TypeUser, authz.IDs(input.User))
-    if err != nil {
-      return false, err
-    }
-  }
-  if len(input.Group) > 0 {
-    err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
-      Type: TypeDocument,
-      ID: authz.ID(document),
-    }, authz.Permission(DocumentView), TypeGroup, authz.IDs(input.Group))
-    if err != nil {
-      return false, err
-    }
-  }
-  if len(input.Role) > 0 {
-    err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
-      Type: TypeDocument,
-      ID: authz.ID(document),
-    }, authz.Permission(DocumentView), TypeRole, authz.IDs(input.Role))
-    if err != nil {
-      return false, err
-    }
-  }
-  
-  return true, nil
+	if len(input.User) > 0 {
+		err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
+			Type: TypeDocument,
+			ID:   authz.ID(document),
+		}, authz.Permission(DocumentView), TypeUser, authz.IDs(input.User))
+		if err != nil {
+			return false, err
+		}
+	}
+	if len(input.Group) > 0 {
+		err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
+			Type: TypeDocument,
+			ID:   authz.ID(document),
+		}, authz.Permission(DocumentView), TypeGroup, authz.IDs(input.Group))
+		if err != nil {
+			return false, err
+		}
+	}
+	if len(input.Role) > 0 {
+		err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
+			Type: TypeDocument,
+			ID:   authz.ID(document),
+		}, authz.Permission(DocumentView), TypeRole, authz.IDs(input.Role))
+		if err != nil {
+			return false, err
+		}
+	}
+
+	return true, nil
 }
 
 func LookupViewDocumentResources(ctx context.Context, input CheckDocumentViewInputs) (DocumentLookupResult, error) {
 
-  if len(input.User) > 0 {
-    result, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeDocument, authz.Permission(DocumentView),
-      TypeUser, authz.IDs(input.User),
-    )
-    if err != nil {
-      return DocumentLookupResult{}, err
-    }
+	if len(input.User) > 0 {
+		result, err := authz.GetEngine(ctx).LookupResources(ctx,
+			TypeDocument, authz.Permission(DocumentView),
+			TypeUser, authz.IDs(input.User),
+		)
+		if err != nil {
+			return DocumentLookupResult{}, err
+		}
 
-    out := DocumentLookupResult{
-      Definite:    authz.FromIDs[Document](result.Definite),
-      Conditional: make([]DocumentConditionalLookupEntry, 0, len(result.Conditional)),
-    }
-    for _, c := range result.Conditional {
-      out.Conditional = append(out.Conditional, DocumentConditionalLookupEntry{
-        ID:          Document(c.ID),
-        MissingKeys: c.MissingKeys,
-      })
-    }
-    return out, nil
-  }
-  if len(input.Group) > 0 {
-    result, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeDocument, authz.Permission(DocumentView),
-      TypeGroup, authz.IDs(input.Group),
-    )
-    if err != nil {
-      return DocumentLookupResult{}, err
-    }
+		out := DocumentLookupResult{
+			Definite:    authz.FromIDs[Document](result.Definite),
+			Conditional: make([]DocumentConditionalLookupEntry, 0, len(result.Conditional)),
+		}
+		for _, c := range result.Conditional {
+			out.Conditional = append(out.Conditional, DocumentConditionalLookupEntry{
+				ID:          Document(c.ID),
+				MissingKeys: c.MissingKeys,
+			})
+		}
+		return out, nil
+	}
+	if len(input.Group) > 0 {
+		result, err := authz.GetEngine(ctx).LookupResources(ctx,
+			TypeDocument, authz.Permission(DocumentView),
+			TypeGroup, authz.IDs(input.Group),
+		)
+		if err != nil {
+			return DocumentLookupResult{}, err
+		}
 
-    out := DocumentLookupResult{
-      Definite:    authz.FromIDs[Document](result.Definite),
-      Conditional: make([]DocumentConditionalLookupEntry, 0, len(result.Conditional)),
-    }
-    for _, c := range result.Conditional {
-      out.Conditional = append(out.Conditional, DocumentConditionalLookupEntry{
-        ID:          Document(c.ID),
-        MissingKeys: c.MissingKeys,
-      })
-    }
-    return out, nil
-  }
-  if len(input.Role) > 0 {
-    result, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeDocument, authz.Permission(DocumentView),
-      TypeRole, authz.IDs(input.Role),
-    )
-    if err != nil {
-      return DocumentLookupResult{}, err
-    }
+		out := DocumentLookupResult{
+			Definite:    authz.FromIDs[Document](result.Definite),
+			Conditional: make([]DocumentConditionalLookupEntry, 0, len(result.Conditional)),
+		}
+		for _, c := range result.Conditional {
+			out.Conditional = append(out.Conditional, DocumentConditionalLookupEntry{
+				ID:          Document(c.ID),
+				MissingKeys: c.MissingKeys,
+			})
+		}
+		return out, nil
+	}
+	if len(input.Role) > 0 {
+		result, err := authz.GetEngine(ctx).LookupResources(ctx,
+			TypeDocument, authz.Permission(DocumentView),
+			TypeRole, authz.IDs(input.Role),
+		)
+		if err != nil {
+			return DocumentLookupResult{}, err
+		}
 
-    out := DocumentLookupResult{
-      Definite:    authz.FromIDs[Document](result.Definite),
-      Conditional: make([]DocumentConditionalLookupEntry, 0, len(result.Conditional)),
-    }
-    for _, c := range result.Conditional {
-      out.Conditional = append(out.Conditional, DocumentConditionalLookupEntry{
-        ID:          Document(c.ID),
-        MissingKeys: c.MissingKeys,
-      })
-    }
-    return out, nil
-  }
-  
-  return DocumentLookupResult{}, nil
+		out := DocumentLookupResult{
+			Definite:    authz.FromIDs[Document](result.Definite),
+			Conditional: make([]DocumentConditionalLookupEntry, 0, len(result.Conditional)),
+		}
+		for _, c := range result.Conditional {
+			out.Conditional = append(out.Conditional, DocumentConditionalLookupEntry{
+				ID:          Document(c.ID),
+				MissingKeys: c.MissingKeys,
+			})
+		}
+		return out, nil
+	}
+
+	return DocumentLookupResult{}, nil
 }
+
 const DocumentEdit PermissionDocument = "edit"
 
 type CheckDocumentEditInputs struct {
-  User []User
-  Group []Group
-  Role []Role
+	User  []User
+	Group []Group
+	Role  []Role
 }
 
 func (document Document) CheckEdit(ctx context.Context, input CheckDocumentEditInputs) (bool, error) {
-  if len(input.User) == 0 && len(input.Group) == 0 && len(input.Role) == 0 && true {
-    return false, authz.ErrNoInput
-  }
+	if len(input.User) == 0 && len(input.Group) == 0 && len(input.Role) == 0 && true {
+		return false, authz.ErrNoInput
+	}
 
-  if len(input.User) > 0 {
-    err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
-      Type: TypeDocument,
-      ID: authz.ID(document),
-    }, authz.Permission(DocumentEdit), TypeUser, authz.IDs(input.User))
-    if err != nil {
-      return false, err
-    }
-  }
-  if len(input.Group) > 0 {
-    err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
-      Type: TypeDocument,
-      ID: authz.ID(document),
-    }, authz.Permission(DocumentEdit), TypeGroup, authz.IDs(input.Group))
-    if err != nil {
-      return false, err
-    }
-  }
-  if len(input.Role) > 0 {
-    err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
-      Type: TypeDocument,
-      ID: authz.ID(document),
-    }, authz.Permission(DocumentEdit), TypeRole, authz.IDs(input.Role))
-    if err != nil {
-      return false, err
-    }
-  }
-  
-  return true, nil
+	if len(input.User) > 0 {
+		err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
+			Type: TypeDocument,
+			ID:   authz.ID(document),
+		}, authz.Permission(DocumentEdit), TypeUser, authz.IDs(input.User))
+		if err != nil {
+			return false, err
+		}
+	}
+	if len(input.Group) > 0 {
+		err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
+			Type: TypeDocument,
+			ID:   authz.ID(document),
+		}, authz.Permission(DocumentEdit), TypeGroup, authz.IDs(input.Group))
+		if err != nil {
+			return false, err
+		}
+	}
+	if len(input.Role) > 0 {
+		err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
+			Type: TypeDocument,
+			ID:   authz.ID(document),
+		}, authz.Permission(DocumentEdit), TypeRole, authz.IDs(input.Role))
+		if err != nil {
+			return false, err
+		}
+	}
+
+	return true, nil
 }
 
 func LookupEditDocumentResources(ctx context.Context, input CheckDocumentEditInputs) (DocumentLookupResult, error) {
 
-  if len(input.User) > 0 {
-    result, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeDocument, authz.Permission(DocumentEdit),
-      TypeUser, authz.IDs(input.User),
-    )
-    if err != nil {
-      return DocumentLookupResult{}, err
-    }
+	if len(input.User) > 0 {
+		result, err := authz.GetEngine(ctx).LookupResources(ctx,
+			TypeDocument, authz.Permission(DocumentEdit),
+			TypeUser, authz.IDs(input.User),
+		)
+		if err != nil {
+			return DocumentLookupResult{}, err
+		}
 
-    out := DocumentLookupResult{
-      Definite:    authz.FromIDs[Document](result.Definite),
-      Conditional: make([]DocumentConditionalLookupEntry, 0, len(result.Conditional)),
-    }
-    for _, c := range result.Conditional {
-      out.Conditional = append(out.Conditional, DocumentConditionalLookupEntry{
-        ID:          Document(c.ID),
-        MissingKeys: c.MissingKeys,
-      })
-    }
-    return out, nil
-  }
-  if len(input.Group) > 0 {
-    result, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeDocument, authz.Permission(DocumentEdit),
-      TypeGroup, authz.IDs(input.Group),
-    )
-    if err != nil {
-      return DocumentLookupResult{}, err
-    }
+		out := DocumentLookupResult{
+			Definite:    authz.FromIDs[Document](result.Definite),
+			Conditional: make([]DocumentConditionalLookupEntry, 0, len(result.Conditional)),
+		}
+		for _, c := range result.Conditional {
+			out.Conditional = append(out.Conditional, DocumentConditionalLookupEntry{
+				ID:          Document(c.ID),
+				MissingKeys: c.MissingKeys,
+			})
+		}
+		return out, nil
+	}
+	if len(input.Group) > 0 {
+		result, err := authz.GetEngine(ctx).LookupResources(ctx,
+			TypeDocument, authz.Permission(DocumentEdit),
+			TypeGroup, authz.IDs(input.Group),
+		)
+		if err != nil {
+			return DocumentLookupResult{}, err
+		}
 
-    out := DocumentLookupResult{
-      Definite:    authz.FromIDs[Document](result.Definite),
-      Conditional: make([]DocumentConditionalLookupEntry, 0, len(result.Conditional)),
-    }
-    for _, c := range result.Conditional {
-      out.Conditional = append(out.Conditional, DocumentConditionalLookupEntry{
-        ID:          Document(c.ID),
-        MissingKeys: c.MissingKeys,
-      })
-    }
-    return out, nil
-  }
-  if len(input.Role) > 0 {
-    result, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeDocument, authz.Permission(DocumentEdit),
-      TypeRole, authz.IDs(input.Role),
-    )
-    if err != nil {
-      return DocumentLookupResult{}, err
-    }
+		out := DocumentLookupResult{
+			Definite:    authz.FromIDs[Document](result.Definite),
+			Conditional: make([]DocumentConditionalLookupEntry, 0, len(result.Conditional)),
+		}
+		for _, c := range result.Conditional {
+			out.Conditional = append(out.Conditional, DocumentConditionalLookupEntry{
+				ID:          Document(c.ID),
+				MissingKeys: c.MissingKeys,
+			})
+		}
+		return out, nil
+	}
+	if len(input.Role) > 0 {
+		result, err := authz.GetEngine(ctx).LookupResources(ctx,
+			TypeDocument, authz.Permission(DocumentEdit),
+			TypeRole, authz.IDs(input.Role),
+		)
+		if err != nil {
+			return DocumentLookupResult{}, err
+		}
 
-    out := DocumentLookupResult{
-      Definite:    authz.FromIDs[Document](result.Definite),
-      Conditional: make([]DocumentConditionalLookupEntry, 0, len(result.Conditional)),
-    }
-    for _, c := range result.Conditional {
-      out.Conditional = append(out.Conditional, DocumentConditionalLookupEntry{
-        ID:          Document(c.ID),
-        MissingKeys: c.MissingKeys,
-      })
-    }
-    return out, nil
-  }
-  
-  return DocumentLookupResult{}, nil
+		out := DocumentLookupResult{
+			Definite:    authz.FromIDs[Document](result.Definite),
+			Conditional: make([]DocumentConditionalLookupEntry, 0, len(result.Conditional)),
+		}
+		for _, c := range result.Conditional {
+			out.Conditional = append(out.Conditional, DocumentConditionalLookupEntry{
+				ID:          Document(c.ID),
+				MissingKeys: c.MissingKeys,
+			})
+		}
+		return out, nil
+	}
+
+	return DocumentLookupResult{}, nil
 }
+
 const DocumentAdmin PermissionDocument = "admin"
 
 type CheckDocumentAdminInputs struct {
-  User []User
-  Group []Group
-  Role []Role
+	User  []User
+	Group []Group
+	Role  []Role
 }
 
 func (document Document) CheckAdmin(ctx context.Context, input CheckDocumentAdminInputs) (bool, error) {
-  if len(input.User) == 0 && len(input.Group) == 0 && len(input.Role) == 0 && true {
-    return false, authz.ErrNoInput
-  }
+	if len(input.User) == 0 && len(input.Group) == 0 && len(input.Role) == 0 && true {
+		return false, authz.ErrNoInput
+	}
 
-  if len(input.User) > 0 {
-    err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
-      Type: TypeDocument,
-      ID: authz.ID(document),
-    }, authz.Permission(DocumentAdmin), TypeUser, authz.IDs(input.User))
-    if err != nil {
-      return false, err
-    }
-  }
-  if len(input.Group) > 0 {
-    err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
-      Type: TypeDocument,
-      ID: authz.ID(document),
-    }, authz.Permission(DocumentAdmin), TypeGroup, authz.IDs(input.Group))
-    if err != nil {
-      return false, err
-    }
-  }
-  if len(input.Role) > 0 {
-    err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
-      Type: TypeDocument,
-      ID: authz.ID(document),
-    }, authz.Permission(DocumentAdmin), TypeRole, authz.IDs(input.Role))
-    if err != nil {
-      return false, err
-    }
-  }
-  
-  return true, nil
+	if len(input.User) > 0 {
+		err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
+			Type: TypeDocument,
+			ID:   authz.ID(document),
+		}, authz.Permission(DocumentAdmin), TypeUser, authz.IDs(input.User))
+		if err != nil {
+			return false, err
+		}
+	}
+	if len(input.Group) > 0 {
+		err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
+			Type: TypeDocument,
+			ID:   authz.ID(document),
+		}, authz.Permission(DocumentAdmin), TypeGroup, authz.IDs(input.Group))
+		if err != nil {
+			return false, err
+		}
+	}
+	if len(input.Role) > 0 {
+		err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
+			Type: TypeDocument,
+			ID:   authz.ID(document),
+		}, authz.Permission(DocumentAdmin), TypeRole, authz.IDs(input.Role))
+		if err != nil {
+			return false, err
+		}
+	}
+
+	return true, nil
 }
 
 func LookupAdminDocumentResources(ctx context.Context, input CheckDocumentAdminInputs) (DocumentLookupResult, error) {
 
-  if len(input.User) > 0 {
-    result, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeDocument, authz.Permission(DocumentAdmin),
-      TypeUser, authz.IDs(input.User),
-    )
-    if err != nil {
-      return DocumentLookupResult{}, err
-    }
+	if len(input.User) > 0 {
+		result, err := authz.GetEngine(ctx).LookupResources(ctx,
+			TypeDocument, authz.Permission(DocumentAdmin),
+			TypeUser, authz.IDs(input.User),
+		)
+		if err != nil {
+			return DocumentLookupResult{}, err
+		}
 
-    out := DocumentLookupResult{
-      Definite:    authz.FromIDs[Document](result.Definite),
-      Conditional: make([]DocumentConditionalLookupEntry, 0, len(result.Conditional)),
-    }
-    for _, c := range result.Conditional {
-      out.Conditional = append(out.Conditional, DocumentConditionalLookupEntry{
-        ID:          Document(c.ID),
-        MissingKeys: c.MissingKeys,
-      })
-    }
-    return out, nil
-  }
-  if len(input.Group) > 0 {
-    result, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeDocument, authz.Permission(DocumentAdmin),
-      TypeGroup, authz.IDs(input.Group),
-    )
-    if err != nil {
-      return DocumentLookupResult{}, err
-    }
+		out := DocumentLookupResult{
+			Definite:    authz.FromIDs[Document](result.Definite),
+			Conditional: make([]DocumentConditionalLookupEntry, 0, len(result.Conditional)),
+		}
+		for _, c := range result.Conditional {
+			out.Conditional = append(out.Conditional, DocumentConditionalLookupEntry{
+				ID:          Document(c.ID),
+				MissingKeys: c.MissingKeys,
+			})
+		}
+		return out, nil
+	}
+	if len(input.Group) > 0 {
+		result, err := authz.GetEngine(ctx).LookupResources(ctx,
+			TypeDocument, authz.Permission(DocumentAdmin),
+			TypeGroup, authz.IDs(input.Group),
+		)
+		if err != nil {
+			return DocumentLookupResult{}, err
+		}
 
-    out := DocumentLookupResult{
-      Definite:    authz.FromIDs[Document](result.Definite),
-      Conditional: make([]DocumentConditionalLookupEntry, 0, len(result.Conditional)),
-    }
-    for _, c := range result.Conditional {
-      out.Conditional = append(out.Conditional, DocumentConditionalLookupEntry{
-        ID:          Document(c.ID),
-        MissingKeys: c.MissingKeys,
-      })
-    }
-    return out, nil
-  }
-  if len(input.Role) > 0 {
-    result, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeDocument, authz.Permission(DocumentAdmin),
-      TypeRole, authz.IDs(input.Role),
-    )
-    if err != nil {
-      return DocumentLookupResult{}, err
-    }
+		out := DocumentLookupResult{
+			Definite:    authz.FromIDs[Document](result.Definite),
+			Conditional: make([]DocumentConditionalLookupEntry, 0, len(result.Conditional)),
+		}
+		for _, c := range result.Conditional {
+			out.Conditional = append(out.Conditional, DocumentConditionalLookupEntry{
+				ID:          Document(c.ID),
+				MissingKeys: c.MissingKeys,
+			})
+		}
+		return out, nil
+	}
+	if len(input.Role) > 0 {
+		result, err := authz.GetEngine(ctx).LookupResources(ctx,
+			TypeDocument, authz.Permission(DocumentAdmin),
+			TypeRole, authz.IDs(input.Role),
+		)
+		if err != nil {
+			return DocumentLookupResult{}, err
+		}
 
-    out := DocumentLookupResult{
-      Definite:    authz.FromIDs[Document](result.Definite),
-      Conditional: make([]DocumentConditionalLookupEntry, 0, len(result.Conditional)),
-    }
-    for _, c := range result.Conditional {
-      out.Conditional = append(out.Conditional, DocumentConditionalLookupEntry{
-        ID:          Document(c.ID),
-        MissingKeys: c.MissingKeys,
-      })
-    }
-    return out, nil
-  }
-  
-  return DocumentLookupResult{}, nil
+		out := DocumentLookupResult{
+			Definite:    authz.FromIDs[Document](result.Definite),
+			Conditional: make([]DocumentConditionalLookupEntry, 0, len(result.Conditional)),
+		}
+		for _, c := range result.Conditional {
+			out.Conditional = append(out.Conditional, DocumentConditionalLookupEntry{
+				ID:          Document(c.ID),
+				MissingKeys: c.MissingKeys,
+			})
+		}
+		return out, nil
+	}
+
+	return DocumentLookupResult{}, nil
 }
+
 const DocumentInheritedCollab PermissionDocument = "inherited_collab"
 
 type CheckDocumentInheritedCollabInputs struct {
-  User []User
+	User []User
 }
 
 func (document Document) CheckInheritedCollab(ctx context.Context, input CheckDocumentInheritedCollabInputs) (bool, error) {
-  if len(input.User) == 0 && true {
-    return false, authz.ErrNoInput
-  }
+	if len(input.User) == 0 && true {
+		return false, authz.ErrNoInput
+	}
 
-  if len(input.User) > 0 {
-    err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
-      Type: TypeDocument,
-      ID: authz.ID(document),
-    }, authz.Permission(DocumentInheritedCollab), TypeUser, authz.IDs(input.User))
-    if err != nil {
-      return false, err
-    }
-  }
-  
-  return true, nil
+	if len(input.User) > 0 {
+		err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
+			Type: TypeDocument,
+			ID:   authz.ID(document),
+		}, authz.Permission(DocumentInheritedCollab), TypeUser, authz.IDs(input.User))
+		if err != nil {
+			return false, err
+		}
+	}
+
+	return true, nil
 }
 
 func LookupInheritedCollabDocumentResources(ctx context.Context, input CheckDocumentInheritedCollabInputs) (DocumentLookupResult, error) {
 
-  if len(input.User) > 0 {
-    result, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeDocument, authz.Permission(DocumentInheritedCollab),
-      TypeUser, authz.IDs(input.User),
-    )
-    if err != nil {
-      return DocumentLookupResult{}, err
-    }
+	if len(input.User) > 0 {
+		result, err := authz.GetEngine(ctx).LookupResources(ctx,
+			TypeDocument, authz.Permission(DocumentInheritedCollab),
+			TypeUser, authz.IDs(input.User),
+		)
+		if err != nil {
+			return DocumentLookupResult{}, err
+		}
 
-    out := DocumentLookupResult{
-      Definite:    authz.FromIDs[Document](result.Definite),
-      Conditional: make([]DocumentConditionalLookupEntry, 0, len(result.Conditional)),
-    }
-    for _, c := range result.Conditional {
-      out.Conditional = append(out.Conditional, DocumentConditionalLookupEntry{
-        ID:          Document(c.ID),
-        MissingKeys: c.MissingKeys,
-      })
-    }
-    return out, nil
-  }
-  
-  return DocumentLookupResult{}, nil
+		out := DocumentLookupResult{
+			Definite:    authz.FromIDs[Document](result.Definite),
+			Conditional: make([]DocumentConditionalLookupEntry, 0, len(result.Conditional)),
+		}
+		for _, c := range result.Conditional {
+			out.Conditional = append(out.Conditional, DocumentConditionalLookupEntry{
+				ID:          Document(c.ID),
+				MissingKeys: c.MissingKeys,
+			})
+		}
+		return out, nil
+	}
+
+	return DocumentLookupResult{}, nil
 }
 
 func (document Document) LookupViewUserSubjects(ctx context.Context) (UserLookupResult, error) {
 
-  result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
-    authz.Resource{
-      Type: TypeDocument,
-      ID: authz.ID(document),
-    },
-    authz.Permission(DocumentView), TypeUser,
-  )
-  if err != nil {
-    return UserLookupResult{}, err
-  }
+	result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+		authz.Resource{
+			Type: TypeDocument,
+			ID:   authz.ID(document),
+		},
+		authz.Permission(DocumentView), TypeUser,
+	)
+	if err != nil {
+		return UserLookupResult{}, err
+	}
 
-  out := UserLookupResult{
-    Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
-    Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
-  }
-  for _, c := range result.Conditional {
-    out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
-      ID:          User(c.ID),
-      MissingKeys: c.MissingKeys,
-    })
-  }
-  return out, nil
+	out := UserLookupResult{
+		Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
+		Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
+	}
+	for _, c := range result.Conditional {
+		out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
+			ID:          User(c.ID),
+			MissingKeys: c.MissingKeys,
+		})
+	}
+	return out, nil
 }
 
 func (document Document) LookupViewUserWildcardSubjects(ctx context.Context) (bool, error) {
-  return authz.GetEngine(ctx).HasPublicSubject(ctx,
-    authz.Resource{
-      Type: TypeDocument,
-      ID: authz.ID(document),
-    },
-    authz.Permission(DocumentView), TypeUser,
-  )
+	return authz.GetEngine(ctx).HasPublicSubject(ctx,
+		authz.Resource{
+			Type: TypeDocument,
+			ID:   authz.ID(document),
+		},
+		authz.Permission(DocumentView), TypeUser,
+	)
 }
 func (document Document) LookupViewGroupSubjects(ctx context.Context) (GroupLookupResult, error) {
 
-  result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
-    authz.Resource{
-      Type: TypeDocument,
-      ID: authz.ID(document),
-    },
-    authz.Permission(DocumentView), TypeGroup,
-  )
-  if err != nil {
-    return GroupLookupResult{}, err
-  }
+	result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+		authz.Resource{
+			Type: TypeDocument,
+			ID:   authz.ID(document),
+		},
+		authz.Permission(DocumentView), TypeGroup,
+	)
+	if err != nil {
+		return GroupLookupResult{}, err
+	}
 
-  out := GroupLookupResult{
-    Definite:    authz.FromIDsExcludingWildcard[Group](result.Definite),
-    Conditional: make([]GroupConditionalLookupEntry, 0, len(result.Conditional)),
-  }
-  for _, c := range result.Conditional {
-    out.Conditional = append(out.Conditional, GroupConditionalLookupEntry{
-      ID:          Group(c.ID),
-      MissingKeys: c.MissingKeys,
-    })
-  }
-  return out, nil
+	out := GroupLookupResult{
+		Definite:    authz.FromIDsExcludingWildcard[Group](result.Definite),
+		Conditional: make([]GroupConditionalLookupEntry, 0, len(result.Conditional)),
+	}
+	for _, c := range result.Conditional {
+		out.Conditional = append(out.Conditional, GroupConditionalLookupEntry{
+			ID:          Group(c.ID),
+			MissingKeys: c.MissingKeys,
+		})
+	}
+	return out, nil
 }
 
 func (document Document) LookupViewGroupWildcardSubjects(ctx context.Context) (bool, error) {
-  return authz.GetEngine(ctx).HasPublicSubject(ctx,
-    authz.Resource{
-      Type: TypeDocument,
-      ID: authz.ID(document),
-    },
-    authz.Permission(DocumentView), TypeGroup,
-  )
+	return authz.GetEngine(ctx).HasPublicSubject(ctx,
+		authz.Resource{
+			Type: TypeDocument,
+			ID:   authz.ID(document),
+		},
+		authz.Permission(DocumentView), TypeGroup,
+	)
 }
 func (document Document) LookupViewRoleSubjects(ctx context.Context) (RoleLookupResult, error) {
 
-  result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
-    authz.Resource{
-      Type: TypeDocument,
-      ID: authz.ID(document),
-    },
-    authz.Permission(DocumentView), TypeRole,
-  )
-  if err != nil {
-    return RoleLookupResult{}, err
-  }
+	result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+		authz.Resource{
+			Type: TypeDocument,
+			ID:   authz.ID(document),
+		},
+		authz.Permission(DocumentView), TypeRole,
+	)
+	if err != nil {
+		return RoleLookupResult{}, err
+	}
 
-  out := RoleLookupResult{
-    Definite:    authz.FromIDsExcludingWildcard[Role](result.Definite),
-    Conditional: make([]RoleConditionalLookupEntry, 0, len(result.Conditional)),
-  }
-  for _, c := range result.Conditional {
-    out.Conditional = append(out.Conditional, RoleConditionalLookupEntry{
-      ID:          Role(c.ID),
-      MissingKeys: c.MissingKeys,
-    })
-  }
-  return out, nil
+	out := RoleLookupResult{
+		Definite:    authz.FromIDsExcludingWildcard[Role](result.Definite),
+		Conditional: make([]RoleConditionalLookupEntry, 0, len(result.Conditional)),
+	}
+	for _, c := range result.Conditional {
+		out.Conditional = append(out.Conditional, RoleConditionalLookupEntry{
+			ID:          Role(c.ID),
+			MissingKeys: c.MissingKeys,
+		})
+	}
+	return out, nil
 }
 
 func (document Document) LookupViewRoleWildcardSubjects(ctx context.Context) (bool, error) {
-  return authz.GetEngine(ctx).HasPublicSubject(ctx,
-    authz.Resource{
-      Type: TypeDocument,
-      ID: authz.ID(document),
-    },
-    authz.Permission(DocumentView), TypeRole,
-  )
+	return authz.GetEngine(ctx).HasPublicSubject(ctx,
+		authz.Resource{
+			Type: TypeDocument,
+			ID:   authz.ID(document),
+		},
+		authz.Permission(DocumentView), TypeRole,
+	)
 }
 
 func (document Document) LookupEditUserSubjects(ctx context.Context) (UserLookupResult, error) {
 
-  result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
-    authz.Resource{
-      Type: TypeDocument,
-      ID: authz.ID(document),
-    },
-    authz.Permission(DocumentEdit), TypeUser,
-  )
-  if err != nil {
-    return UserLookupResult{}, err
-  }
+	result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+		authz.Resource{
+			Type: TypeDocument,
+			ID:   authz.ID(document),
+		},
+		authz.Permission(DocumentEdit), TypeUser,
+	)
+	if err != nil {
+		return UserLookupResult{}, err
+	}
 
-  out := UserLookupResult{
-    Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
-    Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
-  }
-  for _, c := range result.Conditional {
-    out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
-      ID:          User(c.ID),
-      MissingKeys: c.MissingKeys,
-    })
-  }
-  return out, nil
+	out := UserLookupResult{
+		Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
+		Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
+	}
+	for _, c := range result.Conditional {
+		out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
+			ID:          User(c.ID),
+			MissingKeys: c.MissingKeys,
+		})
+	}
+	return out, nil
 }
 
 func (document Document) LookupEditUserWildcardSubjects(ctx context.Context) (bool, error) {
-  return authz.GetEngine(ctx).HasPublicSubject(ctx,
-    authz.Resource{
-      Type: TypeDocument,
-      ID: authz.ID(document),
-    },
-    authz.Permission(DocumentEdit), TypeUser,
-  )
+	return authz.GetEngine(ctx).HasPublicSubject(ctx,
+		authz.Resource{
+			Type: TypeDocument,
+			ID:   authz.ID(document),
+		},
+		authz.Permission(DocumentEdit), TypeUser,
+	)
 }
 func (document Document) LookupEditGroupSubjects(ctx context.Context) (GroupLookupResult, error) {
 
-  result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
-    authz.Resource{
-      Type: TypeDocument,
-      ID: authz.ID(document),
-    },
-    authz.Permission(DocumentEdit), TypeGroup,
-  )
-  if err != nil {
-    return GroupLookupResult{}, err
-  }
+	result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+		authz.Resource{
+			Type: TypeDocument,
+			ID:   authz.ID(document),
+		},
+		authz.Permission(DocumentEdit), TypeGroup,
+	)
+	if err != nil {
+		return GroupLookupResult{}, err
+	}
 
-  out := GroupLookupResult{
-    Definite:    authz.FromIDsExcludingWildcard[Group](result.Definite),
-    Conditional: make([]GroupConditionalLookupEntry, 0, len(result.Conditional)),
-  }
-  for _, c := range result.Conditional {
-    out.Conditional = append(out.Conditional, GroupConditionalLookupEntry{
-      ID:          Group(c.ID),
-      MissingKeys: c.MissingKeys,
-    })
-  }
-  return out, nil
+	out := GroupLookupResult{
+		Definite:    authz.FromIDsExcludingWildcard[Group](result.Definite),
+		Conditional: make([]GroupConditionalLookupEntry, 0, len(result.Conditional)),
+	}
+	for _, c := range result.Conditional {
+		out.Conditional = append(out.Conditional, GroupConditionalLookupEntry{
+			ID:          Group(c.ID),
+			MissingKeys: c.MissingKeys,
+		})
+	}
+	return out, nil
 }
 
 func (document Document) LookupEditGroupWildcardSubjects(ctx context.Context) (bool, error) {
-  return authz.GetEngine(ctx).HasPublicSubject(ctx,
-    authz.Resource{
-      Type: TypeDocument,
-      ID: authz.ID(document),
-    },
-    authz.Permission(DocumentEdit), TypeGroup,
-  )
+	return authz.GetEngine(ctx).HasPublicSubject(ctx,
+		authz.Resource{
+			Type: TypeDocument,
+			ID:   authz.ID(document),
+		},
+		authz.Permission(DocumentEdit), TypeGroup,
+	)
 }
 func (document Document) LookupEditRoleSubjects(ctx context.Context) (RoleLookupResult, error) {
 
-  result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
-    authz.Resource{
-      Type: TypeDocument,
-      ID: authz.ID(document),
-    },
-    authz.Permission(DocumentEdit), TypeRole,
-  )
-  if err != nil {
-    return RoleLookupResult{}, err
-  }
+	result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+		authz.Resource{
+			Type: TypeDocument,
+			ID:   authz.ID(document),
+		},
+		authz.Permission(DocumentEdit), TypeRole,
+	)
+	if err != nil {
+		return RoleLookupResult{}, err
+	}
 
-  out := RoleLookupResult{
-    Definite:    authz.FromIDsExcludingWildcard[Role](result.Definite),
-    Conditional: make([]RoleConditionalLookupEntry, 0, len(result.Conditional)),
-  }
-  for _, c := range result.Conditional {
-    out.Conditional = append(out.Conditional, RoleConditionalLookupEntry{
-      ID:          Role(c.ID),
-      MissingKeys: c.MissingKeys,
-    })
-  }
-  return out, nil
+	out := RoleLookupResult{
+		Definite:    authz.FromIDsExcludingWildcard[Role](result.Definite),
+		Conditional: make([]RoleConditionalLookupEntry, 0, len(result.Conditional)),
+	}
+	for _, c := range result.Conditional {
+		out.Conditional = append(out.Conditional, RoleConditionalLookupEntry{
+			ID:          Role(c.ID),
+			MissingKeys: c.MissingKeys,
+		})
+	}
+	return out, nil
 }
 
 func (document Document) LookupEditRoleWildcardSubjects(ctx context.Context) (bool, error) {
-  return authz.GetEngine(ctx).HasPublicSubject(ctx,
-    authz.Resource{
-      Type: TypeDocument,
-      ID: authz.ID(document),
-    },
-    authz.Permission(DocumentEdit), TypeRole,
-  )
+	return authz.GetEngine(ctx).HasPublicSubject(ctx,
+		authz.Resource{
+			Type: TypeDocument,
+			ID:   authz.ID(document),
+		},
+		authz.Permission(DocumentEdit), TypeRole,
+	)
 }
 
 func (document Document) LookupAdminUserSubjects(ctx context.Context) (UserLookupResult, error) {
 
-  result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
-    authz.Resource{
-      Type: TypeDocument,
-      ID: authz.ID(document),
-    },
-    authz.Permission(DocumentAdmin), TypeUser,
-  )
-  if err != nil {
-    return UserLookupResult{}, err
-  }
+	result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+		authz.Resource{
+			Type: TypeDocument,
+			ID:   authz.ID(document),
+		},
+		authz.Permission(DocumentAdmin), TypeUser,
+	)
+	if err != nil {
+		return UserLookupResult{}, err
+	}
 
-  out := UserLookupResult{
-    Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
-    Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
-  }
-  for _, c := range result.Conditional {
-    out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
-      ID:          User(c.ID),
-      MissingKeys: c.MissingKeys,
-    })
-  }
-  return out, nil
+	out := UserLookupResult{
+		Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
+		Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
+	}
+	for _, c := range result.Conditional {
+		out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
+			ID:          User(c.ID),
+			MissingKeys: c.MissingKeys,
+		})
+	}
+	return out, nil
 }
 
 func (document Document) LookupAdminUserWildcardSubjects(ctx context.Context) (bool, error) {
-  return authz.GetEngine(ctx).HasPublicSubject(ctx,
-    authz.Resource{
-      Type: TypeDocument,
-      ID: authz.ID(document),
-    },
-    authz.Permission(DocumentAdmin), TypeUser,
-  )
+	return authz.GetEngine(ctx).HasPublicSubject(ctx,
+		authz.Resource{
+			Type: TypeDocument,
+			ID:   authz.ID(document),
+		},
+		authz.Permission(DocumentAdmin), TypeUser,
+	)
 }
 func (document Document) LookupAdminGroupSubjects(ctx context.Context) (GroupLookupResult, error) {
 
-  result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
-    authz.Resource{
-      Type: TypeDocument,
-      ID: authz.ID(document),
-    },
-    authz.Permission(DocumentAdmin), TypeGroup,
-  )
-  if err != nil {
-    return GroupLookupResult{}, err
-  }
+	result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+		authz.Resource{
+			Type: TypeDocument,
+			ID:   authz.ID(document),
+		},
+		authz.Permission(DocumentAdmin), TypeGroup,
+	)
+	if err != nil {
+		return GroupLookupResult{}, err
+	}
 
-  out := GroupLookupResult{
-    Definite:    authz.FromIDsExcludingWildcard[Group](result.Definite),
-    Conditional: make([]GroupConditionalLookupEntry, 0, len(result.Conditional)),
-  }
-  for _, c := range result.Conditional {
-    out.Conditional = append(out.Conditional, GroupConditionalLookupEntry{
-      ID:          Group(c.ID),
-      MissingKeys: c.MissingKeys,
-    })
-  }
-  return out, nil
+	out := GroupLookupResult{
+		Definite:    authz.FromIDsExcludingWildcard[Group](result.Definite),
+		Conditional: make([]GroupConditionalLookupEntry, 0, len(result.Conditional)),
+	}
+	for _, c := range result.Conditional {
+		out.Conditional = append(out.Conditional, GroupConditionalLookupEntry{
+			ID:          Group(c.ID),
+			MissingKeys: c.MissingKeys,
+		})
+	}
+	return out, nil
 }
 
 func (document Document) LookupAdminGroupWildcardSubjects(ctx context.Context) (bool, error) {
-  return authz.GetEngine(ctx).HasPublicSubject(ctx,
-    authz.Resource{
-      Type: TypeDocument,
-      ID: authz.ID(document),
-    },
-    authz.Permission(DocumentAdmin), TypeGroup,
-  )
+	return authz.GetEngine(ctx).HasPublicSubject(ctx,
+		authz.Resource{
+			Type: TypeDocument,
+			ID:   authz.ID(document),
+		},
+		authz.Permission(DocumentAdmin), TypeGroup,
+	)
 }
 func (document Document) LookupAdminRoleSubjects(ctx context.Context) (RoleLookupResult, error) {
 
-  result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
-    authz.Resource{
-      Type: TypeDocument,
-      ID: authz.ID(document),
-    },
-    authz.Permission(DocumentAdmin), TypeRole,
-  )
-  if err != nil {
-    return RoleLookupResult{}, err
-  }
+	result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+		authz.Resource{
+			Type: TypeDocument,
+			ID:   authz.ID(document),
+		},
+		authz.Permission(DocumentAdmin), TypeRole,
+	)
+	if err != nil {
+		return RoleLookupResult{}, err
+	}
 
-  out := RoleLookupResult{
-    Definite:    authz.FromIDsExcludingWildcard[Role](result.Definite),
-    Conditional: make([]RoleConditionalLookupEntry, 0, len(result.Conditional)),
-  }
-  for _, c := range result.Conditional {
-    out.Conditional = append(out.Conditional, RoleConditionalLookupEntry{
-      ID:          Role(c.ID),
-      MissingKeys: c.MissingKeys,
-    })
-  }
-  return out, nil
+	out := RoleLookupResult{
+		Definite:    authz.FromIDsExcludingWildcard[Role](result.Definite),
+		Conditional: make([]RoleConditionalLookupEntry, 0, len(result.Conditional)),
+	}
+	for _, c := range result.Conditional {
+		out.Conditional = append(out.Conditional, RoleConditionalLookupEntry{
+			ID:          Role(c.ID),
+			MissingKeys: c.MissingKeys,
+		})
+	}
+	return out, nil
 }
 
 func (document Document) LookupAdminRoleWildcardSubjects(ctx context.Context) (bool, error) {
-  return authz.GetEngine(ctx).HasPublicSubject(ctx,
-    authz.Resource{
-      Type: TypeDocument,
-      ID: authz.ID(document),
-    },
-    authz.Permission(DocumentAdmin), TypeRole,
-  )
+	return authz.GetEngine(ctx).HasPublicSubject(ctx,
+		authz.Resource{
+			Type: TypeDocument,
+			ID:   authz.ID(document),
+		},
+		authz.Permission(DocumentAdmin), TypeRole,
+	)
 }
 
 func (document Document) LookupInheritedCollabUserSubjects(ctx context.Context) (UserLookupResult, error) {
 
-  result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
-    authz.Resource{
-      Type: TypeDocument,
-      ID: authz.ID(document),
-    },
-    authz.Permission(DocumentInheritedCollab), TypeUser,
-  )
-  if err != nil {
-    return UserLookupResult{}, err
-  }
+	result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+		authz.Resource{
+			Type: TypeDocument,
+			ID:   authz.ID(document),
+		},
+		authz.Permission(DocumentInheritedCollab), TypeUser,
+	)
+	if err != nil {
+		return UserLookupResult{}, err
+	}
 
-  out := UserLookupResult{
-    Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
-    Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
-  }
-  for _, c := range result.Conditional {
-    out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
-      ID:          User(c.ID),
-      MissingKeys: c.MissingKeys,
-    })
-  }
-  return out, nil
+	out := UserLookupResult{
+		Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
+		Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
+	}
+	for _, c := range result.Conditional {
+		out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
+			ID:          User(c.ID),
+			MissingKeys: c.MissingKeys,
+		})
+	}
+	return out, nil
 }
 
 func (document Document) LookupInheritedCollabUserWildcardSubjects(ctx context.Context) (bool, error) {
-  return authz.GetEngine(ctx).HasPublicSubject(ctx,
-    authz.Resource{
-      Type: TypeDocument,
-      ID: authz.ID(document),
-    },
-    authz.Permission(DocumentInheritedCollab), TypeUser,
-  )
+	return authz.GetEngine(ctx).HasPublicSubject(ctx,
+		authz.Resource{
+			Type: TypeDocument,
+			ID:   authz.ID(document),
+		},
+		authz.Permission(DocumentInheritedCollab), TypeUser,
+	)
 }

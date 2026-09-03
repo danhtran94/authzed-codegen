@@ -3,45 +3,44 @@
 package extsvc
 
 import (
-  "github.com/danhtran94/authzed-codegen/pkg/authz"
+	"github.com/danhtran94/authzed-codegen/pkg/authz"
 
-  "context"
-  "errors"
-  "fmt"
+	"context"
+	"errors"
+	"fmt"
 )
 
 const TypeGroup authz.Type = "extsvc/group"
+
 type RelationGroup authz.Relation
 type PermissionGroup authz.Permission
-
 
 type Group authz.ID
 
 type GroupLookupResult struct {
-  Definite    []Group
-  Conditional []GroupConditionalLookupEntry
+	Definite    []Group
+	Conditional []GroupConditionalLookupEntry
 }
 type GroupConditionalLookupEntry struct {
-  ID          Group
-  MissingKeys []string
+	ID          Group
+	MissingKeys []string
 }
 
 func GroupStringer(id authz.StringConvertable) Group {
-  return Group(id.String())
+	return Group(id.String())
 }
 
 func GroupStringers(ids ...authz.StringConvertable) []Group {
-  result := []Group{}
-  for _, id := range ids {
-    result = append(result, Group(id.String()))
-  }
-  return result
+	result := []Group{}
+	for _, id := range ids {
+		result = append(result, Group(id.String()))
+	}
+	return result
 }
 
 func (group Group) ToList() []Group {
-  return []Group{ group }
+	return []Group{group}
 }
-
 
 // PurgeRelationsAsSubject deletes every relationship where this Group is the
 // subject, across the resource types whose schema allows Group as a subject.
@@ -50,22 +49,21 @@ func (group Group) ToList() []Group {
 // (idempotent). Use it when this Group is deleted from your store,
 // alongside PurgeRelations if Group also has relations.
 func (group Group) PurgeRelationsAsSubject(ctx context.Context) error {
-  eng := authz.GetEngine(ctx)
-  var errs []error
-  if err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
-    ResourceType: authz.Type("extsvc/document"),
-    SubjectType: TypeGroup,
-    SubjectID: authz.ID(group),
-  }); err != nil {
-    errs = append(errs, fmt.Errorf("purge Group as subject of extsvc/document: %w", err))
-  }
-  if err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
-    ResourceType: authz.Type("extsvc/folder"),
-    SubjectType: TypeGroup,
-    SubjectID: authz.ID(group),
-  }); err != nil {
-    errs = append(errs, fmt.Errorf("purge Group as subject of extsvc/folder: %w", err))
-  }
-  return errors.Join(errs...)
+	eng := authz.GetEngine(ctx)
+	var errs []error
+	if err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
+		ResourceType: authz.Type("extsvc/document"),
+		SubjectType:  TypeGroup,
+		SubjectID:    authz.ID(group),
+	}); err != nil {
+		errs = append(errs, fmt.Errorf("purge Group as subject of extsvc/document: %w", err))
+	}
+	if err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
+		ResourceType: authz.Type("extsvc/folder"),
+		SubjectType:  TypeGroup,
+		SubjectID:    authz.ID(group),
+	}); err != nil {
+		errs = append(errs, fmt.Errorf("purge Group as subject of extsvc/folder: %w", err))
+	}
+	return errors.Join(errs...)
 }
-

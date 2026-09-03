@@ -3,107 +3,111 @@
 package menusvc
 
 import (
-  "github.com/danhtran94/authzed-codegen/pkg/authz"
+	"github.com/danhtran94/authzed-codegen/pkg/authz"
 
-  "context"
-  "time"
+	"context"
+	"time"
 )
 
 const TypeOrder authz.Type = "menusvc/order"
+
 type RelationOrder authz.Relation
 type PermissionOrder authz.Permission
 
 const OrderCreator RelationOrder = "creator"
+
 type OrderCreatorObjects struct {
-  User []User
-  Customer []Customer
+	User     []User
+	Customer []Customer
 }
+
 const OrderBelongsCompany RelationOrder = "belongs_company"
+
 type OrderBelongsCompanyObjects struct {
-  Company []Company
+	Company []Company
 }
 
 type Order authz.ID
 
 type OrderLookupResult struct {
-  Definite    []Order
-  Conditional []OrderConditionalLookupEntry
+	Definite    []Order
+	Conditional []OrderConditionalLookupEntry
 }
 type OrderConditionalLookupEntry struct {
-  ID          Order
-  MissingKeys []string
+	ID          Order
+	MissingKeys []string
 }
 
 func OrderStringer(id authz.StringConvertable) Order {
-  return Order(id.String())
+	return Order(id.String())
 }
 
 func OrderStringers(ids ...authz.StringConvertable) []Order {
-  result := []Order{}
-  for _, id := range ids {
-    result = append(result, Order(id.String()))
-  }
-  return result
+	result := []Order{}
+	for _, id := range ids {
+		result = append(result, Order(id.String()))
+	}
+	return result
 }
 
 func (order Order) ToList() []Order {
-  return []Order{ order }
+	return []Order{order}
 }
 
 func (order Order) CreateCreatorRelations(ctx context.Context, objects OrderCreatorObjects) error {
-  if len(objects.User) > 0 {
-    err := authz.GetEngine(ctx).CreateRelations(ctx, authz.Resource{
-      Type: TypeOrder,
-      ID: authz.ID(order),
-    }, authz.Relation(OrderCreator), TypeUser, authz.IDs(objects.User))
-    if err != nil {
-      return err
-    }
-  }
-  if len(objects.Customer) > 0 {
-    err := authz.GetEngine(ctx).CreateRelations(ctx, authz.Resource{
-      Type: TypeOrder,
-      ID: authz.ID(order),
-    }, authz.Relation(OrderCreator), TypeCustomer, authz.IDs(objects.Customer))
-    if err != nil {
-      return err
-    }
-  }
-  return nil
+	if len(objects.User) > 0 {
+		err := authz.GetEngine(ctx).CreateRelations(ctx, authz.Resource{
+			Type: TypeOrder,
+			ID:   authz.ID(order),
+		}, authz.Relation(OrderCreator), TypeUser, authz.IDs(objects.User))
+		if err != nil {
+			return err
+		}
+	}
+	if len(objects.Customer) > 0 {
+		err := authz.GetEngine(ctx).CreateRelations(ctx, authz.Resource{
+			Type: TypeOrder,
+			ID:   authz.ID(order),
+		}, authz.Relation(OrderCreator), TypeCustomer, authz.IDs(objects.Customer))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 func (order Order) CreateBelongsCompanyRelations(ctx context.Context, objects OrderBelongsCompanyObjects) error {
-  if len(objects.Company) > 0 {
-    err := authz.GetEngine(ctx).CreateRelations(ctx, authz.Resource{
-      Type: TypeOrder,
-      ID: authz.ID(order),
-    }, authz.Relation(OrderBelongsCompany), TypeCompany, authz.IDs(objects.Company))
-    if err != nil {
-      return err
-    }
-  }
-  return nil
+	if len(objects.Company) > 0 {
+		err := authz.GetEngine(ctx).CreateRelations(ctx, authz.Resource{
+			Type: TypeOrder,
+			ID:   authz.ID(order),
+		}, authz.Relation(OrderBelongsCompany), TypeCompany, authz.IDs(objects.Company))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (order Order) DeleteCreatorRelations(ctx context.Context, objects OrderCreatorObjects) error {
-  if len(objects.User) > 0 {
-    err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
-      Type: TypeOrder,
-      ID: authz.ID(order),
-    }, authz.Relation(OrderCreator), TypeUser, authz.IDs(objects.User))
-    if err != nil {
-      return err
-    }
-  }
-  if len(objects.Customer) > 0 {
-    err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
-      Type: TypeOrder,
-      ID: authz.ID(order),
-    }, authz.Relation(OrderCreator), TypeCustomer, authz.IDs(objects.Customer))
-    if err != nil {
-      return err
-    }
-  }
-  return nil
+	if len(objects.User) > 0 {
+		err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
+			Type: TypeOrder,
+			ID:   authz.ID(order),
+		}, authz.Relation(OrderCreator), TypeUser, authz.IDs(objects.User))
+		if err != nil {
+			return err
+		}
+	}
+	if len(objects.Customer) > 0 {
+		err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
+			Type: TypeOrder,
+			ID:   authz.ID(order),
+		}, authz.Relation(OrderCreator), TypeCustomer, authz.IDs(objects.Customer))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // PurgeCreatorRelations deletes every creator relationship on this
@@ -111,24 +115,24 @@ func (order Order) DeleteCreatorRelations(ctx context.Context, objects OrderCrea
 // DeleteCreatorRelations (which revokes the specific subjects you pass),
 // use this when creator as a whole no longer applies to this Order.
 func (order Order) PurgeCreatorRelations(ctx context.Context) error {
-  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
-    ResourceType: TypeOrder,
-    ResourceID: authz.ID(order),
-    Relation: authz.Relation(OrderCreator),
-  })
+	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+		ResourceType: TypeOrder,
+		ResourceID:   authz.ID(order),
+		Relation:     authz.Relation(OrderCreator),
+	})
 }
 
 func (order Order) DeleteBelongsCompanyRelations(ctx context.Context, objects OrderBelongsCompanyObjects) error {
-  if len(objects.Company) > 0 {
-    err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
-      Type: TypeOrder,
-      ID: authz.ID(order),
-    }, authz.Relation(OrderBelongsCompany), TypeCompany, authz.IDs(objects.Company))
-    if err != nil {
-      return err
-    }
-  }
-  return nil
+	if len(objects.Company) > 0 {
+		err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
+			Type: TypeOrder,
+			ID:   authz.ID(order),
+		}, authz.Relation(OrderBelongsCompany), TypeCompany, authz.IDs(objects.Company))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // PurgeBelongsCompanyRelations deletes every belongs_company relationship on this
@@ -136,11 +140,11 @@ func (order Order) DeleteBelongsCompanyRelations(ctx context.Context, objects Or
 // DeleteBelongsCompanyRelations (which revokes the specific subjects you pass),
 // use this when belongs_company as a whole no longer applies to this Order.
 func (order Order) PurgeBelongsCompanyRelations(ctx context.Context) error {
-  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
-    ResourceType: TypeOrder,
-    ResourceID: authz.ID(order),
-    Relation: authz.Relation(OrderBelongsCompany),
-  })
+	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+		ResourceType: TypeOrder,
+		ResourceID:   authz.ID(order),
+		Relation:     authz.Relation(OrderBelongsCompany),
+	})
 }
 
 // PurgeRelations deletes every relationship on this Order — all relations,
@@ -150,263 +154,266 @@ func (order Order) PurgeBelongsCompanyRelations(ctx context.Context) error {
 // resource — for that, see PurgeRelationsAsSubject (emitted when Order is a
 // subject anywhere in the schema).
 func (order Order) PurgeRelations(ctx context.Context) error {
-  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
-    ResourceType: TypeOrder,
-    ResourceID: authz.ID(order),
-  })
+	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+		ResourceType: TypeOrder,
+		ResourceID:   authz.ID(order),
+	})
 }
 
 type OrderCreatorUserRelation struct {
-  ID            User
-  SubRelation   string
-  CaveatName    string
-  CaveatContext map[string]any
-  ExpiresAt     *time.Time
+	ID            User
+	SubRelation   string
+	CaveatName    string
+	CaveatContext map[string]any
+	ExpiresAt     *time.Time
 }
+
 func (r OrderCreatorUserRelation) RelationID() User { return r.ID }
 
 func (order Order) ReadCreatorUserRelations(ctx context.Context) ([]OrderCreatorUserRelation, error) {
-  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
-    Type: TypeOrder,
-    ID: authz.ID(order),
-  }, authz.Relation(OrderCreator), TypeUser)
-  if err != nil {
-    return nil, err
-  }
+	tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+		Type: TypeOrder,
+		ID:   authz.ID(order),
+	}, authz.Relation(OrderCreator), TypeUser)
+	if err != nil {
+		return nil, err
+	}
 
-  rels := make([]OrderCreatorUserRelation, 0, len(tuples))
-  for _, t := range tuples {
-    if t.ID == authz.WildcardID {
-      continue
-    }
-    rels = append(rels, OrderCreatorUserRelation{
-      ID:            User(t.ID),
-      SubRelation:   t.SubRelation,
-      CaveatName:    t.CaveatName,
-      CaveatContext: t.CaveatContext,
-      ExpiresAt:     t.ExpiresAt,
-    })
-  }
-  return rels, nil
+	rels := make([]OrderCreatorUserRelation, 0, len(tuples))
+	for _, t := range tuples {
+		if t.ID == authz.WildcardID {
+			continue
+		}
+		rels = append(rels, OrderCreatorUserRelation{
+			ID:            User(t.ID),
+			SubRelation:   t.SubRelation,
+			CaveatName:    t.CaveatName,
+			CaveatContext: t.CaveatContext,
+			ExpiresAt:     t.ExpiresAt,
+		})
+	}
+	return rels, nil
 }
 
 type OrderCreatorCustomerRelation struct {
-  ID            Customer
-  SubRelation   string
-  CaveatName    string
-  CaveatContext map[string]any
-  ExpiresAt     *time.Time
+	ID            Customer
+	SubRelation   string
+	CaveatName    string
+	CaveatContext map[string]any
+	ExpiresAt     *time.Time
 }
+
 func (r OrderCreatorCustomerRelation) RelationID() Customer { return r.ID }
 
 func (order Order) ReadCreatorCustomerRelations(ctx context.Context) ([]OrderCreatorCustomerRelation, error) {
-  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
-    Type: TypeOrder,
-    ID: authz.ID(order),
-  }, authz.Relation(OrderCreator), TypeCustomer)
-  if err != nil {
-    return nil, err
-  }
+	tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+		Type: TypeOrder,
+		ID:   authz.ID(order),
+	}, authz.Relation(OrderCreator), TypeCustomer)
+	if err != nil {
+		return nil, err
+	}
 
-  rels := make([]OrderCreatorCustomerRelation, 0, len(tuples))
-  for _, t := range tuples {
-    if t.ID == authz.WildcardID {
-      continue
-    }
-    rels = append(rels, OrderCreatorCustomerRelation{
-      ID:            Customer(t.ID),
-      SubRelation:   t.SubRelation,
-      CaveatName:    t.CaveatName,
-      CaveatContext: t.CaveatContext,
-      ExpiresAt:     t.ExpiresAt,
-    })
-  }
-  return rels, nil
+	rels := make([]OrderCreatorCustomerRelation, 0, len(tuples))
+	for _, t := range tuples {
+		if t.ID == authz.WildcardID {
+			continue
+		}
+		rels = append(rels, OrderCreatorCustomerRelation{
+			ID:            Customer(t.ID),
+			SubRelation:   t.SubRelation,
+			CaveatName:    t.CaveatName,
+			CaveatContext: t.CaveatContext,
+			ExpiresAt:     t.ExpiresAt,
+		})
+	}
+	return rels, nil
 }
 
 type OrderBelongsCompanyCompanyRelation struct {
-  ID            Company
-  SubRelation   string
-  CaveatName    string
-  CaveatContext map[string]any
-  ExpiresAt     *time.Time
+	ID            Company
+	SubRelation   string
+	CaveatName    string
+	CaveatContext map[string]any
+	ExpiresAt     *time.Time
 }
+
 func (r OrderBelongsCompanyCompanyRelation) RelationID() Company { return r.ID }
 
 func (order Order) ReadBelongsCompanyCompanyRelations(ctx context.Context) ([]OrderBelongsCompanyCompanyRelation, error) {
-  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
-    Type: TypeOrder,
-    ID: authz.ID(order),
-  }, authz.Relation(OrderBelongsCompany), TypeCompany)
-  if err != nil {
-    return nil, err
-  }
+	tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+		Type: TypeOrder,
+		ID:   authz.ID(order),
+	}, authz.Relation(OrderBelongsCompany), TypeCompany)
+	if err != nil {
+		return nil, err
+	}
 
-  rels := make([]OrderBelongsCompanyCompanyRelation, 0, len(tuples))
-  for _, t := range tuples {
-    if t.ID == authz.WildcardID {
-      continue
-    }
-    rels = append(rels, OrderBelongsCompanyCompanyRelation{
-      ID:            Company(t.ID),
-      SubRelation:   t.SubRelation,
-      CaveatName:    t.CaveatName,
-      CaveatContext: t.CaveatContext,
-      ExpiresAt:     t.ExpiresAt,
-    })
-  }
-  return rels, nil
+	rels := make([]OrderBelongsCompanyCompanyRelation, 0, len(tuples))
+	for _, t := range tuples {
+		if t.ID == authz.WildcardID {
+			continue
+		}
+		rels = append(rels, OrderBelongsCompanyCompanyRelation{
+			ID:            Company(t.ID),
+			SubRelation:   t.SubRelation,
+			CaveatName:    t.CaveatName,
+			CaveatContext: t.CaveatContext,
+			ExpiresAt:     t.ExpiresAt,
+		})
+	}
+	return rels, nil
 }
 
 const OrderWrite PermissionOrder = "write"
 
 type CheckOrderWriteInputs struct {
-  User []User
-  Customer []Customer
+	User     []User
+	Customer []Customer
 }
 
 func (order Order) CheckWrite(ctx context.Context, input CheckOrderWriteInputs) (bool, error) {
-  if len(input.User) == 0 && len(input.Customer) == 0 && true {
-    return false, authz.ErrNoInput
-  }
+	if len(input.User) == 0 && len(input.Customer) == 0 && true {
+		return false, authz.ErrNoInput
+	}
 
-  if len(input.User) > 0 {
-    err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
-      Type: TypeOrder,
-      ID: authz.ID(order),
-    }, authz.Permission(OrderWrite), TypeUser, authz.IDs(input.User))
-    if err != nil {
-      return false, err
-    }
-  }
-  if len(input.Customer) > 0 {
-    err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
-      Type: TypeOrder,
-      ID: authz.ID(order),
-    }, authz.Permission(OrderWrite), TypeCustomer, authz.IDs(input.Customer))
-    if err != nil {
-      return false, err
-    }
-  }
-  
-  return true, nil
+	if len(input.User) > 0 {
+		err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
+			Type: TypeOrder,
+			ID:   authz.ID(order),
+		}, authz.Permission(OrderWrite), TypeUser, authz.IDs(input.User))
+		if err != nil {
+			return false, err
+		}
+	}
+	if len(input.Customer) > 0 {
+		err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
+			Type: TypeOrder,
+			ID:   authz.ID(order),
+		}, authz.Permission(OrderWrite), TypeCustomer, authz.IDs(input.Customer))
+		if err != nil {
+			return false, err
+		}
+	}
+
+	return true, nil
 }
 
 func LookupWriteOrderResources(ctx context.Context, input CheckOrderWriteInputs) (OrderLookupResult, error) {
 
-  if len(input.User) > 0 {
-    result, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeOrder, authz.Permission(OrderWrite),
-      TypeUser, authz.IDs(input.User),
-    )
-    if err != nil {
-      return OrderLookupResult{}, err
-    }
+	if len(input.User) > 0 {
+		result, err := authz.GetEngine(ctx).LookupResources(ctx,
+			TypeOrder, authz.Permission(OrderWrite),
+			TypeUser, authz.IDs(input.User),
+		)
+		if err != nil {
+			return OrderLookupResult{}, err
+		}
 
-    out := OrderLookupResult{
-      Definite:    authz.FromIDs[Order](result.Definite),
-      Conditional: make([]OrderConditionalLookupEntry, 0, len(result.Conditional)),
-    }
-    for _, c := range result.Conditional {
-      out.Conditional = append(out.Conditional, OrderConditionalLookupEntry{
-        ID:          Order(c.ID),
-        MissingKeys: c.MissingKeys,
-      })
-    }
-    return out, nil
-  }
-  if len(input.Customer) > 0 {
-    result, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeOrder, authz.Permission(OrderWrite),
-      TypeCustomer, authz.IDs(input.Customer),
-    )
-    if err != nil {
-      return OrderLookupResult{}, err
-    }
+		out := OrderLookupResult{
+			Definite:    authz.FromIDs[Order](result.Definite),
+			Conditional: make([]OrderConditionalLookupEntry, 0, len(result.Conditional)),
+		}
+		for _, c := range result.Conditional {
+			out.Conditional = append(out.Conditional, OrderConditionalLookupEntry{
+				ID:          Order(c.ID),
+				MissingKeys: c.MissingKeys,
+			})
+		}
+		return out, nil
+	}
+	if len(input.Customer) > 0 {
+		result, err := authz.GetEngine(ctx).LookupResources(ctx,
+			TypeOrder, authz.Permission(OrderWrite),
+			TypeCustomer, authz.IDs(input.Customer),
+		)
+		if err != nil {
+			return OrderLookupResult{}, err
+		}
 
-    out := OrderLookupResult{
-      Definite:    authz.FromIDs[Order](result.Definite),
-      Conditional: make([]OrderConditionalLookupEntry, 0, len(result.Conditional)),
-    }
-    for _, c := range result.Conditional {
-      out.Conditional = append(out.Conditional, OrderConditionalLookupEntry{
-        ID:          Order(c.ID),
-        MissingKeys: c.MissingKeys,
-      })
-    }
-    return out, nil
-  }
-  
-  return OrderLookupResult{}, nil
+		out := OrderLookupResult{
+			Definite:    authz.FromIDs[Order](result.Definite),
+			Conditional: make([]OrderConditionalLookupEntry, 0, len(result.Conditional)),
+		}
+		for _, c := range result.Conditional {
+			out.Conditional = append(out.Conditional, OrderConditionalLookupEntry{
+				ID:          Order(c.ID),
+				MissingKeys: c.MissingKeys,
+			})
+		}
+		return out, nil
+	}
+
+	return OrderLookupResult{}, nil
 }
 
 func (order Order) LookupWriteUserSubjects(ctx context.Context) (UserLookupResult, error) {
 
-  result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
-    authz.Resource{
-      Type: TypeOrder,
-      ID: authz.ID(order),
-    },
-    authz.Permission(OrderWrite), TypeUser,
-  )
-  if err != nil {
-    return UserLookupResult{}, err
-  }
+	result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+		authz.Resource{
+			Type: TypeOrder,
+			ID:   authz.ID(order),
+		},
+		authz.Permission(OrderWrite), TypeUser,
+	)
+	if err != nil {
+		return UserLookupResult{}, err
+	}
 
-  out := UserLookupResult{
-    Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
-    Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
-  }
-  for _, c := range result.Conditional {
-    out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
-      ID:          User(c.ID),
-      MissingKeys: c.MissingKeys,
-    })
-  }
-  return out, nil
+	out := UserLookupResult{
+		Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
+		Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
+	}
+	for _, c := range result.Conditional {
+		out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
+			ID:          User(c.ID),
+			MissingKeys: c.MissingKeys,
+		})
+	}
+	return out, nil
 }
 
 func (order Order) LookupWriteUserWildcardSubjects(ctx context.Context) (bool, error) {
-  return authz.GetEngine(ctx).HasPublicSubject(ctx,
-    authz.Resource{
-      Type: TypeOrder,
-      ID: authz.ID(order),
-    },
-    authz.Permission(OrderWrite), TypeUser,
-  )
+	return authz.GetEngine(ctx).HasPublicSubject(ctx,
+		authz.Resource{
+			Type: TypeOrder,
+			ID:   authz.ID(order),
+		},
+		authz.Permission(OrderWrite), TypeUser,
+	)
 }
 func (order Order) LookupWriteCustomerSubjects(ctx context.Context) (CustomerLookupResult, error) {
 
-  result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
-    authz.Resource{
-      Type: TypeOrder,
-      ID: authz.ID(order),
-    },
-    authz.Permission(OrderWrite), TypeCustomer,
-  )
-  if err != nil {
-    return CustomerLookupResult{}, err
-  }
+	result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+		authz.Resource{
+			Type: TypeOrder,
+			ID:   authz.ID(order),
+		},
+		authz.Permission(OrderWrite), TypeCustomer,
+	)
+	if err != nil {
+		return CustomerLookupResult{}, err
+	}
 
-  out := CustomerLookupResult{
-    Definite:    authz.FromIDsExcludingWildcard[Customer](result.Definite),
-    Conditional: make([]CustomerConditionalLookupEntry, 0, len(result.Conditional)),
-  }
-  for _, c := range result.Conditional {
-    out.Conditional = append(out.Conditional, CustomerConditionalLookupEntry{
-      ID:          Customer(c.ID),
-      MissingKeys: c.MissingKeys,
-    })
-  }
-  return out, nil
+	out := CustomerLookupResult{
+		Definite:    authz.FromIDsExcludingWildcard[Customer](result.Definite),
+		Conditional: make([]CustomerConditionalLookupEntry, 0, len(result.Conditional)),
+	}
+	for _, c := range result.Conditional {
+		out.Conditional = append(out.Conditional, CustomerConditionalLookupEntry{
+			ID:          Customer(c.ID),
+			MissingKeys: c.MissingKeys,
+		})
+	}
+	return out, nil
 }
 
 func (order Order) LookupWriteCustomerWildcardSubjects(ctx context.Context) (bool, error) {
-  return authz.GetEngine(ctx).HasPublicSubject(ctx,
-    authz.Resource{
-      Type: TypeOrder,
-      ID: authz.ID(order),
-    },
-    authz.Permission(OrderWrite), TypeCustomer,
-  )
+	return authz.GetEngine(ctx).HasPublicSubject(ctx,
+		authz.Resource{
+			Type: TypeOrder,
+			ID:   authz.ID(order),
+		},
+		authz.Permission(OrderWrite), TypeCustomer,
+	)
 }

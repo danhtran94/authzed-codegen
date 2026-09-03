@@ -3,314 +3,325 @@
 package menusvc
 
 import (
-  "github.com/danhtran94/authzed-codegen/pkg/authz"
+	"github.com/danhtran94/authzed-codegen/pkg/authz"
 
-  "context"
-  "time"
+	"context"
+	"time"
 )
 
 const TypeBooking authz.Type = "menusvc/booking"
+
 type RelationBooking authz.Relation
 type PermissionBooking authz.Permission
 
 const BookingOwner RelationBooking = "owner"
+
 type BookingOwnerObjects struct {
-  Company []Company
+	Company []Company
 }
+
 const BookingCreator RelationBooking = "creator"
+
 type BookingCreatorObjects struct {
-  User []User
-  Customer []Customer
+	User     []User
+	Customer []Customer
 }
+
 const BookingHoursKeeper RelationBooking = "hours_keeper"
+
 type BookingHoursKeeperObjects struct {
-  User []User
-  Caveats BookingHoursKeeperCaveats
+	User    []User
+	Caveats BookingHoursKeeperCaveats
 }
 type BookingHoursKeeperCaveats struct {
-  User *WithinHoursArgs
+	User *WithinHoursArgs
 }
+
 const BookingMultiTemporal RelationBooking = "multi_temporal"
+
 type BookingMultiTemporalObjects struct {
-  User []User
-  Customer []Customer
-  Caveats BookingMultiTemporalCaveats
+	User     []User
+	Customer []Customer
+	Caveats  BookingMultiTemporalCaveats
 }
 type BookingMultiTemporalCaveats struct {
-  User *WithinHoursArgs
-  Customer *WithinMonthsArgs
+	User     *WithinHoursArgs
+	Customer *WithinMonthsArgs
 }
+
 const BookingSharedCav RelationBooking = "shared_cav"
+
 type BookingSharedCavObjects struct {
-  User []User
-  Customer []Customer
-  Caveats BookingSharedCavCaveats
+	User     []User
+	Customer []Customer
+	Caveats  BookingSharedCavCaveats
 }
 type BookingSharedCavCaveats struct {
-  User *WithinHoursArgs
-  Customer *WithinHoursArgs
+	User     *WithinHoursArgs
+	Customer *WithinHoursArgs
 }
+
 const BookingDupTyped RelationBooking = "dup_typed"
+
 type BookingDupTypedObjects struct {
-  UserWithinHours []User
-  UserWithinMonths []User
-  Caveats BookingDupTypedCaveats
+	UserWithinHours  []User
+	UserWithinMonths []User
+	Caveats          BookingDupTypedCaveats
 }
 type BookingDupTypedCaveats struct {
-  UserWithinHours *WithinHoursArgs
-  UserWithinMonths *WithinMonthsArgs
+	UserWithinHours  *WithinHoursArgs
+	UserWithinMonths *WithinMonthsArgs
 }
 type WithinHoursArgs struct {
-  CloseHour *int
-  CurrentHour *int
-  OpenHour *int
+	CloseHour   *int
+	CurrentHour *int
+	OpenHour    *int
 }
 
 type WithinMonthsArgs struct {
-  CloseMonth *int
-  CurrentMonth *int
-  OpenMonth *int
+	CloseMonth   *int
+	CurrentMonth *int
+	OpenMonth    *int
 }
-
 
 type Booking authz.ID
 
 type BookingLookupResult struct {
-  Definite    []Booking
-  Conditional []BookingConditionalLookupEntry
+	Definite    []Booking
+	Conditional []BookingConditionalLookupEntry
 }
 type BookingConditionalLookupEntry struct {
-  ID          Booking
-  MissingKeys []string
+	ID          Booking
+	MissingKeys []string
 }
 
 func BookingStringer(id authz.StringConvertable) Booking {
-  return Booking(id.String())
+	return Booking(id.String())
 }
 
 func BookingStringers(ids ...authz.StringConvertable) []Booking {
-  result := []Booking{}
-  for _, id := range ids {
-    result = append(result, Booking(id.String()))
-  }
-  return result
+	result := []Booking{}
+	for _, id := range ids {
+		result = append(result, Booking(id.String()))
+	}
+	return result
 }
 
 func (booking Booking) ToList() []Booking {
-  return []Booking{ booking }
+	return []Booking{booking}
 }
 
 func (booking Booking) CreateOwnerRelations(ctx context.Context, objects BookingOwnerObjects) error {
-  if len(objects.Company) > 0 {
-    err := authz.GetEngine(ctx).CreateRelations(ctx, authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    }, authz.Relation(BookingOwner), TypeCompany, authz.IDs(objects.Company))
-    if err != nil {
-      return err
-    }
-  }
-  return nil
+	if len(objects.Company) > 0 {
+		err := authz.GetEngine(ctx).CreateRelations(ctx, authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		}, authz.Relation(BookingOwner), TypeCompany, authz.IDs(objects.Company))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 func (booking Booking) CreateCreatorRelations(ctx context.Context, objects BookingCreatorObjects) error {
-  if len(objects.User) > 0 {
-    err := authz.GetEngine(ctx).CreateRelations(ctx, authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    }, authz.Relation(BookingCreator), TypeUser, authz.IDs(objects.User))
-    if err != nil {
-      return err
-    }
-  }
-  if len(objects.Customer) > 0 {
-    err := authz.GetEngine(ctx).CreateRelations(ctx, authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    }, authz.Relation(BookingCreator), TypeCustomer, authz.IDs(objects.Customer))
-    if err != nil {
-      return err
-    }
-  }
-  return nil
+	if len(objects.User) > 0 {
+		err := authz.GetEngine(ctx).CreateRelations(ctx, authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		}, authz.Relation(BookingCreator), TypeUser, authz.IDs(objects.User))
+		if err != nil {
+			return err
+		}
+	}
+	if len(objects.Customer) > 0 {
+		err := authz.GetEngine(ctx).CreateRelations(ctx, authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		}, authz.Relation(BookingCreator), TypeCustomer, authz.IDs(objects.Customer))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 func (booking Booking) CreateHoursKeeperRelations(ctx context.Context, objects BookingHoursKeeperObjects) error {
-  if len(objects.User) > 0 {
-    var caveatCtx map[string]any
-    if c := objects.Caveats.User; c != nil {
-      caveatCtx = map[string]any{}
-      if c.CloseHour != nil {
-        caveatCtx["close_hour"] = *c.CloseHour
-      }
-      if c.CurrentHour != nil {
-        caveatCtx["current_hour"] = *c.CurrentHour
-      }
-      if c.OpenHour != nil {
-        caveatCtx["open_hour"] = *c.OpenHour
-      }
-    }
-    err := authz.GetEngine(ctx).CreateRelationsWithCaveat(ctx, authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    }, authz.Relation(BookingHoursKeeper), TypeUser, authz.IDs(objects.User), "menusvc/within_hours", caveatCtx)
-    if err != nil {
-      return err
-    }
-  }
-  return nil
+	if len(objects.User) > 0 {
+		var caveatCtx map[string]any
+		if c := objects.Caveats.User; c != nil {
+			caveatCtx = map[string]any{}
+			if c.CloseHour != nil {
+				caveatCtx["close_hour"] = *c.CloseHour
+			}
+			if c.CurrentHour != nil {
+				caveatCtx["current_hour"] = *c.CurrentHour
+			}
+			if c.OpenHour != nil {
+				caveatCtx["open_hour"] = *c.OpenHour
+			}
+		}
+		err := authz.GetEngine(ctx).CreateRelationsWithCaveat(ctx, authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		}, authz.Relation(BookingHoursKeeper), TypeUser, authz.IDs(objects.User), "menusvc/within_hours", caveatCtx)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 func (booking Booking) CreateMultiTemporalRelations(ctx context.Context, objects BookingMultiTemporalObjects) error {
-  if len(objects.User) > 0 {
-    var caveatCtx map[string]any
-    if c := objects.Caveats.User; c != nil {
-      caveatCtx = map[string]any{}
-      if c.CloseHour != nil {
-        caveatCtx["close_hour"] = *c.CloseHour
-      }
-      if c.CurrentHour != nil {
-        caveatCtx["current_hour"] = *c.CurrentHour
-      }
-      if c.OpenHour != nil {
-        caveatCtx["open_hour"] = *c.OpenHour
-      }
-    }
-    err := authz.GetEngine(ctx).CreateRelationsWithCaveat(ctx, authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    }, authz.Relation(BookingMultiTemporal), TypeUser, authz.IDs(objects.User), "menusvc/within_hours", caveatCtx)
-    if err != nil {
-      return err
-    }
-  }
-  if len(objects.Customer) > 0 {
-    var caveatCtx map[string]any
-    if c := objects.Caveats.Customer; c != nil {
-      caveatCtx = map[string]any{}
-      if c.CloseMonth != nil {
-        caveatCtx["close_month"] = *c.CloseMonth
-      }
-      if c.CurrentMonth != nil {
-        caveatCtx["current_month"] = *c.CurrentMonth
-      }
-      if c.OpenMonth != nil {
-        caveatCtx["open_month"] = *c.OpenMonth
-      }
-    }
-    err := authz.GetEngine(ctx).CreateRelationsWithCaveat(ctx, authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    }, authz.Relation(BookingMultiTemporal), TypeCustomer, authz.IDs(objects.Customer), "menusvc/within_months", caveatCtx)
-    if err != nil {
-      return err
-    }
-  }
-  return nil
+	if len(objects.User) > 0 {
+		var caveatCtx map[string]any
+		if c := objects.Caveats.User; c != nil {
+			caveatCtx = map[string]any{}
+			if c.CloseHour != nil {
+				caveatCtx["close_hour"] = *c.CloseHour
+			}
+			if c.CurrentHour != nil {
+				caveatCtx["current_hour"] = *c.CurrentHour
+			}
+			if c.OpenHour != nil {
+				caveatCtx["open_hour"] = *c.OpenHour
+			}
+		}
+		err := authz.GetEngine(ctx).CreateRelationsWithCaveat(ctx, authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		}, authz.Relation(BookingMultiTemporal), TypeUser, authz.IDs(objects.User), "menusvc/within_hours", caveatCtx)
+		if err != nil {
+			return err
+		}
+	}
+	if len(objects.Customer) > 0 {
+		var caveatCtx map[string]any
+		if c := objects.Caveats.Customer; c != nil {
+			caveatCtx = map[string]any{}
+			if c.CloseMonth != nil {
+				caveatCtx["close_month"] = *c.CloseMonth
+			}
+			if c.CurrentMonth != nil {
+				caveatCtx["current_month"] = *c.CurrentMonth
+			}
+			if c.OpenMonth != nil {
+				caveatCtx["open_month"] = *c.OpenMonth
+			}
+		}
+		err := authz.GetEngine(ctx).CreateRelationsWithCaveat(ctx, authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		}, authz.Relation(BookingMultiTemporal), TypeCustomer, authz.IDs(objects.Customer), "menusvc/within_months", caveatCtx)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 func (booking Booking) CreateSharedCavRelations(ctx context.Context, objects BookingSharedCavObjects) error {
-  if len(objects.User) > 0 {
-    var caveatCtx map[string]any
-    if c := objects.Caveats.User; c != nil {
-      caveatCtx = map[string]any{}
-      if c.CloseHour != nil {
-        caveatCtx["close_hour"] = *c.CloseHour
-      }
-      if c.CurrentHour != nil {
-        caveatCtx["current_hour"] = *c.CurrentHour
-      }
-      if c.OpenHour != nil {
-        caveatCtx["open_hour"] = *c.OpenHour
-      }
-    }
-    err := authz.GetEngine(ctx).CreateRelationsWithCaveat(ctx, authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    }, authz.Relation(BookingSharedCav), TypeUser, authz.IDs(objects.User), "menusvc/within_hours", caveatCtx)
-    if err != nil {
-      return err
-    }
-  }
-  if len(objects.Customer) > 0 {
-    var caveatCtx map[string]any
-    if c := objects.Caveats.Customer; c != nil {
-      caveatCtx = map[string]any{}
-      if c.CloseHour != nil {
-        caveatCtx["close_hour"] = *c.CloseHour
-      }
-      if c.CurrentHour != nil {
-        caveatCtx["current_hour"] = *c.CurrentHour
-      }
-      if c.OpenHour != nil {
-        caveatCtx["open_hour"] = *c.OpenHour
-      }
-    }
-    err := authz.GetEngine(ctx).CreateRelationsWithCaveat(ctx, authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    }, authz.Relation(BookingSharedCav), TypeCustomer, authz.IDs(objects.Customer), "menusvc/within_hours", caveatCtx)
-    if err != nil {
-      return err
-    }
-  }
-  return nil
+	if len(objects.User) > 0 {
+		var caveatCtx map[string]any
+		if c := objects.Caveats.User; c != nil {
+			caveatCtx = map[string]any{}
+			if c.CloseHour != nil {
+				caveatCtx["close_hour"] = *c.CloseHour
+			}
+			if c.CurrentHour != nil {
+				caveatCtx["current_hour"] = *c.CurrentHour
+			}
+			if c.OpenHour != nil {
+				caveatCtx["open_hour"] = *c.OpenHour
+			}
+		}
+		err := authz.GetEngine(ctx).CreateRelationsWithCaveat(ctx, authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		}, authz.Relation(BookingSharedCav), TypeUser, authz.IDs(objects.User), "menusvc/within_hours", caveatCtx)
+		if err != nil {
+			return err
+		}
+	}
+	if len(objects.Customer) > 0 {
+		var caveatCtx map[string]any
+		if c := objects.Caveats.Customer; c != nil {
+			caveatCtx = map[string]any{}
+			if c.CloseHour != nil {
+				caveatCtx["close_hour"] = *c.CloseHour
+			}
+			if c.CurrentHour != nil {
+				caveatCtx["current_hour"] = *c.CurrentHour
+			}
+			if c.OpenHour != nil {
+				caveatCtx["open_hour"] = *c.OpenHour
+			}
+		}
+		err := authz.GetEngine(ctx).CreateRelationsWithCaveat(ctx, authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		}, authz.Relation(BookingSharedCav), TypeCustomer, authz.IDs(objects.Customer), "menusvc/within_hours", caveatCtx)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 func (booking Booking) CreateDupTypedRelations(ctx context.Context, objects BookingDupTypedObjects) error {
-  if len(objects.UserWithinHours) > 0 {
-    var caveatCtx map[string]any
-    if c := objects.Caveats.UserWithinHours; c != nil {
-      caveatCtx = map[string]any{}
-      if c.CloseHour != nil {
-        caveatCtx["close_hour"] = *c.CloseHour
-      }
-      if c.CurrentHour != nil {
-        caveatCtx["current_hour"] = *c.CurrentHour
-      }
-      if c.OpenHour != nil {
-        caveatCtx["open_hour"] = *c.OpenHour
-      }
-    }
-    err := authz.GetEngine(ctx).CreateRelationsWithCaveat(ctx, authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    }, authz.Relation(BookingDupTyped), TypeUser, authz.IDs(objects.UserWithinHours), "menusvc/within_hours", caveatCtx)
-    if err != nil {
-      return err
-    }
-  }
-  if len(objects.UserWithinMonths) > 0 {
-    var caveatCtx map[string]any
-    if c := objects.Caveats.UserWithinMonths; c != nil {
-      caveatCtx = map[string]any{}
-      if c.CloseMonth != nil {
-        caveatCtx["close_month"] = *c.CloseMonth
-      }
-      if c.CurrentMonth != nil {
-        caveatCtx["current_month"] = *c.CurrentMonth
-      }
-      if c.OpenMonth != nil {
-        caveatCtx["open_month"] = *c.OpenMonth
-      }
-    }
-    err := authz.GetEngine(ctx).CreateRelationsWithCaveat(ctx, authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    }, authz.Relation(BookingDupTyped), TypeUser, authz.IDs(objects.UserWithinMonths), "menusvc/within_months", caveatCtx)
-    if err != nil {
-      return err
-    }
-  }
-  return nil
+	if len(objects.UserWithinHours) > 0 {
+		var caveatCtx map[string]any
+		if c := objects.Caveats.UserWithinHours; c != nil {
+			caveatCtx = map[string]any{}
+			if c.CloseHour != nil {
+				caveatCtx["close_hour"] = *c.CloseHour
+			}
+			if c.CurrentHour != nil {
+				caveatCtx["current_hour"] = *c.CurrentHour
+			}
+			if c.OpenHour != nil {
+				caveatCtx["open_hour"] = *c.OpenHour
+			}
+		}
+		err := authz.GetEngine(ctx).CreateRelationsWithCaveat(ctx, authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		}, authz.Relation(BookingDupTyped), TypeUser, authz.IDs(objects.UserWithinHours), "menusvc/within_hours", caveatCtx)
+		if err != nil {
+			return err
+		}
+	}
+	if len(objects.UserWithinMonths) > 0 {
+		var caveatCtx map[string]any
+		if c := objects.Caveats.UserWithinMonths; c != nil {
+			caveatCtx = map[string]any{}
+			if c.CloseMonth != nil {
+				caveatCtx["close_month"] = *c.CloseMonth
+			}
+			if c.CurrentMonth != nil {
+				caveatCtx["current_month"] = *c.CurrentMonth
+			}
+			if c.OpenMonth != nil {
+				caveatCtx["open_month"] = *c.OpenMonth
+			}
+		}
+		err := authz.GetEngine(ctx).CreateRelationsWithCaveat(ctx, authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		}, authz.Relation(BookingDupTyped), TypeUser, authz.IDs(objects.UserWithinMonths), "menusvc/within_months", caveatCtx)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (booking Booking) DeleteOwnerRelations(ctx context.Context, objects BookingOwnerObjects) error {
-  if len(objects.Company) > 0 {
-    err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    }, authz.Relation(BookingOwner), TypeCompany, authz.IDs(objects.Company))
-    if err != nil {
-      return err
-    }
-  }
-  return nil
+	if len(objects.Company) > 0 {
+		err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		}, authz.Relation(BookingOwner), TypeCompany, authz.IDs(objects.Company))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // PurgeOwnerRelations deletes every owner relationship on this
@@ -318,33 +329,33 @@ func (booking Booking) DeleteOwnerRelations(ctx context.Context, objects Booking
 // DeleteOwnerRelations (which revokes the specific subjects you pass),
 // use this when owner as a whole no longer applies to this Booking.
 func (booking Booking) PurgeOwnerRelations(ctx context.Context) error {
-  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
-    ResourceType: TypeBooking,
-    ResourceID: authz.ID(booking),
-    Relation: authz.Relation(BookingOwner),
-  })
+	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+		ResourceType: TypeBooking,
+		ResourceID:   authz.ID(booking),
+		Relation:     authz.Relation(BookingOwner),
+	})
 }
 
 func (booking Booking) DeleteCreatorRelations(ctx context.Context, objects BookingCreatorObjects) error {
-  if len(objects.User) > 0 {
-    err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    }, authz.Relation(BookingCreator), TypeUser, authz.IDs(objects.User))
-    if err != nil {
-      return err
-    }
-  }
-  if len(objects.Customer) > 0 {
-    err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    }, authz.Relation(BookingCreator), TypeCustomer, authz.IDs(objects.Customer))
-    if err != nil {
-      return err
-    }
-  }
-  return nil
+	if len(objects.User) > 0 {
+		err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		}, authz.Relation(BookingCreator), TypeUser, authz.IDs(objects.User))
+		if err != nil {
+			return err
+		}
+	}
+	if len(objects.Customer) > 0 {
+		err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		}, authz.Relation(BookingCreator), TypeCustomer, authz.IDs(objects.Customer))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // PurgeCreatorRelations deletes every creator relationship on this
@@ -352,24 +363,24 @@ func (booking Booking) DeleteCreatorRelations(ctx context.Context, objects Booki
 // DeleteCreatorRelations (which revokes the specific subjects you pass),
 // use this when creator as a whole no longer applies to this Booking.
 func (booking Booking) PurgeCreatorRelations(ctx context.Context) error {
-  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
-    ResourceType: TypeBooking,
-    ResourceID: authz.ID(booking),
-    Relation: authz.Relation(BookingCreator),
-  })
+	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+		ResourceType: TypeBooking,
+		ResourceID:   authz.ID(booking),
+		Relation:     authz.Relation(BookingCreator),
+	})
 }
 
 func (booking Booking) DeleteHoursKeeperRelations(ctx context.Context, objects BookingHoursKeeperObjects) error {
-  if len(objects.User) > 0 {
-    err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    }, authz.Relation(BookingHoursKeeper), TypeUser, authz.IDs(objects.User))
-    if err != nil {
-      return err
-    }
-  }
-  return nil
+	if len(objects.User) > 0 {
+		err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		}, authz.Relation(BookingHoursKeeper), TypeUser, authz.IDs(objects.User))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // PurgeHoursKeeperRelations deletes every hours_keeper relationship on this
@@ -377,33 +388,33 @@ func (booking Booking) DeleteHoursKeeperRelations(ctx context.Context, objects B
 // DeleteHoursKeeperRelations (which revokes the specific subjects you pass),
 // use this when hours_keeper as a whole no longer applies to this Booking.
 func (booking Booking) PurgeHoursKeeperRelations(ctx context.Context) error {
-  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
-    ResourceType: TypeBooking,
-    ResourceID: authz.ID(booking),
-    Relation: authz.Relation(BookingHoursKeeper),
-  })
+	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+		ResourceType: TypeBooking,
+		ResourceID:   authz.ID(booking),
+		Relation:     authz.Relation(BookingHoursKeeper),
+	})
 }
 
 func (booking Booking) DeleteMultiTemporalRelations(ctx context.Context, objects BookingMultiTemporalObjects) error {
-  if len(objects.User) > 0 {
-    err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    }, authz.Relation(BookingMultiTemporal), TypeUser, authz.IDs(objects.User))
-    if err != nil {
-      return err
-    }
-  }
-  if len(objects.Customer) > 0 {
-    err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    }, authz.Relation(BookingMultiTemporal), TypeCustomer, authz.IDs(objects.Customer))
-    if err != nil {
-      return err
-    }
-  }
-  return nil
+	if len(objects.User) > 0 {
+		err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		}, authz.Relation(BookingMultiTemporal), TypeUser, authz.IDs(objects.User))
+		if err != nil {
+			return err
+		}
+	}
+	if len(objects.Customer) > 0 {
+		err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		}, authz.Relation(BookingMultiTemporal), TypeCustomer, authz.IDs(objects.Customer))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // PurgeMultiTemporalRelations deletes every multi_temporal relationship on this
@@ -411,33 +422,33 @@ func (booking Booking) DeleteMultiTemporalRelations(ctx context.Context, objects
 // DeleteMultiTemporalRelations (which revokes the specific subjects you pass),
 // use this when multi_temporal as a whole no longer applies to this Booking.
 func (booking Booking) PurgeMultiTemporalRelations(ctx context.Context) error {
-  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
-    ResourceType: TypeBooking,
-    ResourceID: authz.ID(booking),
-    Relation: authz.Relation(BookingMultiTemporal),
-  })
+	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+		ResourceType: TypeBooking,
+		ResourceID:   authz.ID(booking),
+		Relation:     authz.Relation(BookingMultiTemporal),
+	})
 }
 
 func (booking Booking) DeleteSharedCavRelations(ctx context.Context, objects BookingSharedCavObjects) error {
-  if len(objects.User) > 0 {
-    err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    }, authz.Relation(BookingSharedCav), TypeUser, authz.IDs(objects.User))
-    if err != nil {
-      return err
-    }
-  }
-  if len(objects.Customer) > 0 {
-    err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    }, authz.Relation(BookingSharedCav), TypeCustomer, authz.IDs(objects.Customer))
-    if err != nil {
-      return err
-    }
-  }
-  return nil
+	if len(objects.User) > 0 {
+		err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		}, authz.Relation(BookingSharedCav), TypeUser, authz.IDs(objects.User))
+		if err != nil {
+			return err
+		}
+	}
+	if len(objects.Customer) > 0 {
+		err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		}, authz.Relation(BookingSharedCav), TypeCustomer, authz.IDs(objects.Customer))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // PurgeSharedCavRelations deletes every shared_cav relationship on this
@@ -445,33 +456,33 @@ func (booking Booking) DeleteSharedCavRelations(ctx context.Context, objects Boo
 // DeleteSharedCavRelations (which revokes the specific subjects you pass),
 // use this when shared_cav as a whole no longer applies to this Booking.
 func (booking Booking) PurgeSharedCavRelations(ctx context.Context) error {
-  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
-    ResourceType: TypeBooking,
-    ResourceID: authz.ID(booking),
-    Relation: authz.Relation(BookingSharedCav),
-  })
+	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+		ResourceType: TypeBooking,
+		ResourceID:   authz.ID(booking),
+		Relation:     authz.Relation(BookingSharedCav),
+	})
 }
 
 func (booking Booking) DeleteDupTypedRelations(ctx context.Context, objects BookingDupTypedObjects) error {
-  if len(objects.UserWithinHours) > 0 {
-    err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    }, authz.Relation(BookingDupTyped), TypeUser, authz.IDs(objects.UserWithinHours))
-    if err != nil {
-      return err
-    }
-  }
-  if len(objects.UserWithinMonths) > 0 {
-    err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    }, authz.Relation(BookingDupTyped), TypeUser, authz.IDs(objects.UserWithinMonths))
-    if err != nil {
-      return err
-    }
-  }
-  return nil
+	if len(objects.UserWithinHours) > 0 {
+		err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		}, authz.Relation(BookingDupTyped), TypeUser, authz.IDs(objects.UserWithinHours))
+		if err != nil {
+			return err
+		}
+	}
+	if len(objects.UserWithinMonths) > 0 {
+		err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		}, authz.Relation(BookingDupTyped), TypeUser, authz.IDs(objects.UserWithinMonths))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // PurgeDupTypedRelations deletes every dup_typed relationship on this
@@ -479,11 +490,11 @@ func (booking Booking) DeleteDupTypedRelations(ctx context.Context, objects Book
 // DeleteDupTypedRelations (which revokes the specific subjects you pass),
 // use this when dup_typed as a whole no longer applies to this Booking.
 func (booking Booking) PurgeDupTypedRelations(ctx context.Context) error {
-  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
-    ResourceType: TypeBooking,
-    ResourceID: authz.ID(booking),
-    Relation: authz.Relation(BookingDupTyped),
-  })
+	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+		ResourceType: TypeBooking,
+		ResourceID:   authz.ID(booking),
+		Relation:     authz.Relation(BookingDupTyped),
+	})
 }
 
 // PurgeRelations deletes every relationship on this Booking — all relations,
@@ -493,1288 +504,1301 @@ func (booking Booking) PurgeDupTypedRelations(ctx context.Context) error {
 // resource — for that, see PurgeRelationsAsSubject (emitted when Booking is a
 // subject anywhere in the schema).
 func (booking Booking) PurgeRelations(ctx context.Context) error {
-  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
-    ResourceType: TypeBooking,
-    ResourceID: authz.ID(booking),
-  })
+	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+		ResourceType: TypeBooking,
+		ResourceID:   authz.ID(booking),
+	})
 }
 
 type BookingOwnerCompanyRelation struct {
-  ID            Company
-  SubRelation   string
-  CaveatName    string
-  CaveatContext map[string]any
-  ExpiresAt     *time.Time
+	ID            Company
+	SubRelation   string
+	CaveatName    string
+	CaveatContext map[string]any
+	ExpiresAt     *time.Time
 }
+
 func (r BookingOwnerCompanyRelation) RelationID() Company { return r.ID }
 
 func (booking Booking) ReadOwnerCompanyRelations(ctx context.Context) ([]BookingOwnerCompanyRelation, error) {
-  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
-    Type: TypeBooking,
-    ID: authz.ID(booking),
-  }, authz.Relation(BookingOwner), TypeCompany)
-  if err != nil {
-    return nil, err
-  }
+	tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+		Type: TypeBooking,
+		ID:   authz.ID(booking),
+	}, authz.Relation(BookingOwner), TypeCompany)
+	if err != nil {
+		return nil, err
+	}
 
-  rels := make([]BookingOwnerCompanyRelation, 0, len(tuples))
-  for _, t := range tuples {
-    if t.ID == authz.WildcardID {
-      continue
-    }
-    rels = append(rels, BookingOwnerCompanyRelation{
-      ID:            Company(t.ID),
-      SubRelation:   t.SubRelation,
-      CaveatName:    t.CaveatName,
-      CaveatContext: t.CaveatContext,
-      ExpiresAt:     t.ExpiresAt,
-    })
-  }
-  return rels, nil
+	rels := make([]BookingOwnerCompanyRelation, 0, len(tuples))
+	for _, t := range tuples {
+		if t.ID == authz.WildcardID {
+			continue
+		}
+		rels = append(rels, BookingOwnerCompanyRelation{
+			ID:            Company(t.ID),
+			SubRelation:   t.SubRelation,
+			CaveatName:    t.CaveatName,
+			CaveatContext: t.CaveatContext,
+			ExpiresAt:     t.ExpiresAt,
+		})
+	}
+	return rels, nil
 }
 
 type BookingCreatorUserRelation struct {
-  ID            User
-  SubRelation   string
-  CaveatName    string
-  CaveatContext map[string]any
-  ExpiresAt     *time.Time
+	ID            User
+	SubRelation   string
+	CaveatName    string
+	CaveatContext map[string]any
+	ExpiresAt     *time.Time
 }
+
 func (r BookingCreatorUserRelation) RelationID() User { return r.ID }
 
 func (booking Booking) ReadCreatorUserRelations(ctx context.Context) ([]BookingCreatorUserRelation, error) {
-  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
-    Type: TypeBooking,
-    ID: authz.ID(booking),
-  }, authz.Relation(BookingCreator), TypeUser)
-  if err != nil {
-    return nil, err
-  }
+	tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+		Type: TypeBooking,
+		ID:   authz.ID(booking),
+	}, authz.Relation(BookingCreator), TypeUser)
+	if err != nil {
+		return nil, err
+	}
 
-  rels := make([]BookingCreatorUserRelation, 0, len(tuples))
-  for _, t := range tuples {
-    if t.ID == authz.WildcardID {
-      continue
-    }
-    rels = append(rels, BookingCreatorUserRelation{
-      ID:            User(t.ID),
-      SubRelation:   t.SubRelation,
-      CaveatName:    t.CaveatName,
-      CaveatContext: t.CaveatContext,
-      ExpiresAt:     t.ExpiresAt,
-    })
-  }
-  return rels, nil
+	rels := make([]BookingCreatorUserRelation, 0, len(tuples))
+	for _, t := range tuples {
+		if t.ID == authz.WildcardID {
+			continue
+		}
+		rels = append(rels, BookingCreatorUserRelation{
+			ID:            User(t.ID),
+			SubRelation:   t.SubRelation,
+			CaveatName:    t.CaveatName,
+			CaveatContext: t.CaveatContext,
+			ExpiresAt:     t.ExpiresAt,
+		})
+	}
+	return rels, nil
 }
 
 type BookingCreatorCustomerRelation struct {
-  ID            Customer
-  SubRelation   string
-  CaveatName    string
-  CaveatContext map[string]any
-  ExpiresAt     *time.Time
+	ID            Customer
+	SubRelation   string
+	CaveatName    string
+	CaveatContext map[string]any
+	ExpiresAt     *time.Time
 }
+
 func (r BookingCreatorCustomerRelation) RelationID() Customer { return r.ID }
 
 func (booking Booking) ReadCreatorCustomerRelations(ctx context.Context) ([]BookingCreatorCustomerRelation, error) {
-  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
-    Type: TypeBooking,
-    ID: authz.ID(booking),
-  }, authz.Relation(BookingCreator), TypeCustomer)
-  if err != nil {
-    return nil, err
-  }
+	tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+		Type: TypeBooking,
+		ID:   authz.ID(booking),
+	}, authz.Relation(BookingCreator), TypeCustomer)
+	if err != nil {
+		return nil, err
+	}
 
-  rels := make([]BookingCreatorCustomerRelation, 0, len(tuples))
-  for _, t := range tuples {
-    if t.ID == authz.WildcardID {
-      continue
-    }
-    rels = append(rels, BookingCreatorCustomerRelation{
-      ID:            Customer(t.ID),
-      SubRelation:   t.SubRelation,
-      CaveatName:    t.CaveatName,
-      CaveatContext: t.CaveatContext,
-      ExpiresAt:     t.ExpiresAt,
-    })
-  }
-  return rels, nil
+	rels := make([]BookingCreatorCustomerRelation, 0, len(tuples))
+	for _, t := range tuples {
+		if t.ID == authz.WildcardID {
+			continue
+		}
+		rels = append(rels, BookingCreatorCustomerRelation{
+			ID:            Customer(t.ID),
+			SubRelation:   t.SubRelation,
+			CaveatName:    t.CaveatName,
+			CaveatContext: t.CaveatContext,
+			ExpiresAt:     t.ExpiresAt,
+		})
+	}
+	return rels, nil
 }
 
 type BookingHoursKeeperUserRelation struct {
-  ID            User
-  SubRelation   string
-  CaveatName    string
-  CaveatContext map[string]any
-  ExpiresAt     *time.Time
+	ID            User
+	SubRelation   string
+	CaveatName    string
+	CaveatContext map[string]any
+	ExpiresAt     *time.Time
 }
+
 func (r BookingHoursKeeperUserRelation) RelationID() User { return r.ID }
 
 func (booking Booking) ReadHoursKeeperUserRelations(ctx context.Context) ([]BookingHoursKeeperUserRelation, error) {
-  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
-    Type: TypeBooking,
-    ID: authz.ID(booking),
-  }, authz.Relation(BookingHoursKeeper), TypeUser)
-  if err != nil {
-    return nil, err
-  }
+	tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+		Type: TypeBooking,
+		ID:   authz.ID(booking),
+	}, authz.Relation(BookingHoursKeeper), TypeUser)
+	if err != nil {
+		return nil, err
+	}
 
-  rels := make([]BookingHoursKeeperUserRelation, 0, len(tuples))
-  for _, t := range tuples {
-    if t.ID == authz.WildcardID {
-      continue
-    }
-    rels = append(rels, BookingHoursKeeperUserRelation{
-      ID:            User(t.ID),
-      SubRelation:   t.SubRelation,
-      CaveatName:    t.CaveatName,
-      CaveatContext: t.CaveatContext,
-      ExpiresAt:     t.ExpiresAt,
-    })
-  }
-  return rels, nil
+	rels := make([]BookingHoursKeeperUserRelation, 0, len(tuples))
+	for _, t := range tuples {
+		if t.ID == authz.WildcardID {
+			continue
+		}
+		rels = append(rels, BookingHoursKeeperUserRelation{
+			ID:            User(t.ID),
+			SubRelation:   t.SubRelation,
+			CaveatName:    t.CaveatName,
+			CaveatContext: t.CaveatContext,
+			ExpiresAt:     t.ExpiresAt,
+		})
+	}
+	return rels, nil
 }
 
 type BookingMultiTemporalUserRelation struct {
-  ID            User
-  SubRelation   string
-  CaveatName    string
-  CaveatContext map[string]any
-  ExpiresAt     *time.Time
+	ID            User
+	SubRelation   string
+	CaveatName    string
+	CaveatContext map[string]any
+	ExpiresAt     *time.Time
 }
+
 func (r BookingMultiTemporalUserRelation) RelationID() User { return r.ID }
 
 func (booking Booking) ReadMultiTemporalUserRelations(ctx context.Context) ([]BookingMultiTemporalUserRelation, error) {
-  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
-    Type: TypeBooking,
-    ID: authz.ID(booking),
-  }, authz.Relation(BookingMultiTemporal), TypeUser)
-  if err != nil {
-    return nil, err
-  }
+	tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+		Type: TypeBooking,
+		ID:   authz.ID(booking),
+	}, authz.Relation(BookingMultiTemporal), TypeUser)
+	if err != nil {
+		return nil, err
+	}
 
-  rels := make([]BookingMultiTemporalUserRelation, 0, len(tuples))
-  for _, t := range tuples {
-    if t.ID == authz.WildcardID {
-      continue
-    }
-    rels = append(rels, BookingMultiTemporalUserRelation{
-      ID:            User(t.ID),
-      SubRelation:   t.SubRelation,
-      CaveatName:    t.CaveatName,
-      CaveatContext: t.CaveatContext,
-      ExpiresAt:     t.ExpiresAt,
-    })
-  }
-  return rels, nil
+	rels := make([]BookingMultiTemporalUserRelation, 0, len(tuples))
+	for _, t := range tuples {
+		if t.ID == authz.WildcardID {
+			continue
+		}
+		rels = append(rels, BookingMultiTemporalUserRelation{
+			ID:            User(t.ID),
+			SubRelation:   t.SubRelation,
+			CaveatName:    t.CaveatName,
+			CaveatContext: t.CaveatContext,
+			ExpiresAt:     t.ExpiresAt,
+		})
+	}
+	return rels, nil
 }
 
 type BookingMultiTemporalCustomerRelation struct {
-  ID            Customer
-  SubRelation   string
-  CaveatName    string
-  CaveatContext map[string]any
-  ExpiresAt     *time.Time
+	ID            Customer
+	SubRelation   string
+	CaveatName    string
+	CaveatContext map[string]any
+	ExpiresAt     *time.Time
 }
+
 func (r BookingMultiTemporalCustomerRelation) RelationID() Customer { return r.ID }
 
 func (booking Booking) ReadMultiTemporalCustomerRelations(ctx context.Context) ([]BookingMultiTemporalCustomerRelation, error) {
-  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
-    Type: TypeBooking,
-    ID: authz.ID(booking),
-  }, authz.Relation(BookingMultiTemporal), TypeCustomer)
-  if err != nil {
-    return nil, err
-  }
+	tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+		Type: TypeBooking,
+		ID:   authz.ID(booking),
+	}, authz.Relation(BookingMultiTemporal), TypeCustomer)
+	if err != nil {
+		return nil, err
+	}
 
-  rels := make([]BookingMultiTemporalCustomerRelation, 0, len(tuples))
-  for _, t := range tuples {
-    if t.ID == authz.WildcardID {
-      continue
-    }
-    rels = append(rels, BookingMultiTemporalCustomerRelation{
-      ID:            Customer(t.ID),
-      SubRelation:   t.SubRelation,
-      CaveatName:    t.CaveatName,
-      CaveatContext: t.CaveatContext,
-      ExpiresAt:     t.ExpiresAt,
-    })
-  }
-  return rels, nil
+	rels := make([]BookingMultiTemporalCustomerRelation, 0, len(tuples))
+	for _, t := range tuples {
+		if t.ID == authz.WildcardID {
+			continue
+		}
+		rels = append(rels, BookingMultiTemporalCustomerRelation{
+			ID:            Customer(t.ID),
+			SubRelation:   t.SubRelation,
+			CaveatName:    t.CaveatName,
+			CaveatContext: t.CaveatContext,
+			ExpiresAt:     t.ExpiresAt,
+		})
+	}
+	return rels, nil
 }
 
 type BookingSharedCavUserRelation struct {
-  ID            User
-  SubRelation   string
-  CaveatName    string
-  CaveatContext map[string]any
-  ExpiresAt     *time.Time
+	ID            User
+	SubRelation   string
+	CaveatName    string
+	CaveatContext map[string]any
+	ExpiresAt     *time.Time
 }
+
 func (r BookingSharedCavUserRelation) RelationID() User { return r.ID }
 
 func (booking Booking) ReadSharedCavUserRelations(ctx context.Context) ([]BookingSharedCavUserRelation, error) {
-  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
-    Type: TypeBooking,
-    ID: authz.ID(booking),
-  }, authz.Relation(BookingSharedCav), TypeUser)
-  if err != nil {
-    return nil, err
-  }
+	tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+		Type: TypeBooking,
+		ID:   authz.ID(booking),
+	}, authz.Relation(BookingSharedCav), TypeUser)
+	if err != nil {
+		return nil, err
+	}
 
-  rels := make([]BookingSharedCavUserRelation, 0, len(tuples))
-  for _, t := range tuples {
-    if t.ID == authz.WildcardID {
-      continue
-    }
-    rels = append(rels, BookingSharedCavUserRelation{
-      ID:            User(t.ID),
-      SubRelation:   t.SubRelation,
-      CaveatName:    t.CaveatName,
-      CaveatContext: t.CaveatContext,
-      ExpiresAt:     t.ExpiresAt,
-    })
-  }
-  return rels, nil
+	rels := make([]BookingSharedCavUserRelation, 0, len(tuples))
+	for _, t := range tuples {
+		if t.ID == authz.WildcardID {
+			continue
+		}
+		rels = append(rels, BookingSharedCavUserRelation{
+			ID:            User(t.ID),
+			SubRelation:   t.SubRelation,
+			CaveatName:    t.CaveatName,
+			CaveatContext: t.CaveatContext,
+			ExpiresAt:     t.ExpiresAt,
+		})
+	}
+	return rels, nil
 }
 
 type BookingSharedCavCustomerRelation struct {
-  ID            Customer
-  SubRelation   string
-  CaveatName    string
-  CaveatContext map[string]any
-  ExpiresAt     *time.Time
+	ID            Customer
+	SubRelation   string
+	CaveatName    string
+	CaveatContext map[string]any
+	ExpiresAt     *time.Time
 }
+
 func (r BookingSharedCavCustomerRelation) RelationID() Customer { return r.ID }
 
 func (booking Booking) ReadSharedCavCustomerRelations(ctx context.Context) ([]BookingSharedCavCustomerRelation, error) {
-  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
-    Type: TypeBooking,
-    ID: authz.ID(booking),
-  }, authz.Relation(BookingSharedCav), TypeCustomer)
-  if err != nil {
-    return nil, err
-  }
+	tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+		Type: TypeBooking,
+		ID:   authz.ID(booking),
+	}, authz.Relation(BookingSharedCav), TypeCustomer)
+	if err != nil {
+		return nil, err
+	}
 
-  rels := make([]BookingSharedCavCustomerRelation, 0, len(tuples))
-  for _, t := range tuples {
-    if t.ID == authz.WildcardID {
-      continue
-    }
-    rels = append(rels, BookingSharedCavCustomerRelation{
-      ID:            Customer(t.ID),
-      SubRelation:   t.SubRelation,
-      CaveatName:    t.CaveatName,
-      CaveatContext: t.CaveatContext,
-      ExpiresAt:     t.ExpiresAt,
-    })
-  }
-  return rels, nil
+	rels := make([]BookingSharedCavCustomerRelation, 0, len(tuples))
+	for _, t := range tuples {
+		if t.ID == authz.WildcardID {
+			continue
+		}
+		rels = append(rels, BookingSharedCavCustomerRelation{
+			ID:            Customer(t.ID),
+			SubRelation:   t.SubRelation,
+			CaveatName:    t.CaveatName,
+			CaveatContext: t.CaveatContext,
+			ExpiresAt:     t.ExpiresAt,
+		})
+	}
+	return rels, nil
 }
 
 type BookingDupTypedUserRelation struct {
-  ID            User
-  SubRelation   string
-  CaveatName    string
-  CaveatContext map[string]any
-  ExpiresAt     *time.Time
+	ID            User
+	SubRelation   string
+	CaveatName    string
+	CaveatContext map[string]any
+	ExpiresAt     *time.Time
 }
+
 func (r BookingDupTypedUserRelation) RelationID() User { return r.ID }
 
 func (booking Booking) ReadDupTypedUserRelations(ctx context.Context) ([]BookingDupTypedUserRelation, error) {
-  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
-    Type: TypeBooking,
-    ID: authz.ID(booking),
-  }, authz.Relation(BookingDupTyped), TypeUser)
-  if err != nil {
-    return nil, err
-  }
+	tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+		Type: TypeBooking,
+		ID:   authz.ID(booking),
+	}, authz.Relation(BookingDupTyped), TypeUser)
+	if err != nil {
+		return nil, err
+	}
 
-  rels := make([]BookingDupTypedUserRelation, 0, len(tuples))
-  for _, t := range tuples {
-    if t.ID == authz.WildcardID {
-      continue
-    }
-    rels = append(rels, BookingDupTypedUserRelation{
-      ID:            User(t.ID),
-      SubRelation:   t.SubRelation,
-      CaveatName:    t.CaveatName,
-      CaveatContext: t.CaveatContext,
-      ExpiresAt:     t.ExpiresAt,
-    })
-  }
-  return rels, nil
+	rels := make([]BookingDupTypedUserRelation, 0, len(tuples))
+	for _, t := range tuples {
+		if t.ID == authz.WildcardID {
+			continue
+		}
+		rels = append(rels, BookingDupTypedUserRelation{
+			ID:            User(t.ID),
+			SubRelation:   t.SubRelation,
+			CaveatName:    t.CaveatName,
+			CaveatContext: t.CaveatContext,
+			ExpiresAt:     t.ExpiresAt,
+		})
+	}
+	return rels, nil
 }
 
 const BookingWrite PermissionBooking = "write"
 
 type CheckBookingWriteInputs struct {
-  User []User
-  Customer []Customer
+	User     []User
+	Customer []Customer
 }
 
 func (booking Booking) CheckWrite(ctx context.Context, input CheckBookingWriteInputs) (bool, error) {
-  if len(input.User) == 0 && len(input.Customer) == 0 && true {
-    return false, authz.ErrNoInput
-  }
+	if len(input.User) == 0 && len(input.Customer) == 0 && true {
+		return false, authz.ErrNoInput
+	}
 
-  if len(input.User) > 0 {
-    err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    }, authz.Permission(BookingWrite), TypeUser, authz.IDs(input.User))
-    if err != nil {
-      return false, err
-    }
-  }
-  if len(input.Customer) > 0 {
-    err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    }, authz.Permission(BookingWrite), TypeCustomer, authz.IDs(input.Customer))
-    if err != nil {
-      return false, err
-    }
-  }
-  
-  return true, nil
+	if len(input.User) > 0 {
+		err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		}, authz.Permission(BookingWrite), TypeUser, authz.IDs(input.User))
+		if err != nil {
+			return false, err
+		}
+	}
+	if len(input.Customer) > 0 {
+		err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		}, authz.Permission(BookingWrite), TypeCustomer, authz.IDs(input.Customer))
+		if err != nil {
+			return false, err
+		}
+	}
+
+	return true, nil
 }
 
 func LookupWriteBookingResources(ctx context.Context, input CheckBookingWriteInputs) (BookingLookupResult, error) {
 
-  if len(input.User) > 0 {
-    result, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeBooking, authz.Permission(BookingWrite),
-      TypeUser, authz.IDs(input.User),
-    )
-    if err != nil {
-      return BookingLookupResult{}, err
-    }
+	if len(input.User) > 0 {
+		result, err := authz.GetEngine(ctx).LookupResources(ctx,
+			TypeBooking, authz.Permission(BookingWrite),
+			TypeUser, authz.IDs(input.User),
+		)
+		if err != nil {
+			return BookingLookupResult{}, err
+		}
 
-    out := BookingLookupResult{
-      Definite:    authz.FromIDs[Booking](result.Definite),
-      Conditional: make([]BookingConditionalLookupEntry, 0, len(result.Conditional)),
-    }
-    for _, c := range result.Conditional {
-      out.Conditional = append(out.Conditional, BookingConditionalLookupEntry{
-        ID:          Booking(c.ID),
-        MissingKeys: c.MissingKeys,
-      })
-    }
-    return out, nil
-  }
-  if len(input.Customer) > 0 {
-    result, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeBooking, authz.Permission(BookingWrite),
-      TypeCustomer, authz.IDs(input.Customer),
-    )
-    if err != nil {
-      return BookingLookupResult{}, err
-    }
+		out := BookingLookupResult{
+			Definite:    authz.FromIDs[Booking](result.Definite),
+			Conditional: make([]BookingConditionalLookupEntry, 0, len(result.Conditional)),
+		}
+		for _, c := range result.Conditional {
+			out.Conditional = append(out.Conditional, BookingConditionalLookupEntry{
+				ID:          Booking(c.ID),
+				MissingKeys: c.MissingKeys,
+			})
+		}
+		return out, nil
+	}
+	if len(input.Customer) > 0 {
+		result, err := authz.GetEngine(ctx).LookupResources(ctx,
+			TypeBooking, authz.Permission(BookingWrite),
+			TypeCustomer, authz.IDs(input.Customer),
+		)
+		if err != nil {
+			return BookingLookupResult{}, err
+		}
 
-    out := BookingLookupResult{
-      Definite:    authz.FromIDs[Booking](result.Definite),
-      Conditional: make([]BookingConditionalLookupEntry, 0, len(result.Conditional)),
-    }
-    for _, c := range result.Conditional {
-      out.Conditional = append(out.Conditional, BookingConditionalLookupEntry{
-        ID:          Booking(c.ID),
-        MissingKeys: c.MissingKeys,
-      })
-    }
-    return out, nil
-  }
-  
-  return BookingLookupResult{}, nil
+		out := BookingLookupResult{
+			Definite:    authz.FromIDs[Booking](result.Definite),
+			Conditional: make([]BookingConditionalLookupEntry, 0, len(result.Conditional)),
+		}
+		for _, c := range result.Conditional {
+			out.Conditional = append(out.Conditional, BookingConditionalLookupEntry{
+				ID:          Booking(c.ID),
+				MissingKeys: c.MissingKeys,
+			})
+		}
+		return out, nil
+	}
+
+	return BookingLookupResult{}, nil
 }
+
 const BookingHoursCheck PermissionBooking = "hours_check"
 
 type CheckBookingHoursCheckInputs struct {
-  User []User
-  Caveats CheckBookingHoursCheckCaveats
+	User    []User
+	Caveats CheckBookingHoursCheckCaveats
 }
 type CheckBookingHoursCheckCaveats struct {
-  WithinHours *WithinHoursArgs
+	WithinHours *WithinHoursArgs
 }
 
 func (booking Booking) CheckHoursCheck(ctx context.Context, input CheckBookingHoursCheckInputs) (bool, error) {
-  if len(input.User) == 0 && true {
-    return false, authz.ErrNoInput
-  }
+	if len(input.User) == 0 && true {
+		return false, authz.ErrNoInput
+	}
 
-  var caveatCtx map[string]any
-  if c := input.Caveats.WithinHours; c != nil {
-    caveatCtx = map[string]any{}
+	var caveatCtx map[string]any
+	if c := input.Caveats.WithinHours; c != nil {
+		caveatCtx = map[string]any{}
 
-    if c.CloseHour != nil {
-      caveatCtx["close_hour"] = *c.CloseHour
-    }
-    if c.CurrentHour != nil {
-      caveatCtx["current_hour"] = *c.CurrentHour
-    }
-    if c.OpenHour != nil {
-      caveatCtx["open_hour"] = *c.OpenHour
-    }
-  }
+		if c.CloseHour != nil {
+			caveatCtx["close_hour"] = *c.CloseHour
+		}
+		if c.CurrentHour != nil {
+			caveatCtx["current_hour"] = *c.CurrentHour
+		}
+		if c.OpenHour != nil {
+			caveatCtx["open_hour"] = *c.OpenHour
+		}
+	}
 
-  if len(input.User) > 0 {
-    err := authz.GetEngine(ctx).CheckPermissionWithCaveat(ctx, authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    }, authz.Permission(BookingHoursCheck), TypeUser, authz.IDs(input.User), caveatCtx)
-    if err != nil {
-      return false, err
-    }
-  }
-  
-  return true, nil
+	if len(input.User) > 0 {
+		err := authz.GetEngine(ctx).CheckPermissionWithCaveat(ctx, authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		}, authz.Permission(BookingHoursCheck), TypeUser, authz.IDs(input.User), caveatCtx)
+		if err != nil {
+			return false, err
+		}
+	}
+
+	return true, nil
 }
 
 func LookupHoursCheckBookingResources(ctx context.Context, input CheckBookingHoursCheckInputs) (BookingLookupResult, error) {
 
-  var caveatCtx map[string]any
-  if c := input.Caveats.WithinHours; c != nil {
-    caveatCtx = map[string]any{}
+	var caveatCtx map[string]any
+	if c := input.Caveats.WithinHours; c != nil {
+		caveatCtx = map[string]any{}
 
-    if c.CloseHour != nil {
-      caveatCtx["close_hour"] = *c.CloseHour
-    }
-    if c.CurrentHour != nil {
-      caveatCtx["current_hour"] = *c.CurrentHour
-    }
-    if c.OpenHour != nil {
-      caveatCtx["open_hour"] = *c.OpenHour
-    }
-  }
+		if c.CloseHour != nil {
+			caveatCtx["close_hour"] = *c.CloseHour
+		}
+		if c.CurrentHour != nil {
+			caveatCtx["current_hour"] = *c.CurrentHour
+		}
+		if c.OpenHour != nil {
+			caveatCtx["open_hour"] = *c.OpenHour
+		}
+	}
 
-  if len(input.User) > 0 {
-    result, err := authz.GetEngine(ctx).LookupResourcesWithCaveat(ctx,
-      TypeBooking, authz.Permission(BookingHoursCheck),
-      TypeUser, authz.IDs(input.User),
-      caveatCtx,
-    )
-    if err != nil {
-      return BookingLookupResult{}, err
-    }
+	if len(input.User) > 0 {
+		result, err := authz.GetEngine(ctx).LookupResourcesWithCaveat(ctx,
+			TypeBooking, authz.Permission(BookingHoursCheck),
+			TypeUser, authz.IDs(input.User),
+			caveatCtx,
+		)
+		if err != nil {
+			return BookingLookupResult{}, err
+		}
 
-    out := BookingLookupResult{
-      Definite:    authz.FromIDs[Booking](result.Definite),
-      Conditional: make([]BookingConditionalLookupEntry, 0, len(result.Conditional)),
-    }
-    for _, c := range result.Conditional {
-      out.Conditional = append(out.Conditional, BookingConditionalLookupEntry{
-        ID:          Booking(c.ID),
-        MissingKeys: c.MissingKeys,
-      })
-    }
-    return out, nil
-  }
-  
-  return BookingLookupResult{}, nil
+		out := BookingLookupResult{
+			Definite:    authz.FromIDs[Booking](result.Definite),
+			Conditional: make([]BookingConditionalLookupEntry, 0, len(result.Conditional)),
+		}
+		for _, c := range result.Conditional {
+			out.Conditional = append(out.Conditional, BookingConditionalLookupEntry{
+				ID:          Booking(c.ID),
+				MissingKeys: c.MissingKeys,
+			})
+		}
+		return out, nil
+	}
+
+	return BookingLookupResult{}, nil
 }
+
 const BookingMultiTemporalCheck PermissionBooking = "multi_temporal_check"
 
 type CheckBookingMultiTemporalCheckInputs struct {
-  User []User
-  Customer []Customer
-  Caveats CheckBookingMultiTemporalCheckCaveats
+	User     []User
+	Customer []Customer
+	Caveats  CheckBookingMultiTemporalCheckCaveats
 }
 type CheckBookingMultiTemporalCheckCaveats struct {
-  WithinHours *WithinHoursArgs
-  WithinMonths *WithinMonthsArgs
+	WithinHours  *WithinHoursArgs
+	WithinMonths *WithinMonthsArgs
 }
 
 func (booking Booking) CheckMultiTemporalCheck(ctx context.Context, input CheckBookingMultiTemporalCheckInputs) (bool, error) {
-  if len(input.User) == 0 && len(input.Customer) == 0 && true {
-    return false, authz.ErrNoInput
-  }
+	if len(input.User) == 0 && len(input.Customer) == 0 && true {
+		return false, authz.ErrNoInput
+	}
 
-  var caveatCtx map[string]any
-  if c := input.Caveats.WithinHours; c != nil {
-    caveatCtx = map[string]any{}
+	var caveatCtx map[string]any
+	if c := input.Caveats.WithinHours; c != nil {
+		caveatCtx = map[string]any{}
 
-    if c.CloseHour != nil {
-      caveatCtx["close_hour"] = *c.CloseHour
-    }
-    if c.CurrentHour != nil {
-      caveatCtx["current_hour"] = *c.CurrentHour
-    }
-    if c.OpenHour != nil {
-      caveatCtx["open_hour"] = *c.OpenHour
-    }
-  }
-  if c := input.Caveats.WithinMonths; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+		if c.CloseHour != nil {
+			caveatCtx["close_hour"] = *c.CloseHour
+		}
+		if c.CurrentHour != nil {
+			caveatCtx["current_hour"] = *c.CurrentHour
+		}
+		if c.OpenHour != nil {
+			caveatCtx["open_hour"] = *c.OpenHour
+		}
+	}
+	if c := input.Caveats.WithinMonths; c != nil {
+		if caveatCtx == nil {
+			caveatCtx = map[string]any{}
+		}
 
-    if c.CloseMonth != nil {
-      caveatCtx["close_month"] = *c.CloseMonth
-    }
-    if c.CurrentMonth != nil {
-      caveatCtx["current_month"] = *c.CurrentMonth
-    }
-    if c.OpenMonth != nil {
-      caveatCtx["open_month"] = *c.OpenMonth
-    }
-  }
+		if c.CloseMonth != nil {
+			caveatCtx["close_month"] = *c.CloseMonth
+		}
+		if c.CurrentMonth != nil {
+			caveatCtx["current_month"] = *c.CurrentMonth
+		}
+		if c.OpenMonth != nil {
+			caveatCtx["open_month"] = *c.OpenMonth
+		}
+	}
 
-  if len(input.User) > 0 {
-    err := authz.GetEngine(ctx).CheckPermissionWithCaveat(ctx, authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    }, authz.Permission(BookingMultiTemporalCheck), TypeUser, authz.IDs(input.User), caveatCtx)
-    if err != nil {
-      return false, err
-    }
-  }
-  if len(input.Customer) > 0 {
-    err := authz.GetEngine(ctx).CheckPermissionWithCaveat(ctx, authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    }, authz.Permission(BookingMultiTemporalCheck), TypeCustomer, authz.IDs(input.Customer), caveatCtx)
-    if err != nil {
-      return false, err
-    }
-  }
-  
-  return true, nil
+	if len(input.User) > 0 {
+		err := authz.GetEngine(ctx).CheckPermissionWithCaveat(ctx, authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		}, authz.Permission(BookingMultiTemporalCheck), TypeUser, authz.IDs(input.User), caveatCtx)
+		if err != nil {
+			return false, err
+		}
+	}
+	if len(input.Customer) > 0 {
+		err := authz.GetEngine(ctx).CheckPermissionWithCaveat(ctx, authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		}, authz.Permission(BookingMultiTemporalCheck), TypeCustomer, authz.IDs(input.Customer), caveatCtx)
+		if err != nil {
+			return false, err
+		}
+	}
+
+	return true, nil
 }
 
 func LookupMultiTemporalCheckBookingResources(ctx context.Context, input CheckBookingMultiTemporalCheckInputs) (BookingLookupResult, error) {
 
-  var caveatCtx map[string]any
-  if c := input.Caveats.WithinHours; c != nil {
-    caveatCtx = map[string]any{}
+	var caveatCtx map[string]any
+	if c := input.Caveats.WithinHours; c != nil {
+		caveatCtx = map[string]any{}
 
-    if c.CloseHour != nil {
-      caveatCtx["close_hour"] = *c.CloseHour
-    }
-    if c.CurrentHour != nil {
-      caveatCtx["current_hour"] = *c.CurrentHour
-    }
-    if c.OpenHour != nil {
-      caveatCtx["open_hour"] = *c.OpenHour
-    }
-  }
-  if c := input.Caveats.WithinMonths; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+		if c.CloseHour != nil {
+			caveatCtx["close_hour"] = *c.CloseHour
+		}
+		if c.CurrentHour != nil {
+			caveatCtx["current_hour"] = *c.CurrentHour
+		}
+		if c.OpenHour != nil {
+			caveatCtx["open_hour"] = *c.OpenHour
+		}
+	}
+	if c := input.Caveats.WithinMonths; c != nil {
+		if caveatCtx == nil {
+			caveatCtx = map[string]any{}
+		}
 
-    if c.CloseMonth != nil {
-      caveatCtx["close_month"] = *c.CloseMonth
-    }
-    if c.CurrentMonth != nil {
-      caveatCtx["current_month"] = *c.CurrentMonth
-    }
-    if c.OpenMonth != nil {
-      caveatCtx["open_month"] = *c.OpenMonth
-    }
-  }
+		if c.CloseMonth != nil {
+			caveatCtx["close_month"] = *c.CloseMonth
+		}
+		if c.CurrentMonth != nil {
+			caveatCtx["current_month"] = *c.CurrentMonth
+		}
+		if c.OpenMonth != nil {
+			caveatCtx["open_month"] = *c.OpenMonth
+		}
+	}
 
-  if len(input.User) > 0 {
-    result, err := authz.GetEngine(ctx).LookupResourcesWithCaveat(ctx,
-      TypeBooking, authz.Permission(BookingMultiTemporalCheck),
-      TypeUser, authz.IDs(input.User),
-      caveatCtx,
-    )
-    if err != nil {
-      return BookingLookupResult{}, err
-    }
+	if len(input.User) > 0 {
+		result, err := authz.GetEngine(ctx).LookupResourcesWithCaveat(ctx,
+			TypeBooking, authz.Permission(BookingMultiTemporalCheck),
+			TypeUser, authz.IDs(input.User),
+			caveatCtx,
+		)
+		if err != nil {
+			return BookingLookupResult{}, err
+		}
 
-    out := BookingLookupResult{
-      Definite:    authz.FromIDs[Booking](result.Definite),
-      Conditional: make([]BookingConditionalLookupEntry, 0, len(result.Conditional)),
-    }
-    for _, c := range result.Conditional {
-      out.Conditional = append(out.Conditional, BookingConditionalLookupEntry{
-        ID:          Booking(c.ID),
-        MissingKeys: c.MissingKeys,
-      })
-    }
-    return out, nil
-  }
-  if len(input.Customer) > 0 {
-    result, err := authz.GetEngine(ctx).LookupResourcesWithCaveat(ctx,
-      TypeBooking, authz.Permission(BookingMultiTemporalCheck),
-      TypeCustomer, authz.IDs(input.Customer),
-      caveatCtx,
-    )
-    if err != nil {
-      return BookingLookupResult{}, err
-    }
+		out := BookingLookupResult{
+			Definite:    authz.FromIDs[Booking](result.Definite),
+			Conditional: make([]BookingConditionalLookupEntry, 0, len(result.Conditional)),
+		}
+		for _, c := range result.Conditional {
+			out.Conditional = append(out.Conditional, BookingConditionalLookupEntry{
+				ID:          Booking(c.ID),
+				MissingKeys: c.MissingKeys,
+			})
+		}
+		return out, nil
+	}
+	if len(input.Customer) > 0 {
+		result, err := authz.GetEngine(ctx).LookupResourcesWithCaveat(ctx,
+			TypeBooking, authz.Permission(BookingMultiTemporalCheck),
+			TypeCustomer, authz.IDs(input.Customer),
+			caveatCtx,
+		)
+		if err != nil {
+			return BookingLookupResult{}, err
+		}
 
-    out := BookingLookupResult{
-      Definite:    authz.FromIDs[Booking](result.Definite),
-      Conditional: make([]BookingConditionalLookupEntry, 0, len(result.Conditional)),
-    }
-    for _, c := range result.Conditional {
-      out.Conditional = append(out.Conditional, BookingConditionalLookupEntry{
-        ID:          Booking(c.ID),
-        MissingKeys: c.MissingKeys,
-      })
-    }
-    return out, nil
-  }
-  
-  return BookingLookupResult{}, nil
+		out := BookingLookupResult{
+			Definite:    authz.FromIDs[Booking](result.Definite),
+			Conditional: make([]BookingConditionalLookupEntry, 0, len(result.Conditional)),
+		}
+		for _, c := range result.Conditional {
+			out.Conditional = append(out.Conditional, BookingConditionalLookupEntry{
+				ID:          Booking(c.ID),
+				MissingKeys: c.MissingKeys,
+			})
+		}
+		return out, nil
+	}
+
+	return BookingLookupResult{}, nil
 }
+
 const BookingSharedCavCheck PermissionBooking = "shared_cav_check"
 
 type CheckBookingSharedCavCheckInputs struct {
-  User []User
-  Customer []Customer
-  Caveats CheckBookingSharedCavCheckCaveats
+	User     []User
+	Customer []Customer
+	Caveats  CheckBookingSharedCavCheckCaveats
 }
 type CheckBookingSharedCavCheckCaveats struct {
-  WithinHours *WithinHoursArgs
+	WithinHours *WithinHoursArgs
 }
 
 func (booking Booking) CheckSharedCavCheck(ctx context.Context, input CheckBookingSharedCavCheckInputs) (bool, error) {
-  if len(input.User) == 0 && len(input.Customer) == 0 && true {
-    return false, authz.ErrNoInput
-  }
+	if len(input.User) == 0 && len(input.Customer) == 0 && true {
+		return false, authz.ErrNoInput
+	}
 
-  var caveatCtx map[string]any
-  if c := input.Caveats.WithinHours; c != nil {
-    caveatCtx = map[string]any{}
+	var caveatCtx map[string]any
+	if c := input.Caveats.WithinHours; c != nil {
+		caveatCtx = map[string]any{}
 
-    if c.CloseHour != nil {
-      caveatCtx["close_hour"] = *c.CloseHour
-    }
-    if c.CurrentHour != nil {
-      caveatCtx["current_hour"] = *c.CurrentHour
-    }
-    if c.OpenHour != nil {
-      caveatCtx["open_hour"] = *c.OpenHour
-    }
-  }
+		if c.CloseHour != nil {
+			caveatCtx["close_hour"] = *c.CloseHour
+		}
+		if c.CurrentHour != nil {
+			caveatCtx["current_hour"] = *c.CurrentHour
+		}
+		if c.OpenHour != nil {
+			caveatCtx["open_hour"] = *c.OpenHour
+		}
+	}
 
-  if len(input.User) > 0 {
-    err := authz.GetEngine(ctx).CheckPermissionWithCaveat(ctx, authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    }, authz.Permission(BookingSharedCavCheck), TypeUser, authz.IDs(input.User), caveatCtx)
-    if err != nil {
-      return false, err
-    }
-  }
-  if len(input.Customer) > 0 {
-    err := authz.GetEngine(ctx).CheckPermissionWithCaveat(ctx, authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    }, authz.Permission(BookingSharedCavCheck), TypeCustomer, authz.IDs(input.Customer), caveatCtx)
-    if err != nil {
-      return false, err
-    }
-  }
-  
-  return true, nil
+	if len(input.User) > 0 {
+		err := authz.GetEngine(ctx).CheckPermissionWithCaveat(ctx, authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		}, authz.Permission(BookingSharedCavCheck), TypeUser, authz.IDs(input.User), caveatCtx)
+		if err != nil {
+			return false, err
+		}
+	}
+	if len(input.Customer) > 0 {
+		err := authz.GetEngine(ctx).CheckPermissionWithCaveat(ctx, authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		}, authz.Permission(BookingSharedCavCheck), TypeCustomer, authz.IDs(input.Customer), caveatCtx)
+		if err != nil {
+			return false, err
+		}
+	}
+
+	return true, nil
 }
 
 func LookupSharedCavCheckBookingResources(ctx context.Context, input CheckBookingSharedCavCheckInputs) (BookingLookupResult, error) {
 
-  var caveatCtx map[string]any
-  if c := input.Caveats.WithinHours; c != nil {
-    caveatCtx = map[string]any{}
+	var caveatCtx map[string]any
+	if c := input.Caveats.WithinHours; c != nil {
+		caveatCtx = map[string]any{}
 
-    if c.CloseHour != nil {
-      caveatCtx["close_hour"] = *c.CloseHour
-    }
-    if c.CurrentHour != nil {
-      caveatCtx["current_hour"] = *c.CurrentHour
-    }
-    if c.OpenHour != nil {
-      caveatCtx["open_hour"] = *c.OpenHour
-    }
-  }
+		if c.CloseHour != nil {
+			caveatCtx["close_hour"] = *c.CloseHour
+		}
+		if c.CurrentHour != nil {
+			caveatCtx["current_hour"] = *c.CurrentHour
+		}
+		if c.OpenHour != nil {
+			caveatCtx["open_hour"] = *c.OpenHour
+		}
+	}
 
-  if len(input.User) > 0 {
-    result, err := authz.GetEngine(ctx).LookupResourcesWithCaveat(ctx,
-      TypeBooking, authz.Permission(BookingSharedCavCheck),
-      TypeUser, authz.IDs(input.User),
-      caveatCtx,
-    )
-    if err != nil {
-      return BookingLookupResult{}, err
-    }
+	if len(input.User) > 0 {
+		result, err := authz.GetEngine(ctx).LookupResourcesWithCaveat(ctx,
+			TypeBooking, authz.Permission(BookingSharedCavCheck),
+			TypeUser, authz.IDs(input.User),
+			caveatCtx,
+		)
+		if err != nil {
+			return BookingLookupResult{}, err
+		}
 
-    out := BookingLookupResult{
-      Definite:    authz.FromIDs[Booking](result.Definite),
-      Conditional: make([]BookingConditionalLookupEntry, 0, len(result.Conditional)),
-    }
-    for _, c := range result.Conditional {
-      out.Conditional = append(out.Conditional, BookingConditionalLookupEntry{
-        ID:          Booking(c.ID),
-        MissingKeys: c.MissingKeys,
-      })
-    }
-    return out, nil
-  }
-  if len(input.Customer) > 0 {
-    result, err := authz.GetEngine(ctx).LookupResourcesWithCaveat(ctx,
-      TypeBooking, authz.Permission(BookingSharedCavCheck),
-      TypeCustomer, authz.IDs(input.Customer),
-      caveatCtx,
-    )
-    if err != nil {
-      return BookingLookupResult{}, err
-    }
+		out := BookingLookupResult{
+			Definite:    authz.FromIDs[Booking](result.Definite),
+			Conditional: make([]BookingConditionalLookupEntry, 0, len(result.Conditional)),
+		}
+		for _, c := range result.Conditional {
+			out.Conditional = append(out.Conditional, BookingConditionalLookupEntry{
+				ID:          Booking(c.ID),
+				MissingKeys: c.MissingKeys,
+			})
+		}
+		return out, nil
+	}
+	if len(input.Customer) > 0 {
+		result, err := authz.GetEngine(ctx).LookupResourcesWithCaveat(ctx,
+			TypeBooking, authz.Permission(BookingSharedCavCheck),
+			TypeCustomer, authz.IDs(input.Customer),
+			caveatCtx,
+		)
+		if err != nil {
+			return BookingLookupResult{}, err
+		}
 
-    out := BookingLookupResult{
-      Definite:    authz.FromIDs[Booking](result.Definite),
-      Conditional: make([]BookingConditionalLookupEntry, 0, len(result.Conditional)),
-    }
-    for _, c := range result.Conditional {
-      out.Conditional = append(out.Conditional, BookingConditionalLookupEntry{
-        ID:          Booking(c.ID),
-        MissingKeys: c.MissingKeys,
-      })
-    }
-    return out, nil
-  }
-  
-  return BookingLookupResult{}, nil
+		out := BookingLookupResult{
+			Definite:    authz.FromIDs[Booking](result.Definite),
+			Conditional: make([]BookingConditionalLookupEntry, 0, len(result.Conditional)),
+		}
+		for _, c := range result.Conditional {
+			out.Conditional = append(out.Conditional, BookingConditionalLookupEntry{
+				ID:          Booking(c.ID),
+				MissingKeys: c.MissingKeys,
+			})
+		}
+		return out, nil
+	}
+
+	return BookingLookupResult{}, nil
 }
+
 const BookingDupTypedCheck PermissionBooking = "dup_typed_check"
 
 type CheckBookingDupTypedCheckInputs struct {
-  User []User
-  Caveats CheckBookingDupTypedCheckCaveats
+	User    []User
+	Caveats CheckBookingDupTypedCheckCaveats
 }
 type CheckBookingDupTypedCheckCaveats struct {
-  WithinHours *WithinHoursArgs
-  WithinMonths *WithinMonthsArgs
+	WithinHours  *WithinHoursArgs
+	WithinMonths *WithinMonthsArgs
 }
 
 func (booking Booking) CheckDupTypedCheck(ctx context.Context, input CheckBookingDupTypedCheckInputs) (bool, error) {
-  if len(input.User) == 0 && true {
-    return false, authz.ErrNoInput
-  }
+	if len(input.User) == 0 && true {
+		return false, authz.ErrNoInput
+	}
 
-  var caveatCtx map[string]any
-  if c := input.Caveats.WithinHours; c != nil {
-    caveatCtx = map[string]any{}
+	var caveatCtx map[string]any
+	if c := input.Caveats.WithinHours; c != nil {
+		caveatCtx = map[string]any{}
 
-    if c.CloseHour != nil {
-      caveatCtx["close_hour"] = *c.CloseHour
-    }
-    if c.CurrentHour != nil {
-      caveatCtx["current_hour"] = *c.CurrentHour
-    }
-    if c.OpenHour != nil {
-      caveatCtx["open_hour"] = *c.OpenHour
-    }
-  }
-  if c := input.Caveats.WithinMonths; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+		if c.CloseHour != nil {
+			caveatCtx["close_hour"] = *c.CloseHour
+		}
+		if c.CurrentHour != nil {
+			caveatCtx["current_hour"] = *c.CurrentHour
+		}
+		if c.OpenHour != nil {
+			caveatCtx["open_hour"] = *c.OpenHour
+		}
+	}
+	if c := input.Caveats.WithinMonths; c != nil {
+		if caveatCtx == nil {
+			caveatCtx = map[string]any{}
+		}
 
-    if c.CloseMonth != nil {
-      caveatCtx["close_month"] = *c.CloseMonth
-    }
-    if c.CurrentMonth != nil {
-      caveatCtx["current_month"] = *c.CurrentMonth
-    }
-    if c.OpenMonth != nil {
-      caveatCtx["open_month"] = *c.OpenMonth
-    }
-  }
+		if c.CloseMonth != nil {
+			caveatCtx["close_month"] = *c.CloseMonth
+		}
+		if c.CurrentMonth != nil {
+			caveatCtx["current_month"] = *c.CurrentMonth
+		}
+		if c.OpenMonth != nil {
+			caveatCtx["open_month"] = *c.OpenMonth
+		}
+	}
 
-  if len(input.User) > 0 {
-    err := authz.GetEngine(ctx).CheckPermissionWithCaveat(ctx, authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    }, authz.Permission(BookingDupTypedCheck), TypeUser, authz.IDs(input.User), caveatCtx)
-    if err != nil {
-      return false, err
-    }
-  }
-  
-  return true, nil
+	if len(input.User) > 0 {
+		err := authz.GetEngine(ctx).CheckPermissionWithCaveat(ctx, authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		}, authz.Permission(BookingDupTypedCheck), TypeUser, authz.IDs(input.User), caveatCtx)
+		if err != nil {
+			return false, err
+		}
+	}
+
+	return true, nil
 }
 
 func LookupDupTypedCheckBookingResources(ctx context.Context, input CheckBookingDupTypedCheckInputs) (BookingLookupResult, error) {
 
-  var caveatCtx map[string]any
-  if c := input.Caveats.WithinHours; c != nil {
-    caveatCtx = map[string]any{}
+	var caveatCtx map[string]any
+	if c := input.Caveats.WithinHours; c != nil {
+		caveatCtx = map[string]any{}
 
-    if c.CloseHour != nil {
-      caveatCtx["close_hour"] = *c.CloseHour
-    }
-    if c.CurrentHour != nil {
-      caveatCtx["current_hour"] = *c.CurrentHour
-    }
-    if c.OpenHour != nil {
-      caveatCtx["open_hour"] = *c.OpenHour
-    }
-  }
-  if c := input.Caveats.WithinMonths; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+		if c.CloseHour != nil {
+			caveatCtx["close_hour"] = *c.CloseHour
+		}
+		if c.CurrentHour != nil {
+			caveatCtx["current_hour"] = *c.CurrentHour
+		}
+		if c.OpenHour != nil {
+			caveatCtx["open_hour"] = *c.OpenHour
+		}
+	}
+	if c := input.Caveats.WithinMonths; c != nil {
+		if caveatCtx == nil {
+			caveatCtx = map[string]any{}
+		}
 
-    if c.CloseMonth != nil {
-      caveatCtx["close_month"] = *c.CloseMonth
-    }
-    if c.CurrentMonth != nil {
-      caveatCtx["current_month"] = *c.CurrentMonth
-    }
-    if c.OpenMonth != nil {
-      caveatCtx["open_month"] = *c.OpenMonth
-    }
-  }
+		if c.CloseMonth != nil {
+			caveatCtx["close_month"] = *c.CloseMonth
+		}
+		if c.CurrentMonth != nil {
+			caveatCtx["current_month"] = *c.CurrentMonth
+		}
+		if c.OpenMonth != nil {
+			caveatCtx["open_month"] = *c.OpenMonth
+		}
+	}
 
-  if len(input.User) > 0 {
-    result, err := authz.GetEngine(ctx).LookupResourcesWithCaveat(ctx,
-      TypeBooking, authz.Permission(BookingDupTypedCheck),
-      TypeUser, authz.IDs(input.User),
-      caveatCtx,
-    )
-    if err != nil {
-      return BookingLookupResult{}, err
-    }
+	if len(input.User) > 0 {
+		result, err := authz.GetEngine(ctx).LookupResourcesWithCaveat(ctx,
+			TypeBooking, authz.Permission(BookingDupTypedCheck),
+			TypeUser, authz.IDs(input.User),
+			caveatCtx,
+		)
+		if err != nil {
+			return BookingLookupResult{}, err
+		}
 
-    out := BookingLookupResult{
-      Definite:    authz.FromIDs[Booking](result.Definite),
-      Conditional: make([]BookingConditionalLookupEntry, 0, len(result.Conditional)),
-    }
-    for _, c := range result.Conditional {
-      out.Conditional = append(out.Conditional, BookingConditionalLookupEntry{
-        ID:          Booking(c.ID),
-        MissingKeys: c.MissingKeys,
-      })
-    }
-    return out, nil
-  }
-  
-  return BookingLookupResult{}, nil
+		out := BookingLookupResult{
+			Definite:    authz.FromIDs[Booking](result.Definite),
+			Conditional: make([]BookingConditionalLookupEntry, 0, len(result.Conditional)),
+		}
+		for _, c := range result.Conditional {
+			out.Conditional = append(out.Conditional, BookingConditionalLookupEntry{
+				ID:          Booking(c.ID),
+				MissingKeys: c.MissingKeys,
+			})
+		}
+		return out, nil
+	}
+
+	return BookingLookupResult{}, nil
 }
 
 func (booking Booking) LookupWriteUserSubjects(ctx context.Context) (UserLookupResult, error) {
 
-  result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
-    authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    },
-    authz.Permission(BookingWrite), TypeUser,
-  )
-  if err != nil {
-    return UserLookupResult{}, err
-  }
+	result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+		authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		},
+		authz.Permission(BookingWrite), TypeUser,
+	)
+	if err != nil {
+		return UserLookupResult{}, err
+	}
 
-  out := UserLookupResult{
-    Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
-    Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
-  }
-  for _, c := range result.Conditional {
-    out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
-      ID:          User(c.ID),
-      MissingKeys: c.MissingKeys,
-    })
-  }
-  return out, nil
+	out := UserLookupResult{
+		Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
+		Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
+	}
+	for _, c := range result.Conditional {
+		out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
+			ID:          User(c.ID),
+			MissingKeys: c.MissingKeys,
+		})
+	}
+	return out, nil
 }
 
 func (booking Booking) LookupWriteUserWildcardSubjects(ctx context.Context) (bool, error) {
-  return authz.GetEngine(ctx).HasPublicSubject(ctx,
-    authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    },
-    authz.Permission(BookingWrite), TypeUser,
-  )
+	return authz.GetEngine(ctx).HasPublicSubject(ctx,
+		authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		},
+		authz.Permission(BookingWrite), TypeUser,
+	)
 }
 func (booking Booking) LookupWriteCustomerSubjects(ctx context.Context) (CustomerLookupResult, error) {
 
-  result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
-    authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    },
-    authz.Permission(BookingWrite), TypeCustomer,
-  )
-  if err != nil {
-    return CustomerLookupResult{}, err
-  }
+	result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+		authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		},
+		authz.Permission(BookingWrite), TypeCustomer,
+	)
+	if err != nil {
+		return CustomerLookupResult{}, err
+	}
 
-  out := CustomerLookupResult{
-    Definite:    authz.FromIDsExcludingWildcard[Customer](result.Definite),
-    Conditional: make([]CustomerConditionalLookupEntry, 0, len(result.Conditional)),
-  }
-  for _, c := range result.Conditional {
-    out.Conditional = append(out.Conditional, CustomerConditionalLookupEntry{
-      ID:          Customer(c.ID),
-      MissingKeys: c.MissingKeys,
-    })
-  }
-  return out, nil
+	out := CustomerLookupResult{
+		Definite:    authz.FromIDsExcludingWildcard[Customer](result.Definite),
+		Conditional: make([]CustomerConditionalLookupEntry, 0, len(result.Conditional)),
+	}
+	for _, c := range result.Conditional {
+		out.Conditional = append(out.Conditional, CustomerConditionalLookupEntry{
+			ID:          Customer(c.ID),
+			MissingKeys: c.MissingKeys,
+		})
+	}
+	return out, nil
 }
 
 func (booking Booking) LookupWriteCustomerWildcardSubjects(ctx context.Context) (bool, error) {
-  return authz.GetEngine(ctx).HasPublicSubject(ctx,
-    authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    },
-    authz.Permission(BookingWrite), TypeCustomer,
-  )
+	return authz.GetEngine(ctx).HasPublicSubject(ctx,
+		authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		},
+		authz.Permission(BookingWrite), TypeCustomer,
+	)
 }
 
 func (booking Booking) LookupHoursCheckUserSubjects(ctx context.Context, caveats CheckBookingHoursCheckCaveats) (UserLookupResult, error) {
 
-  var caveatCtx map[string]any
-  if c := caveats.WithinHours; c != nil {
-    caveatCtx = map[string]any{}
+	var caveatCtx map[string]any
+	if c := caveats.WithinHours; c != nil {
+		caveatCtx = map[string]any{}
 
-    if c.CloseHour != nil {
-      caveatCtx["close_hour"] = *c.CloseHour
-    }
-    if c.CurrentHour != nil {
-      caveatCtx["current_hour"] = *c.CurrentHour
-    }
-    if c.OpenHour != nil {
-      caveatCtx["open_hour"] = *c.OpenHour
-    }
-  }
+		if c.CloseHour != nil {
+			caveatCtx["close_hour"] = *c.CloseHour
+		}
+		if c.CurrentHour != nil {
+			caveatCtx["current_hour"] = *c.CurrentHour
+		}
+		if c.OpenHour != nil {
+			caveatCtx["open_hour"] = *c.OpenHour
+		}
+	}
 
-  result, err := authz.GetEngine(ctx).LookupSubjectsWithCaveat(ctx,
-    authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    },
-    authz.Permission(BookingHoursCheck), TypeUser,
-    caveatCtx,
-  )
-  if err != nil {
-    return UserLookupResult{}, err
-  }
+	result, err := authz.GetEngine(ctx).LookupSubjectsWithCaveat(ctx,
+		authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		},
+		authz.Permission(BookingHoursCheck), TypeUser,
+		caveatCtx,
+	)
+	if err != nil {
+		return UserLookupResult{}, err
+	}
 
-  out := UserLookupResult{
-    Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
-    Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
-  }
-  for _, c := range result.Conditional {
-    out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
-      ID:          User(c.ID),
-      MissingKeys: c.MissingKeys,
-    })
-  }
-  return out, nil
+	out := UserLookupResult{
+		Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
+		Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
+	}
+	for _, c := range result.Conditional {
+		out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
+			ID:          User(c.ID),
+			MissingKeys: c.MissingKeys,
+		})
+	}
+	return out, nil
 }
 
 func (booking Booking) LookupHoursCheckUserWildcardSubjects(ctx context.Context) (bool, error) {
-  return authz.GetEngine(ctx).HasPublicSubject(ctx,
-    authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    },
-    authz.Permission(BookingHoursCheck), TypeUser,
-  )
+	return authz.GetEngine(ctx).HasPublicSubject(ctx,
+		authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		},
+		authz.Permission(BookingHoursCheck), TypeUser,
+	)
 }
 
 func (booking Booking) LookupMultiTemporalCheckUserSubjects(ctx context.Context, caveats CheckBookingMultiTemporalCheckCaveats) (UserLookupResult, error) {
 
-  var caveatCtx map[string]any
-  if c := caveats.WithinHours; c != nil {
-    caveatCtx = map[string]any{}
+	var caveatCtx map[string]any
+	if c := caveats.WithinHours; c != nil {
+		caveatCtx = map[string]any{}
 
-    if c.CloseHour != nil {
-      caveatCtx["close_hour"] = *c.CloseHour
-    }
-    if c.CurrentHour != nil {
-      caveatCtx["current_hour"] = *c.CurrentHour
-    }
-    if c.OpenHour != nil {
-      caveatCtx["open_hour"] = *c.OpenHour
-    }
-  }
-  if c := caveats.WithinMonths; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+		if c.CloseHour != nil {
+			caveatCtx["close_hour"] = *c.CloseHour
+		}
+		if c.CurrentHour != nil {
+			caveatCtx["current_hour"] = *c.CurrentHour
+		}
+		if c.OpenHour != nil {
+			caveatCtx["open_hour"] = *c.OpenHour
+		}
+	}
+	if c := caveats.WithinMonths; c != nil {
+		if caveatCtx == nil {
+			caveatCtx = map[string]any{}
+		}
 
-    if c.CloseMonth != nil {
-      caveatCtx["close_month"] = *c.CloseMonth
-    }
-    if c.CurrentMonth != nil {
-      caveatCtx["current_month"] = *c.CurrentMonth
-    }
-    if c.OpenMonth != nil {
-      caveatCtx["open_month"] = *c.OpenMonth
-    }
-  }
+		if c.CloseMonth != nil {
+			caveatCtx["close_month"] = *c.CloseMonth
+		}
+		if c.CurrentMonth != nil {
+			caveatCtx["current_month"] = *c.CurrentMonth
+		}
+		if c.OpenMonth != nil {
+			caveatCtx["open_month"] = *c.OpenMonth
+		}
+	}
 
-  result, err := authz.GetEngine(ctx).LookupSubjectsWithCaveat(ctx,
-    authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    },
-    authz.Permission(BookingMultiTemporalCheck), TypeUser,
-    caveatCtx,
-  )
-  if err != nil {
-    return UserLookupResult{}, err
-  }
+	result, err := authz.GetEngine(ctx).LookupSubjectsWithCaveat(ctx,
+		authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		},
+		authz.Permission(BookingMultiTemporalCheck), TypeUser,
+		caveatCtx,
+	)
+	if err != nil {
+		return UserLookupResult{}, err
+	}
 
-  out := UserLookupResult{
-    Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
-    Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
-  }
-  for _, c := range result.Conditional {
-    out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
-      ID:          User(c.ID),
-      MissingKeys: c.MissingKeys,
-    })
-  }
-  return out, nil
+	out := UserLookupResult{
+		Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
+		Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
+	}
+	for _, c := range result.Conditional {
+		out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
+			ID:          User(c.ID),
+			MissingKeys: c.MissingKeys,
+		})
+	}
+	return out, nil
 }
 
 func (booking Booking) LookupMultiTemporalCheckUserWildcardSubjects(ctx context.Context) (bool, error) {
-  return authz.GetEngine(ctx).HasPublicSubject(ctx,
-    authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    },
-    authz.Permission(BookingMultiTemporalCheck), TypeUser,
-  )
+	return authz.GetEngine(ctx).HasPublicSubject(ctx,
+		authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		},
+		authz.Permission(BookingMultiTemporalCheck), TypeUser,
+	)
 }
 func (booking Booking) LookupMultiTemporalCheckCustomerSubjects(ctx context.Context, caveats CheckBookingMultiTemporalCheckCaveats) (CustomerLookupResult, error) {
 
-  var caveatCtx map[string]any
-  if c := caveats.WithinHours; c != nil {
-    caveatCtx = map[string]any{}
+	var caveatCtx map[string]any
+	if c := caveats.WithinHours; c != nil {
+		caveatCtx = map[string]any{}
 
-    if c.CloseHour != nil {
-      caveatCtx["close_hour"] = *c.CloseHour
-    }
-    if c.CurrentHour != nil {
-      caveatCtx["current_hour"] = *c.CurrentHour
-    }
-    if c.OpenHour != nil {
-      caveatCtx["open_hour"] = *c.OpenHour
-    }
-  }
-  if c := caveats.WithinMonths; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+		if c.CloseHour != nil {
+			caveatCtx["close_hour"] = *c.CloseHour
+		}
+		if c.CurrentHour != nil {
+			caveatCtx["current_hour"] = *c.CurrentHour
+		}
+		if c.OpenHour != nil {
+			caveatCtx["open_hour"] = *c.OpenHour
+		}
+	}
+	if c := caveats.WithinMonths; c != nil {
+		if caveatCtx == nil {
+			caveatCtx = map[string]any{}
+		}
 
-    if c.CloseMonth != nil {
-      caveatCtx["close_month"] = *c.CloseMonth
-    }
-    if c.CurrentMonth != nil {
-      caveatCtx["current_month"] = *c.CurrentMonth
-    }
-    if c.OpenMonth != nil {
-      caveatCtx["open_month"] = *c.OpenMonth
-    }
-  }
+		if c.CloseMonth != nil {
+			caveatCtx["close_month"] = *c.CloseMonth
+		}
+		if c.CurrentMonth != nil {
+			caveatCtx["current_month"] = *c.CurrentMonth
+		}
+		if c.OpenMonth != nil {
+			caveatCtx["open_month"] = *c.OpenMonth
+		}
+	}
 
-  result, err := authz.GetEngine(ctx).LookupSubjectsWithCaveat(ctx,
-    authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    },
-    authz.Permission(BookingMultiTemporalCheck), TypeCustomer,
-    caveatCtx,
-  )
-  if err != nil {
-    return CustomerLookupResult{}, err
-  }
+	result, err := authz.GetEngine(ctx).LookupSubjectsWithCaveat(ctx,
+		authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		},
+		authz.Permission(BookingMultiTemporalCheck), TypeCustomer,
+		caveatCtx,
+	)
+	if err != nil {
+		return CustomerLookupResult{}, err
+	}
 
-  out := CustomerLookupResult{
-    Definite:    authz.FromIDsExcludingWildcard[Customer](result.Definite),
-    Conditional: make([]CustomerConditionalLookupEntry, 0, len(result.Conditional)),
-  }
-  for _, c := range result.Conditional {
-    out.Conditional = append(out.Conditional, CustomerConditionalLookupEntry{
-      ID:          Customer(c.ID),
-      MissingKeys: c.MissingKeys,
-    })
-  }
-  return out, nil
+	out := CustomerLookupResult{
+		Definite:    authz.FromIDsExcludingWildcard[Customer](result.Definite),
+		Conditional: make([]CustomerConditionalLookupEntry, 0, len(result.Conditional)),
+	}
+	for _, c := range result.Conditional {
+		out.Conditional = append(out.Conditional, CustomerConditionalLookupEntry{
+			ID:          Customer(c.ID),
+			MissingKeys: c.MissingKeys,
+		})
+	}
+	return out, nil
 }
 
 func (booking Booking) LookupMultiTemporalCheckCustomerWildcardSubjects(ctx context.Context) (bool, error) {
-  return authz.GetEngine(ctx).HasPublicSubject(ctx,
-    authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    },
-    authz.Permission(BookingMultiTemporalCheck), TypeCustomer,
-  )
+	return authz.GetEngine(ctx).HasPublicSubject(ctx,
+		authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		},
+		authz.Permission(BookingMultiTemporalCheck), TypeCustomer,
+	)
 }
 
 func (booking Booking) LookupSharedCavCheckUserSubjects(ctx context.Context, caveats CheckBookingSharedCavCheckCaveats) (UserLookupResult, error) {
 
-  var caveatCtx map[string]any
-  if c := caveats.WithinHours; c != nil {
-    caveatCtx = map[string]any{}
+	var caveatCtx map[string]any
+	if c := caveats.WithinHours; c != nil {
+		caveatCtx = map[string]any{}
 
-    if c.CloseHour != nil {
-      caveatCtx["close_hour"] = *c.CloseHour
-    }
-    if c.CurrentHour != nil {
-      caveatCtx["current_hour"] = *c.CurrentHour
-    }
-    if c.OpenHour != nil {
-      caveatCtx["open_hour"] = *c.OpenHour
-    }
-  }
+		if c.CloseHour != nil {
+			caveatCtx["close_hour"] = *c.CloseHour
+		}
+		if c.CurrentHour != nil {
+			caveatCtx["current_hour"] = *c.CurrentHour
+		}
+		if c.OpenHour != nil {
+			caveatCtx["open_hour"] = *c.OpenHour
+		}
+	}
 
-  result, err := authz.GetEngine(ctx).LookupSubjectsWithCaveat(ctx,
-    authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    },
-    authz.Permission(BookingSharedCavCheck), TypeUser,
-    caveatCtx,
-  )
-  if err != nil {
-    return UserLookupResult{}, err
-  }
+	result, err := authz.GetEngine(ctx).LookupSubjectsWithCaveat(ctx,
+		authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		},
+		authz.Permission(BookingSharedCavCheck), TypeUser,
+		caveatCtx,
+	)
+	if err != nil {
+		return UserLookupResult{}, err
+	}
 
-  out := UserLookupResult{
-    Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
-    Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
-  }
-  for _, c := range result.Conditional {
-    out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
-      ID:          User(c.ID),
-      MissingKeys: c.MissingKeys,
-    })
-  }
-  return out, nil
+	out := UserLookupResult{
+		Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
+		Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
+	}
+	for _, c := range result.Conditional {
+		out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
+			ID:          User(c.ID),
+			MissingKeys: c.MissingKeys,
+		})
+	}
+	return out, nil
 }
 
 func (booking Booking) LookupSharedCavCheckUserWildcardSubjects(ctx context.Context) (bool, error) {
-  return authz.GetEngine(ctx).HasPublicSubject(ctx,
-    authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    },
-    authz.Permission(BookingSharedCavCheck), TypeUser,
-  )
+	return authz.GetEngine(ctx).HasPublicSubject(ctx,
+		authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		},
+		authz.Permission(BookingSharedCavCheck), TypeUser,
+	)
 }
 func (booking Booking) LookupSharedCavCheckCustomerSubjects(ctx context.Context, caveats CheckBookingSharedCavCheckCaveats) (CustomerLookupResult, error) {
 
-  var caveatCtx map[string]any
-  if c := caveats.WithinHours; c != nil {
-    caveatCtx = map[string]any{}
+	var caveatCtx map[string]any
+	if c := caveats.WithinHours; c != nil {
+		caveatCtx = map[string]any{}
 
-    if c.CloseHour != nil {
-      caveatCtx["close_hour"] = *c.CloseHour
-    }
-    if c.CurrentHour != nil {
-      caveatCtx["current_hour"] = *c.CurrentHour
-    }
-    if c.OpenHour != nil {
-      caveatCtx["open_hour"] = *c.OpenHour
-    }
-  }
+		if c.CloseHour != nil {
+			caveatCtx["close_hour"] = *c.CloseHour
+		}
+		if c.CurrentHour != nil {
+			caveatCtx["current_hour"] = *c.CurrentHour
+		}
+		if c.OpenHour != nil {
+			caveatCtx["open_hour"] = *c.OpenHour
+		}
+	}
 
-  result, err := authz.GetEngine(ctx).LookupSubjectsWithCaveat(ctx,
-    authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    },
-    authz.Permission(BookingSharedCavCheck), TypeCustomer,
-    caveatCtx,
-  )
-  if err != nil {
-    return CustomerLookupResult{}, err
-  }
+	result, err := authz.GetEngine(ctx).LookupSubjectsWithCaveat(ctx,
+		authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		},
+		authz.Permission(BookingSharedCavCheck), TypeCustomer,
+		caveatCtx,
+	)
+	if err != nil {
+		return CustomerLookupResult{}, err
+	}
 
-  out := CustomerLookupResult{
-    Definite:    authz.FromIDsExcludingWildcard[Customer](result.Definite),
-    Conditional: make([]CustomerConditionalLookupEntry, 0, len(result.Conditional)),
-  }
-  for _, c := range result.Conditional {
-    out.Conditional = append(out.Conditional, CustomerConditionalLookupEntry{
-      ID:          Customer(c.ID),
-      MissingKeys: c.MissingKeys,
-    })
-  }
-  return out, nil
+	out := CustomerLookupResult{
+		Definite:    authz.FromIDsExcludingWildcard[Customer](result.Definite),
+		Conditional: make([]CustomerConditionalLookupEntry, 0, len(result.Conditional)),
+	}
+	for _, c := range result.Conditional {
+		out.Conditional = append(out.Conditional, CustomerConditionalLookupEntry{
+			ID:          Customer(c.ID),
+			MissingKeys: c.MissingKeys,
+		})
+	}
+	return out, nil
 }
 
 func (booking Booking) LookupSharedCavCheckCustomerWildcardSubjects(ctx context.Context) (bool, error) {
-  return authz.GetEngine(ctx).HasPublicSubject(ctx,
-    authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    },
-    authz.Permission(BookingSharedCavCheck), TypeCustomer,
-  )
+	return authz.GetEngine(ctx).HasPublicSubject(ctx,
+		authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		},
+		authz.Permission(BookingSharedCavCheck), TypeCustomer,
+	)
 }
 
 func (booking Booking) LookupDupTypedCheckUserSubjects(ctx context.Context, caveats CheckBookingDupTypedCheckCaveats) (UserLookupResult, error) {
 
-  var caveatCtx map[string]any
-  if c := caveats.WithinHours; c != nil {
-    caveatCtx = map[string]any{}
+	var caveatCtx map[string]any
+	if c := caveats.WithinHours; c != nil {
+		caveatCtx = map[string]any{}
 
-    if c.CloseHour != nil {
-      caveatCtx["close_hour"] = *c.CloseHour
-    }
-    if c.CurrentHour != nil {
-      caveatCtx["current_hour"] = *c.CurrentHour
-    }
-    if c.OpenHour != nil {
-      caveatCtx["open_hour"] = *c.OpenHour
-    }
-  }
-  if c := caveats.WithinMonths; c != nil {
-    if caveatCtx == nil {
-      caveatCtx = map[string]any{}
-    }
+		if c.CloseHour != nil {
+			caveatCtx["close_hour"] = *c.CloseHour
+		}
+		if c.CurrentHour != nil {
+			caveatCtx["current_hour"] = *c.CurrentHour
+		}
+		if c.OpenHour != nil {
+			caveatCtx["open_hour"] = *c.OpenHour
+		}
+	}
+	if c := caveats.WithinMonths; c != nil {
+		if caveatCtx == nil {
+			caveatCtx = map[string]any{}
+		}
 
-    if c.CloseMonth != nil {
-      caveatCtx["close_month"] = *c.CloseMonth
-    }
-    if c.CurrentMonth != nil {
-      caveatCtx["current_month"] = *c.CurrentMonth
-    }
-    if c.OpenMonth != nil {
-      caveatCtx["open_month"] = *c.OpenMonth
-    }
-  }
+		if c.CloseMonth != nil {
+			caveatCtx["close_month"] = *c.CloseMonth
+		}
+		if c.CurrentMonth != nil {
+			caveatCtx["current_month"] = *c.CurrentMonth
+		}
+		if c.OpenMonth != nil {
+			caveatCtx["open_month"] = *c.OpenMonth
+		}
+	}
 
-  result, err := authz.GetEngine(ctx).LookupSubjectsWithCaveat(ctx,
-    authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    },
-    authz.Permission(BookingDupTypedCheck), TypeUser,
-    caveatCtx,
-  )
-  if err != nil {
-    return UserLookupResult{}, err
-  }
+	result, err := authz.GetEngine(ctx).LookupSubjectsWithCaveat(ctx,
+		authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		},
+		authz.Permission(BookingDupTypedCheck), TypeUser,
+		caveatCtx,
+	)
+	if err != nil {
+		return UserLookupResult{}, err
+	}
 
-  out := UserLookupResult{
-    Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
-    Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
-  }
-  for _, c := range result.Conditional {
-    out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
-      ID:          User(c.ID),
-      MissingKeys: c.MissingKeys,
-    })
-  }
-  return out, nil
+	out := UserLookupResult{
+		Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
+		Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
+	}
+	for _, c := range result.Conditional {
+		out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
+			ID:          User(c.ID),
+			MissingKeys: c.MissingKeys,
+		})
+	}
+	return out, nil
 }
 
 func (booking Booking) LookupDupTypedCheckUserWildcardSubjects(ctx context.Context) (bool, error) {
-  return authz.GetEngine(ctx).HasPublicSubject(ctx,
-    authz.Resource{
-      Type: TypeBooking,
-      ID: authz.ID(booking),
-    },
-    authz.Permission(BookingDupTypedCheck), TypeUser,
-  )
+	return authz.GetEngine(ctx).HasPublicSubject(ctx,
+		authz.Resource{
+			Type: TypeBooking,
+			ID:   authz.ID(booking),
+		},
+		authz.Permission(BookingDupTypedCheck), TypeUser,
+	)
 }

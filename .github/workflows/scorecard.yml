@@ -1,0 +1,45 @@
+name: OpenSSF Scorecard
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 8 * * 1"  # Monday 08:00 UTC
+  workflow_dispatch:
+
+permissions: read-all
+
+jobs:
+  scorecard:
+    name: Scorecard analysis
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+        with:
+          persist-credentials: false
+
+      - name: Run Scorecard analysis
+        uses: ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc  # v2.4.4
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: true
+          # The default GITHUB_TOKEN cannot read classic branch protection
+          # rules, so Branch-Protection returns -1 (internal error) and drops
+          # out of the aggregate instead of being scored. SCORECARD_TOKEN is a
+          # fine-grained PAT scoped to this repo with `Administration: Read-only`
+          # (which implies `Metadata: Read-only`) — nothing else, no write.
+          # It expires after a year; renew it or Branch-Protection silently
+          # reverts to -1. Falls back to GITHUB_TOKEN when the secret is absent
+          # so the workflow keeps running rather than hard-failing.
+          repo_token: ${{ secrets.SCORECARD_TOKEN || github.token }}
+
+      - name: Upload Scorecard results to Security tab
+        uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938  # v4
+        with:
+          sarif_file: results.sarif
+          category: scorecard

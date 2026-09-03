@@ -506,7 +506,6 @@ func TestBooking_ReadRelations(t *testing.T) {
 	assert.Equal(t, []menusvc.Customer{"t-tvc1br"}, authz.IDsOf(customers))
 }
 
-
 // AUZ-007 ext — caveat codegen in menusvc namespace.
 
 func TestBooking_HoursCheck_GrantsWhenWithinHours(t *testing.T) {

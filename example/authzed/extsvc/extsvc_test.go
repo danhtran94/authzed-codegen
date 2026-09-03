@@ -55,7 +55,6 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-
 // --- Boilerplate identity tests (User / Group / Role) ---
 
 func TestUser_Boilerplate(t *testing.T) {
@@ -1044,6 +1043,7 @@ func TestFolder_EliteAccess_GrantsWhenBothLegsHold(t *testing.T) {
 //   - scored_viewer tuple sees {min_required:0.5, current:0.9} from
 //     write only → eval true.
 //   - token_viewer tuple sees {token:<bytes>} from check only → eval true.
+//
 // Intersection: both legs grant → grant.
 //
 // This proves the codegen-driven path matches SpiceDB's documented

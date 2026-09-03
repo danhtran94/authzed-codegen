@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"fmt"
+	"go/format"
 	"os"
 	"path/filepath"
 	"sort"
@@ -81,8 +82,13 @@ func (g *Generator) GenerateSchemaSource(tmplStr string, schemaBytes []byte) err
 		return err
 	}
 
+	formatted, err := format.Source(buf.Bytes())
+	if err != nil {
+		return fmt.Errorf("gofmt schema.gen.go: %w", err)
+	}
+
 	filePath := fmt.Sprintf("%s/schema.gen.go", g.OutputPath)
-	return os.WriteFile(filePath, buf.Bytes(), os.ModePerm)
+	return os.WriteFile(filePath, formatted, os.ModePerm)
 }
 
 func (g *Generator) GenerateObjectSource(name string) error {
@@ -275,11 +281,16 @@ func (g *Generator) GenerateObjectSource(name string) error {
 			DefinitionView: def,
 		})
 		if err != nil {
-			return nil
+			return err
+		}
+
+		formatted, err := format.Source(buf.Bytes())
+		if err != nil {
+			return fmt.Errorf("gofmt %s/%s: %w", def.ObjectType.Prefix, def.ObjectType.Name, err)
 		}
 
 		filePath := fmt.Sprintf("%s/%s/%s.gen.go", g.OutputPath, utilstr.PackageName(def.ObjectType.Prefix), utilstr.PackageName(def.ObjectType.Name))
-		err = os.WriteFile(filePath, buf.Bytes(), os.ModePerm)
+		err = os.WriteFile(filePath, formatted, os.ModePerm)
 		if err != nil {
 			return err
 		}

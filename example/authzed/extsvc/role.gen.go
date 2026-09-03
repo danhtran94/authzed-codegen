@@ -3,45 +3,44 @@
 package extsvc
 
 import (
-  "github.com/danhtran94/authzed-codegen/pkg/authz"
+	"github.com/danhtran94/authzed-codegen/pkg/authz"
 
-  "context"
-  "errors"
-  "fmt"
+	"context"
+	"errors"
+	"fmt"
 )
 
 const TypeRole authz.Type = "extsvc/role"
+
 type RelationRole authz.Relation
 type PermissionRole authz.Permission
-
 
 type Role authz.ID
 
 type RoleLookupResult struct {
-  Definite    []Role
-  Conditional []RoleConditionalLookupEntry
+	Definite    []Role
+	Conditional []RoleConditionalLookupEntry
 }
 type RoleConditionalLookupEntry struct {
-  ID          Role
-  MissingKeys []string
+	ID          Role
+	MissingKeys []string
 }
 
 func RoleStringer(id authz.StringConvertable) Role {
-  return Role(id.String())
+	return Role(id.String())
 }
 
 func RoleStringers(ids ...authz.StringConvertable) []Role {
-  result := []Role{}
-  for _, id := range ids {
-    result = append(result, Role(id.String()))
-  }
-  return result
+	result := []Role{}
+	for _, id := range ids {
+		result = append(result, Role(id.String()))
+	}
+	return result
 }
 
 func (role Role) ToList() []Role {
-  return []Role{ role }
+	return []Role{role}
 }
-
 
 // PurgeRelationsAsSubject deletes every relationship where this Role is the
 // subject, across the resource types whose schema allows Role as a subject.
@@ -50,15 +49,14 @@ func (role Role) ToList() []Role {
 // (idempotent). Use it when this Role is deleted from your store,
 // alongside PurgeRelations if Role also has relations.
 func (role Role) PurgeRelationsAsSubject(ctx context.Context) error {
-  eng := authz.GetEngine(ctx)
-  var errs []error
-  if err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
-    ResourceType: authz.Type("extsvc/folder"),
-    SubjectType: TypeRole,
-    SubjectID: authz.ID(role),
-  }); err != nil {
-    errs = append(errs, fmt.Errorf("purge Role as subject of extsvc/folder: %w", err))
-  }
-  return errors.Join(errs...)
+	eng := authz.GetEngine(ctx)
+	var errs []error
+	if err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
+		ResourceType: authz.Type("extsvc/folder"),
+		SubjectType:  TypeRole,
+		SubjectID:    authz.ID(role),
+	}); err != nil {
+		errs = append(errs, fmt.Errorf("purge Role as subject of extsvc/folder: %w", err))
+	}
+	return errors.Join(errs...)
 }
-

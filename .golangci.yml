@@ -1,13 +1,31 @@
-linters-settings:
-  depguard:
-    rules:
-      pkg-no-internal:
-        files:
-          - "**/pkg/**"
-        deny:
-          - pkg: "github.com/danhtran94/authzed-codegen/internal"
-            desc: "pkg/ is the runtime contract consumed by generated code; it must not depend on internal/"
-
+version: "2"
 linters:
   enable:
     - depguard
+  settings:
+    depguard:
+      rules:
+        pkg-no-internal:
+          files:
+            - '**/pkg/**'
+          deny:
+            - pkg: github.com/danhtran94/authzed-codegen/internal
+              desc: pkg/ is the runtime contract consumed by generated code; it must not depend on internal/
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

@@ -3,74 +3,76 @@
 package menusvc
 
 import (
-  "github.com/danhtran94/authzed-codegen/pkg/authz"
+	"github.com/danhtran94/authzed-codegen/pkg/authz"
 
-  "context"
-  "time"
-  "errors"
-  "fmt"
+	"context"
+	"errors"
+	"fmt"
+	"time"
 )
 
 const TypeUser authz.Type = "menusvc/user"
+
 type RelationUser authz.Relation
 type PermissionUser authz.Permission
 
 const UserBelongsCompany RelationUser = "belongs_company"
+
 type UserBelongsCompanyObjects struct {
-  Company []Company
+	Company []Company
 }
 
 type User authz.ID
 
 type UserLookupResult struct {
-  Definite    []User
-  Conditional []UserConditionalLookupEntry
+	Definite    []User
+	Conditional []UserConditionalLookupEntry
 }
 type UserConditionalLookupEntry struct {
-  ID          User
-  MissingKeys []string
+	ID          User
+	MissingKeys []string
 }
 
 func UserStringer(id authz.StringConvertable) User {
-  return User(id.String())
+	return User(id.String())
 }
 
 func UserStringers(ids ...authz.StringConvertable) []User {
-  result := []User{}
-  for _, id := range ids {
-    result = append(result, User(id.String()))
-  }
-  return result
+	result := []User{}
+	for _, id := range ids {
+		result = append(result, User(id.String()))
+	}
+	return result
 }
 
 func (user User) ToList() []User {
-  return []User{ user }
+	return []User{user}
 }
 
 func (user User) CreateBelongsCompanyRelations(ctx context.Context, objects UserBelongsCompanyObjects) error {
-  if len(objects.Company) > 0 {
-    err := authz.GetEngine(ctx).CreateRelations(ctx, authz.Resource{
-      Type: TypeUser,
-      ID: authz.ID(user),
-    }, authz.Relation(UserBelongsCompany), TypeCompany, authz.IDs(objects.Company))
-    if err != nil {
-      return err
-    }
-  }
-  return nil
+	if len(objects.Company) > 0 {
+		err := authz.GetEngine(ctx).CreateRelations(ctx, authz.Resource{
+			Type: TypeUser,
+			ID:   authz.ID(user),
+		}, authz.Relation(UserBelongsCompany), TypeCompany, authz.IDs(objects.Company))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (user User) DeleteBelongsCompanyRelations(ctx context.Context, objects UserBelongsCompanyObjects) error {
-  if len(objects.Company) > 0 {
-    err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
-      Type: TypeUser,
-      ID: authz.ID(user),
-    }, authz.Relation(UserBelongsCompany), TypeCompany, authz.IDs(objects.Company))
-    if err != nil {
-      return err
-    }
-  }
-  return nil
+	if len(objects.Company) > 0 {
+		err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
+			Type: TypeUser,
+			ID:   authz.ID(user),
+		}, authz.Relation(UserBelongsCompany), TypeCompany, authz.IDs(objects.Company))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // PurgeBelongsCompanyRelations deletes every belongs_company relationship on this
@@ -78,11 +80,11 @@ func (user User) DeleteBelongsCompanyRelations(ctx context.Context, objects User
 // DeleteBelongsCompanyRelations (which revokes the specific subjects you pass),
 // use this when belongs_company as a whole no longer applies to this User.
 func (user User) PurgeBelongsCompanyRelations(ctx context.Context) error {
-  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
-    ResourceType: TypeUser,
-    ResourceID: authz.ID(user),
-    Relation: authz.Relation(UserBelongsCompany),
-  })
+	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+		ResourceType: TypeUser,
+		ResourceID:   authz.ID(user),
+		Relation:     authz.Relation(UserBelongsCompany),
+	})
 }
 
 // PurgeRelations deletes every relationship on this User — all relations,
@@ -92,10 +94,10 @@ func (user User) PurgeBelongsCompanyRelations(ctx context.Context) error {
 // resource — for that, see PurgeRelationsAsSubject (emitted when User is a
 // subject anywhere in the schema).
 func (user User) PurgeRelations(ctx context.Context) error {
-  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
-    ResourceType: TypeUser,
-    ResourceID: authz.ID(user),
-  })
+	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+		ResourceType: TypeUser,
+		ResourceID:   authz.ID(user),
+	})
 }
 
 // PurgeRelationsAsSubject deletes every relationship where this User is the
@@ -105,149 +107,150 @@ func (user User) PurgeRelations(ctx context.Context) error {
 // (idempotent). Use it when this User is deleted from your store,
 // alongside PurgeRelations if User also has relations.
 func (user User) PurgeRelationsAsSubject(ctx context.Context) error {
-  eng := authz.GetEngine(ctx)
-  var errs []error
-  if err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
-    ResourceType: authz.Type("menusvc/booking"),
-    SubjectType: TypeUser,
-    SubjectID: authz.ID(user),
-  }); err != nil {
-    errs = append(errs, fmt.Errorf("purge User as subject of menusvc/booking: %w", err))
-  }
-  if err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
-    ResourceType: authz.Type("menusvc/company"),
-    SubjectType: TypeUser,
-    SubjectID: authz.ID(user),
-  }); err != nil {
-    errs = append(errs, fmt.Errorf("purge User as subject of menusvc/company: %w", err))
-  }
-  if err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
-    ResourceType: authz.Type("menusvc/order"),
-    SubjectType: TypeUser,
-    SubjectID: authz.ID(user),
-  }); err != nil {
-    errs = append(errs, fmt.Errorf("purge User as subject of menusvc/order: %w", err))
-  }
-  return errors.Join(errs...)
+	eng := authz.GetEngine(ctx)
+	var errs []error
+	if err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
+		ResourceType: authz.Type("menusvc/booking"),
+		SubjectType:  TypeUser,
+		SubjectID:    authz.ID(user),
+	}); err != nil {
+		errs = append(errs, fmt.Errorf("purge User as subject of menusvc/booking: %w", err))
+	}
+	if err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
+		ResourceType: authz.Type("menusvc/company"),
+		SubjectType:  TypeUser,
+		SubjectID:    authz.ID(user),
+	}); err != nil {
+		errs = append(errs, fmt.Errorf("purge User as subject of menusvc/company: %w", err))
+	}
+	if err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
+		ResourceType: authz.Type("menusvc/order"),
+		SubjectType:  TypeUser,
+		SubjectID:    authz.ID(user),
+	}); err != nil {
+		errs = append(errs, fmt.Errorf("purge User as subject of menusvc/order: %w", err))
+	}
+	return errors.Join(errs...)
 }
 
 type UserBelongsCompanyCompanyRelation struct {
-  ID            Company
-  SubRelation   string
-  CaveatName    string
-  CaveatContext map[string]any
-  ExpiresAt     *time.Time
+	ID            Company
+	SubRelation   string
+	CaveatName    string
+	CaveatContext map[string]any
+	ExpiresAt     *time.Time
 }
+
 func (r UserBelongsCompanyCompanyRelation) RelationID() Company { return r.ID }
 
 func (user User) ReadBelongsCompanyCompanyRelations(ctx context.Context) ([]UserBelongsCompanyCompanyRelation, error) {
-  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
-    Type: TypeUser,
-    ID: authz.ID(user),
-  }, authz.Relation(UserBelongsCompany), TypeCompany)
-  if err != nil {
-    return nil, err
-  }
+	tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+		Type: TypeUser,
+		ID:   authz.ID(user),
+	}, authz.Relation(UserBelongsCompany), TypeCompany)
+	if err != nil {
+		return nil, err
+	}
 
-  rels := make([]UserBelongsCompanyCompanyRelation, 0, len(tuples))
-  for _, t := range tuples {
-    if t.ID == authz.WildcardID {
-      continue
-    }
-    rels = append(rels, UserBelongsCompanyCompanyRelation{
-      ID:            Company(t.ID),
-      SubRelation:   t.SubRelation,
-      CaveatName:    t.CaveatName,
-      CaveatContext: t.CaveatContext,
-      ExpiresAt:     t.ExpiresAt,
-    })
-  }
-  return rels, nil
+	rels := make([]UserBelongsCompanyCompanyRelation, 0, len(tuples))
+	for _, t := range tuples {
+		if t.ID == authz.WildcardID {
+			continue
+		}
+		rels = append(rels, UserBelongsCompanyCompanyRelation{
+			ID:            Company(t.ID),
+			SubRelation:   t.SubRelation,
+			CaveatName:    t.CaveatName,
+			CaveatContext: t.CaveatContext,
+			ExpiresAt:     t.ExpiresAt,
+		})
+	}
+	return rels, nil
 }
 
 const UserManage PermissionUser = "manage"
 
 type CheckUserManageInputs struct {
-  User []User
+	User []User
 }
 
 func (user User) CheckManage(ctx context.Context, input CheckUserManageInputs) (bool, error) {
-  if len(input.User) == 0 && true {
-    return false, authz.ErrNoInput
-  }
+	if len(input.User) == 0 && true {
+		return false, authz.ErrNoInput
+	}
 
-  if len(input.User) > 0 {
-    err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
-      Type: TypeUser,
-      ID: authz.ID(user),
-    }, authz.Permission(UserManage), TypeUser, authz.IDs(input.User))
-    if err != nil {
-      return false, err
-    }
-  }
-  
-  return true, nil
+	if len(input.User) > 0 {
+		err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
+			Type: TypeUser,
+			ID:   authz.ID(user),
+		}, authz.Permission(UserManage), TypeUser, authz.IDs(input.User))
+		if err != nil {
+			return false, err
+		}
+	}
+
+	return true, nil
 }
 
 func LookupManageUserResources(ctx context.Context, input CheckUserManageInputs) (UserLookupResult, error) {
 
-  if len(input.User) > 0 {
-    result, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeUser, authz.Permission(UserManage),
-      TypeUser, authz.IDs(input.User),
-    )
-    if err != nil {
-      return UserLookupResult{}, err
-    }
+	if len(input.User) > 0 {
+		result, err := authz.GetEngine(ctx).LookupResources(ctx,
+			TypeUser, authz.Permission(UserManage),
+			TypeUser, authz.IDs(input.User),
+		)
+		if err != nil {
+			return UserLookupResult{}, err
+		}
 
-    out := UserLookupResult{
-      Definite:    authz.FromIDs[User](result.Definite),
-      Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
-    }
-    for _, c := range result.Conditional {
-      out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
-        ID:          User(c.ID),
-        MissingKeys: c.MissingKeys,
-      })
-    }
-    return out, nil
-  }
-  
-  return UserLookupResult{}, nil
+		out := UserLookupResult{
+			Definite:    authz.FromIDs[User](result.Definite),
+			Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
+		}
+		for _, c := range result.Conditional {
+			out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
+				ID:          User(c.ID),
+				MissingKeys: c.MissingKeys,
+			})
+		}
+		return out, nil
+	}
+
+	return UserLookupResult{}, nil
 }
 
 func (user User) LookupManageUserSubjects(ctx context.Context) (UserLookupResult, error) {
 
-  result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
-    authz.Resource{
-      Type: TypeUser,
-      ID: authz.ID(user),
-    },
-    authz.Permission(UserManage), TypeUser,
-  )
-  if err != nil {
-    return UserLookupResult{}, err
-  }
+	result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+		authz.Resource{
+			Type: TypeUser,
+			ID:   authz.ID(user),
+		},
+		authz.Permission(UserManage), TypeUser,
+	)
+	if err != nil {
+		return UserLookupResult{}, err
+	}
 
-  out := UserLookupResult{
-    Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
-    Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
-  }
-  for _, c := range result.Conditional {
-    out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
-      ID:          User(c.ID),
-      MissingKeys: c.MissingKeys,
-    })
-  }
-  return out, nil
+	out := UserLookupResult{
+		Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
+		Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
+	}
+	for _, c := range result.Conditional {
+		out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
+			ID:          User(c.ID),
+			MissingKeys: c.MissingKeys,
+		})
+	}
+	return out, nil
 }
 
 func (user User) LookupManageUserWildcardSubjects(ctx context.Context) (bool, error) {
-  return authz.GetEngine(ctx).HasPublicSubject(ctx,
-    authz.Resource{
-      Type: TypeUser,
-      ID: authz.ID(user),
-    },
-    authz.Permission(UserManage), TypeUser,
-  )
+	return authz.GetEngine(ctx).HasPublicSubject(ctx,
+		authz.Resource{
+			Type: TypeUser,
+			ID:   authz.ID(user),
+		},
+		authz.Permission(UserManage), TypeUser,
+	)
 }

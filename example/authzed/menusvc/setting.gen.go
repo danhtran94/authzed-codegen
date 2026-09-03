@@ -3,72 +3,74 @@
 package menusvc
 
 import (
-  "github.com/danhtran94/authzed-codegen/pkg/authz"
+	"github.com/danhtran94/authzed-codegen/pkg/authz"
 
-  "context"
-  "time"
+	"context"
+	"time"
 )
 
 const TypeSetting authz.Type = "menusvc/setting"
+
 type RelationSetting authz.Relation
 type PermissionSetting authz.Permission
 
 const SettingOwner RelationSetting = "owner"
+
 type SettingOwnerObjects struct {
-  Company []Company
+	Company []Company
 }
 
 type Setting authz.ID
 
 type SettingLookupResult struct {
-  Definite    []Setting
-  Conditional []SettingConditionalLookupEntry
+	Definite    []Setting
+	Conditional []SettingConditionalLookupEntry
 }
 type SettingConditionalLookupEntry struct {
-  ID          Setting
-  MissingKeys []string
+	ID          Setting
+	MissingKeys []string
 }
 
 func SettingStringer(id authz.StringConvertable) Setting {
-  return Setting(id.String())
+	return Setting(id.String())
 }
 
 func SettingStringers(ids ...authz.StringConvertable) []Setting {
-  result := []Setting{}
-  for _, id := range ids {
-    result = append(result, Setting(id.String()))
-  }
-  return result
+	result := []Setting{}
+	for _, id := range ids {
+		result = append(result, Setting(id.String()))
+	}
+	return result
 }
 
 func (setting Setting) ToList() []Setting {
-  return []Setting{ setting }
+	return []Setting{setting}
 }
 
 func (setting Setting) CreateOwnerRelations(ctx context.Context, objects SettingOwnerObjects) error {
-  if len(objects.Company) > 0 {
-    err := authz.GetEngine(ctx).CreateRelations(ctx, authz.Resource{
-      Type: TypeSetting,
-      ID: authz.ID(setting),
-    }, authz.Relation(SettingOwner), TypeCompany, authz.IDs(objects.Company))
-    if err != nil {
-      return err
-    }
-  }
-  return nil
+	if len(objects.Company) > 0 {
+		err := authz.GetEngine(ctx).CreateRelations(ctx, authz.Resource{
+			Type: TypeSetting,
+			ID:   authz.ID(setting),
+		}, authz.Relation(SettingOwner), TypeCompany, authz.IDs(objects.Company))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (setting Setting) DeleteOwnerRelations(ctx context.Context, objects SettingOwnerObjects) error {
-  if len(objects.Company) > 0 {
-    err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
-      Type: TypeSetting,
-      ID: authz.ID(setting),
-    }, authz.Relation(SettingOwner), TypeCompany, authz.IDs(objects.Company))
-    if err != nil {
-      return err
-    }
-  }
-  return nil
+	if len(objects.Company) > 0 {
+		err := authz.GetEngine(ctx).DeleteRelations(ctx, authz.Resource{
+			Type: TypeSetting,
+			ID:   authz.ID(setting),
+		}, authz.Relation(SettingOwner), TypeCompany, authz.IDs(objects.Company))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // PurgeOwnerRelations deletes every owner relationship on this
@@ -76,11 +78,11 @@ func (setting Setting) DeleteOwnerRelations(ctx context.Context, objects Setting
 // DeleteOwnerRelations (which revokes the specific subjects you pass),
 // use this when owner as a whole no longer applies to this Setting.
 func (setting Setting) PurgeOwnerRelations(ctx context.Context) error {
-  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
-    ResourceType: TypeSetting,
-    ResourceID: authz.ID(setting),
-    Relation: authz.Relation(SettingOwner),
-  })
+	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+		ResourceType: TypeSetting,
+		ResourceID:   authz.ID(setting),
+		Relation:     authz.Relation(SettingOwner),
+	})
 }
 
 // PurgeRelations deletes every relationship on this Setting — all relations,
@@ -90,129 +92,130 @@ func (setting Setting) PurgeOwnerRelations(ctx context.Context) error {
 // resource — for that, see PurgeRelationsAsSubject (emitted when Setting is a
 // subject anywhere in the schema).
 func (setting Setting) PurgeRelations(ctx context.Context) error {
-  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
-    ResourceType: TypeSetting,
-    ResourceID: authz.ID(setting),
-  })
+	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+		ResourceType: TypeSetting,
+		ResourceID:   authz.ID(setting),
+	})
 }
 
 type SettingOwnerCompanyRelation struct {
-  ID            Company
-  SubRelation   string
-  CaveatName    string
-  CaveatContext map[string]any
-  ExpiresAt     *time.Time
+	ID            Company
+	SubRelation   string
+	CaveatName    string
+	CaveatContext map[string]any
+	ExpiresAt     *time.Time
 }
+
 func (r SettingOwnerCompanyRelation) RelationID() Company { return r.ID }
 
 func (setting Setting) ReadOwnerCompanyRelations(ctx context.Context) ([]SettingOwnerCompanyRelation, error) {
-  tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
-    Type: TypeSetting,
-    ID: authz.ID(setting),
-  }, authz.Relation(SettingOwner), TypeCompany)
-  if err != nil {
-    return nil, err
-  }
+	tuples, err := authz.GetEngine(ctx).ReadRelations(ctx, authz.Resource{
+		Type: TypeSetting,
+		ID:   authz.ID(setting),
+	}, authz.Relation(SettingOwner), TypeCompany)
+	if err != nil {
+		return nil, err
+	}
 
-  rels := make([]SettingOwnerCompanyRelation, 0, len(tuples))
-  for _, t := range tuples {
-    if t.ID == authz.WildcardID {
-      continue
-    }
-    rels = append(rels, SettingOwnerCompanyRelation{
-      ID:            Company(t.ID),
-      SubRelation:   t.SubRelation,
-      CaveatName:    t.CaveatName,
-      CaveatContext: t.CaveatContext,
-      ExpiresAt:     t.ExpiresAt,
-    })
-  }
-  return rels, nil
+	rels := make([]SettingOwnerCompanyRelation, 0, len(tuples))
+	for _, t := range tuples {
+		if t.ID == authz.WildcardID {
+			continue
+		}
+		rels = append(rels, SettingOwnerCompanyRelation{
+			ID:            Company(t.ID),
+			SubRelation:   t.SubRelation,
+			CaveatName:    t.CaveatName,
+			CaveatContext: t.CaveatContext,
+			ExpiresAt:     t.ExpiresAt,
+		})
+	}
+	return rels, nil
 }
 
 const SettingWrite PermissionSetting = "write"
 
 type CheckSettingWriteInputs struct {
-  User []User
+	User []User
 }
 
 func (setting Setting) CheckWrite(ctx context.Context, input CheckSettingWriteInputs) (bool, error) {
-  if len(input.User) == 0 && true {
-    return false, authz.ErrNoInput
-  }
+	if len(input.User) == 0 && true {
+		return false, authz.ErrNoInput
+	}
 
-  if len(input.User) > 0 {
-    err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
-      Type: TypeSetting,
-      ID: authz.ID(setting),
-    }, authz.Permission(SettingWrite), TypeUser, authz.IDs(input.User))
-    if err != nil {
-      return false, err
-    }
-  }
-  
-  return true, nil
+	if len(input.User) > 0 {
+		err := authz.GetEngine(ctx).CheckPermission(ctx, authz.Resource{
+			Type: TypeSetting,
+			ID:   authz.ID(setting),
+		}, authz.Permission(SettingWrite), TypeUser, authz.IDs(input.User))
+		if err != nil {
+			return false, err
+		}
+	}
+
+	return true, nil
 }
 
 func LookupWriteSettingResources(ctx context.Context, input CheckSettingWriteInputs) (SettingLookupResult, error) {
 
-  if len(input.User) > 0 {
-    result, err := authz.GetEngine(ctx).LookupResources(ctx,
-      TypeSetting, authz.Permission(SettingWrite),
-      TypeUser, authz.IDs(input.User),
-    )
-    if err != nil {
-      return SettingLookupResult{}, err
-    }
+	if len(input.User) > 0 {
+		result, err := authz.GetEngine(ctx).LookupResources(ctx,
+			TypeSetting, authz.Permission(SettingWrite),
+			TypeUser, authz.IDs(input.User),
+		)
+		if err != nil {
+			return SettingLookupResult{}, err
+		}
 
-    out := SettingLookupResult{
-      Definite:    authz.FromIDs[Setting](result.Definite),
-      Conditional: make([]SettingConditionalLookupEntry, 0, len(result.Conditional)),
-    }
-    for _, c := range result.Conditional {
-      out.Conditional = append(out.Conditional, SettingConditionalLookupEntry{
-        ID:          Setting(c.ID),
-        MissingKeys: c.MissingKeys,
-      })
-    }
-    return out, nil
-  }
-  
-  return SettingLookupResult{}, nil
+		out := SettingLookupResult{
+			Definite:    authz.FromIDs[Setting](result.Definite),
+			Conditional: make([]SettingConditionalLookupEntry, 0, len(result.Conditional)),
+		}
+		for _, c := range result.Conditional {
+			out.Conditional = append(out.Conditional, SettingConditionalLookupEntry{
+				ID:          Setting(c.ID),
+				MissingKeys: c.MissingKeys,
+			})
+		}
+		return out, nil
+	}
+
+	return SettingLookupResult{}, nil
 }
 
 func (setting Setting) LookupWriteUserSubjects(ctx context.Context) (UserLookupResult, error) {
 
-  result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
-    authz.Resource{
-      Type: TypeSetting,
-      ID: authz.ID(setting),
-    },
-    authz.Permission(SettingWrite), TypeUser,
-  )
-  if err != nil {
-    return UserLookupResult{}, err
-  }
+	result, err := authz.GetEngine(ctx).LookupSubjects(ctx,
+		authz.Resource{
+			Type: TypeSetting,
+			ID:   authz.ID(setting),
+		},
+		authz.Permission(SettingWrite), TypeUser,
+	)
+	if err != nil {
+		return UserLookupResult{}, err
+	}
 
-  out := UserLookupResult{
-    Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
-    Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
-  }
-  for _, c := range result.Conditional {
-    out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
-      ID:          User(c.ID),
-      MissingKeys: c.MissingKeys,
-    })
-  }
-  return out, nil
+	out := UserLookupResult{
+		Definite:    authz.FromIDsExcludingWildcard[User](result.Definite),
+		Conditional: make([]UserConditionalLookupEntry, 0, len(result.Conditional)),
+	}
+	for _, c := range result.Conditional {
+		out.Conditional = append(out.Conditional, UserConditionalLookupEntry{
+			ID:          User(c.ID),
+			MissingKeys: c.MissingKeys,
+		})
+	}
+	return out, nil
 }
 
 func (setting Setting) LookupWriteUserWildcardSubjects(ctx context.Context) (bool, error) {
-  return authz.GetEngine(ctx).HasPublicSubject(ctx,
-    authz.Resource{
-      Type: TypeSetting,
-      ID: authz.ID(setting),
-    },
-    authz.Permission(SettingWrite), TypeUser,
-  )
+	return authz.GetEngine(ctx).HasPublicSubject(ctx,
+		authz.Resource{
+			Type: TypeSetting,
+			ID:   authz.ID(setting),
+		},
+		authz.Permission(SettingWrite), TypeUser,
+	)
 }

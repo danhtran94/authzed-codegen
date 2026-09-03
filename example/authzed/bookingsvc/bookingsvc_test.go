@@ -402,7 +402,6 @@ func TestBooking_ReadRelations(t *testing.T) {
 	assert.Equal(t, []bookingsvc.Customer{"t-c-read"}, authz.IDsOf(creators))
 }
 
-
 // AUZ-007 ext — caveat codegen in bookingsvc namespace.
 
 func TestBooking_RegionalWrite_GrantsWhenRegionMatches(t *testing.T) {

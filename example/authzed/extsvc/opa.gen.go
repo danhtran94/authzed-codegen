@@ -25,8 +25,9 @@ import (
 //	r := rego.New(opts...)
 //
 // Builtin signatures:
-//   extsvc.check_<resource>_<perm>(subject, resource_id, caveat_context) -> bool
-//   extsvc.lookup_<resource>_<perm>_resources(subject, caveat_context) -> []string
+//
+//	extsvc.check_<resource>_<perm>(subject, resource_id, caveat_context) -> bool
+//	extsvc.lookup_<resource>_<perm>_resources(subject, caveat_context) -> []string
 //
 // `subject` is an object keyed by SpiceDB subject type, value a single id
 // string or a list of id strings — e.g. {"extsvc/user": "alice"} or
@@ -4071,3999 +4072,3999 @@ func SpiceDBBuiltins(engine authz.Engine, ctx context.Context) []func(*rego.Rego
 func RegisterSpiceDBBuiltinsGlobal(engine authz.Engine, ctx context.Context) {
 	rego.RegisterBuiltin3(
 		&rego.Function{
-				Name: "extsvc.check_article_author_only",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: object keyed by SpiceDB subject type, value
-						// a string id or a list of string ids. Fully dynamic —
-						// OPA's static-property object types are effectively
-						// required-all, so per-permission key sets can't be
-						// declared without breaking single-key calls; bogus
-						// subject types surface as a runtime error from SpiceDB.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.S,
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.B,
+			Name: "extsvc.check_article_author_only",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: object keyed by SpiceDB subject type, value
+					// a string id or a list of string ids. Fully dynamic —
+					// OPA's static-property object types are effectively
+					// required-all, so per-permission key sets can't be
+					// declared without breaking single-key calls; bogus
+					// subject types surface as a runtime error from SpiceDB.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.S,
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.B,
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, resTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				resID, ok := resTerm.Value.(ast.String)
-				if !ok {
-					return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			resID, ok := resTerm.Value.(ast.String)
+			if !ok {
+				return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			}
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.BooleanTerm(false), nil
+			}
+
+			res := authz.Resource{Type: authz.Type("extsvc/article"), ID: authz.ID(resID)}
+			perm := authz.Permission("author_only")
+			// AND across present subject-type keys — matches the typed
+			// Check<X> method, which short-circuits to false on the first
+			// non-granted subject slice. (Single-key call: this is just one check.)
+			for _, e := range entries {
+				var checkErr error
+				if caveatCtx == nil {
+					checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
+				} else {
+					ctxMap := structpbToMap(caveatCtx)
+					checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 				}
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
+				granted, fatal := checkOneGranted(checkErr)
+				if fatal != nil {
+					return nil, fatal
 				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
+				if !granted {
 					return ast.BooleanTerm(false), nil
 				}
-
-				res := authz.Resource{Type: authz.Type("extsvc/article"), ID: authz.ID(resID)}
-				perm := authz.Permission("author_only")
-				// AND across present subject-type keys — matches the typed
-				// Check<X> method, which short-circuits to false on the first
-				// non-granted subject slice. (Single-key call: this is just one check.)
-				for _, e := range entries {
-					var checkErr error
-					if caveatCtx == nil {
-						checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
-					} else {
-						ctxMap := structpbToMap(caveatCtx)
-						checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-					}
-					granted, fatal := checkOneGranted(checkErr)
-					if fatal != nil {
-						return nil, fatal
-					}
-					if !granted {
-						return ast.BooleanTerm(false), nil
-					}
-				}
-				return ast.BooleanTerm(true), nil
-			},
+			}
+			return ast.BooleanTerm(true), nil
+		},
 	)
 	rego.RegisterBuiltin2(
 		&rego.Function{
-				Name: "extsvc.lookup_article_author_only_resources",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: see check_* above — same object shape.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.NewArray(nil, types.S),
+			Name: "extsvc.lookup_article_author_only_resources",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: see check_* above — same object shape.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.NewArray(nil, types.S),
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
-				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
-					return ast.ArrayTerm(), nil
-				}
-				// First present subject-type key wins — matches the typed
-				// Lookup<Perm><Resource>Resources method. Pass exactly one
-				// key for predictable results.
-				e := entries[0]
-				resType := authz.Type("extsvc/article")
-				perm := authz.Permission("author_only")
-				// Returns LookupResult.Definite only; Conditional entries dropped per
-				// scope-opa-go-builtins-codegen.md Out of Scope item 8.
-				var result authz.LookupResult
-				if caveatCtx == nil {
-					result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
-				} else {
-					ctxMap := structpbToMap(caveatCtx)
-					result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-				}
-				if err != nil {
-					return nil, fmt.Errorf("LookupResources: %v", err)
-				}
-				terms := make([]*ast.Term, len(result.Definite))
-				for i, id := range result.Definite {
-					terms[i] = ast.StringTerm(string(id))
-				}
-				return ast.ArrayTerm(terms...), nil
-			},
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.ArrayTerm(), nil
+			}
+			// First present subject-type key wins — matches the typed
+			// Lookup<Perm><Resource>Resources method. Pass exactly one
+			// key for predictable results.
+			e := entries[0]
+			resType := authz.Type("extsvc/article")
+			perm := authz.Permission("author_only")
+			// Returns LookupResult.Definite only; Conditional entries dropped per
+			// scope-opa-go-builtins-codegen.md Out of Scope item 8.
+			var result authz.LookupResult
+			if caveatCtx == nil {
+				result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
+			} else {
+				ctxMap := structpbToMap(caveatCtx)
+				result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
+			}
+			if err != nil {
+				return nil, fmt.Errorf("LookupResources: %v", err)
+			}
+			terms := make([]*ast.Term, len(result.Definite))
+			for i, id := range result.Definite {
+				terms[i] = ast.StringTerm(string(id))
+			}
+			return ast.ArrayTerm(terms...), nil
+		},
 	)
 	rego.RegisterBuiltin3(
 		&rego.Function{
-				Name: "extsvc.check_article_editor",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: object keyed by SpiceDB subject type, value
-						// a string id or a list of string ids. Fully dynamic —
-						// OPA's static-property object types are effectively
-						// required-all, so per-permission key sets can't be
-						// declared without breaking single-key calls; bogus
-						// subject types surface as a runtime error from SpiceDB.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.S,
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.B,
+			Name: "extsvc.check_article_editor",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: object keyed by SpiceDB subject type, value
+					// a string id or a list of string ids. Fully dynamic —
+					// OPA's static-property object types are effectively
+					// required-all, so per-permission key sets can't be
+					// declared without breaking single-key calls; bogus
+					// subject types surface as a runtime error from SpiceDB.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.S,
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.B,
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, resTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				resID, ok := resTerm.Value.(ast.String)
-				if !ok {
-					return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			resID, ok := resTerm.Value.(ast.String)
+			if !ok {
+				return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			}
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.BooleanTerm(false), nil
+			}
+
+			res := authz.Resource{Type: authz.Type("extsvc/article"), ID: authz.ID(resID)}
+			perm := authz.Permission("editor")
+			// AND across present subject-type keys — matches the typed
+			// Check<X> method, which short-circuits to false on the first
+			// non-granted subject slice. (Single-key call: this is just one check.)
+			for _, e := range entries {
+				var checkErr error
+				if caveatCtx == nil {
+					checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
+				} else {
+					ctxMap := structpbToMap(caveatCtx)
+					checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 				}
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
+				granted, fatal := checkOneGranted(checkErr)
+				if fatal != nil {
+					return nil, fatal
 				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
+				if !granted {
 					return ast.BooleanTerm(false), nil
 				}
-
-				res := authz.Resource{Type: authz.Type("extsvc/article"), ID: authz.ID(resID)}
-				perm := authz.Permission("editor")
-				// AND across present subject-type keys — matches the typed
-				// Check<X> method, which short-circuits to false on the first
-				// non-granted subject slice. (Single-key call: this is just one check.)
-				for _, e := range entries {
-					var checkErr error
-					if caveatCtx == nil {
-						checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
-					} else {
-						ctxMap := structpbToMap(caveatCtx)
-						checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-					}
-					granted, fatal := checkOneGranted(checkErr)
-					if fatal != nil {
-						return nil, fatal
-					}
-					if !granted {
-						return ast.BooleanTerm(false), nil
-					}
-				}
-				return ast.BooleanTerm(true), nil
-			},
+			}
+			return ast.BooleanTerm(true), nil
+		},
 	)
 	rego.RegisterBuiltin2(
 		&rego.Function{
-				Name: "extsvc.lookup_article_editor_resources",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: see check_* above — same object shape.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.NewArray(nil, types.S),
+			Name: "extsvc.lookup_article_editor_resources",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: see check_* above — same object shape.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.NewArray(nil, types.S),
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
-				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
-					return ast.ArrayTerm(), nil
-				}
-				// First present subject-type key wins — matches the typed
-				// Lookup<Perm><Resource>Resources method. Pass exactly one
-				// key for predictable results.
-				e := entries[0]
-				resType := authz.Type("extsvc/article")
-				perm := authz.Permission("editor")
-				// Returns LookupResult.Definite only; Conditional entries dropped per
-				// scope-opa-go-builtins-codegen.md Out of Scope item 8.
-				var result authz.LookupResult
-				if caveatCtx == nil {
-					result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
-				} else {
-					ctxMap := structpbToMap(caveatCtx)
-					result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-				}
-				if err != nil {
-					return nil, fmt.Errorf("LookupResources: %v", err)
-				}
-				terms := make([]*ast.Term, len(result.Definite))
-				for i, id := range result.Definite {
-					terms[i] = ast.StringTerm(string(id))
-				}
-				return ast.ArrayTerm(terms...), nil
-			},
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.ArrayTerm(), nil
+			}
+			// First present subject-type key wins — matches the typed
+			// Lookup<Perm><Resource>Resources method. Pass exactly one
+			// key for predictable results.
+			e := entries[0]
+			resType := authz.Type("extsvc/article")
+			perm := authz.Permission("editor")
+			// Returns LookupResult.Definite only; Conditional entries dropped per
+			// scope-opa-go-builtins-codegen.md Out of Scope item 8.
+			var result authz.LookupResult
+			if caveatCtx == nil {
+				result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
+			} else {
+				ctxMap := structpbToMap(caveatCtx)
+				result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
+			}
+			if err != nil {
+				return nil, fmt.Errorf("LookupResources: %v", err)
+			}
+			terms := make([]*ast.Term, len(result.Definite))
+			for i, id := range result.Definite {
+				terms[i] = ast.StringTerm(string(id))
+			}
+			return ast.ArrayTerm(terms...), nil
+		},
 	)
 	rego.RegisterBuiltin3(
 		&rego.Function{
-				Name: "extsvc.check_document_admin",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: object keyed by SpiceDB subject type, value
-						// a string id or a list of string ids. Fully dynamic —
-						// OPA's static-property object types are effectively
-						// required-all, so per-permission key sets can't be
-						// declared without breaking single-key calls; bogus
-						// subject types surface as a runtime error from SpiceDB.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.S,
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.B,
+			Name: "extsvc.check_document_admin",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: object keyed by SpiceDB subject type, value
+					// a string id or a list of string ids. Fully dynamic —
+					// OPA's static-property object types are effectively
+					// required-all, so per-permission key sets can't be
+					// declared without breaking single-key calls; bogus
+					// subject types surface as a runtime error from SpiceDB.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.S,
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.B,
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, resTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				resID, ok := resTerm.Value.(ast.String)
-				if !ok {
-					return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			resID, ok := resTerm.Value.(ast.String)
+			if !ok {
+				return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			}
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.BooleanTerm(false), nil
+			}
+
+			res := authz.Resource{Type: authz.Type("extsvc/document"), ID: authz.ID(resID)}
+			perm := authz.Permission("admin")
+			// AND across present subject-type keys — matches the typed
+			// Check<X> method, which short-circuits to false on the first
+			// non-granted subject slice. (Single-key call: this is just one check.)
+			for _, e := range entries {
+				var checkErr error
+				if caveatCtx == nil {
+					checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
+				} else {
+					ctxMap := structpbToMap(caveatCtx)
+					checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 				}
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
+				granted, fatal := checkOneGranted(checkErr)
+				if fatal != nil {
+					return nil, fatal
 				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
+				if !granted {
 					return ast.BooleanTerm(false), nil
 				}
-
-				res := authz.Resource{Type: authz.Type("extsvc/document"), ID: authz.ID(resID)}
-				perm := authz.Permission("admin")
-				// AND across present subject-type keys — matches the typed
-				// Check<X> method, which short-circuits to false on the first
-				// non-granted subject slice. (Single-key call: this is just one check.)
-				for _, e := range entries {
-					var checkErr error
-					if caveatCtx == nil {
-						checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
-					} else {
-						ctxMap := structpbToMap(caveatCtx)
-						checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-					}
-					granted, fatal := checkOneGranted(checkErr)
-					if fatal != nil {
-						return nil, fatal
-					}
-					if !granted {
-						return ast.BooleanTerm(false), nil
-					}
-				}
-				return ast.BooleanTerm(true), nil
-			},
+			}
+			return ast.BooleanTerm(true), nil
+		},
 	)
 	rego.RegisterBuiltin2(
 		&rego.Function{
-				Name: "extsvc.lookup_document_admin_resources",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: see check_* above — same object shape.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.NewArray(nil, types.S),
+			Name: "extsvc.lookup_document_admin_resources",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: see check_* above — same object shape.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.NewArray(nil, types.S),
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
-				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
-					return ast.ArrayTerm(), nil
-				}
-				// First present subject-type key wins — matches the typed
-				// Lookup<Perm><Resource>Resources method. Pass exactly one
-				// key for predictable results.
-				e := entries[0]
-				resType := authz.Type("extsvc/document")
-				perm := authz.Permission("admin")
-				// Returns LookupResult.Definite only; Conditional entries dropped per
-				// scope-opa-go-builtins-codegen.md Out of Scope item 8.
-				var result authz.LookupResult
-				if caveatCtx == nil {
-					result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
-				} else {
-					ctxMap := structpbToMap(caveatCtx)
-					result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-				}
-				if err != nil {
-					return nil, fmt.Errorf("LookupResources: %v", err)
-				}
-				terms := make([]*ast.Term, len(result.Definite))
-				for i, id := range result.Definite {
-					terms[i] = ast.StringTerm(string(id))
-				}
-				return ast.ArrayTerm(terms...), nil
-			},
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.ArrayTerm(), nil
+			}
+			// First present subject-type key wins — matches the typed
+			// Lookup<Perm><Resource>Resources method. Pass exactly one
+			// key for predictable results.
+			e := entries[0]
+			resType := authz.Type("extsvc/document")
+			perm := authz.Permission("admin")
+			// Returns LookupResult.Definite only; Conditional entries dropped per
+			// scope-opa-go-builtins-codegen.md Out of Scope item 8.
+			var result authz.LookupResult
+			if caveatCtx == nil {
+				result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
+			} else {
+				ctxMap := structpbToMap(caveatCtx)
+				result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
+			}
+			if err != nil {
+				return nil, fmt.Errorf("LookupResources: %v", err)
+			}
+			terms := make([]*ast.Term, len(result.Definite))
+			for i, id := range result.Definite {
+				terms[i] = ast.StringTerm(string(id))
+			}
+			return ast.ArrayTerm(terms...), nil
+		},
 	)
 	rego.RegisterBuiltin3(
 		&rego.Function{
-				Name: "extsvc.check_document_edit",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: object keyed by SpiceDB subject type, value
-						// a string id or a list of string ids. Fully dynamic —
-						// OPA's static-property object types are effectively
-						// required-all, so per-permission key sets can't be
-						// declared without breaking single-key calls; bogus
-						// subject types surface as a runtime error from SpiceDB.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.S,
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.B,
+			Name: "extsvc.check_document_edit",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: object keyed by SpiceDB subject type, value
+					// a string id or a list of string ids. Fully dynamic —
+					// OPA's static-property object types are effectively
+					// required-all, so per-permission key sets can't be
+					// declared without breaking single-key calls; bogus
+					// subject types surface as a runtime error from SpiceDB.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.S,
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.B,
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, resTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				resID, ok := resTerm.Value.(ast.String)
-				if !ok {
-					return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			resID, ok := resTerm.Value.(ast.String)
+			if !ok {
+				return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			}
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.BooleanTerm(false), nil
+			}
+
+			res := authz.Resource{Type: authz.Type("extsvc/document"), ID: authz.ID(resID)}
+			perm := authz.Permission("edit")
+			// AND across present subject-type keys — matches the typed
+			// Check<X> method, which short-circuits to false on the first
+			// non-granted subject slice. (Single-key call: this is just one check.)
+			for _, e := range entries {
+				var checkErr error
+				if caveatCtx == nil {
+					checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
+				} else {
+					ctxMap := structpbToMap(caveatCtx)
+					checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 				}
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
+				granted, fatal := checkOneGranted(checkErr)
+				if fatal != nil {
+					return nil, fatal
 				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
+				if !granted {
 					return ast.BooleanTerm(false), nil
 				}
-
-				res := authz.Resource{Type: authz.Type("extsvc/document"), ID: authz.ID(resID)}
-				perm := authz.Permission("edit")
-				// AND across present subject-type keys — matches the typed
-				// Check<X> method, which short-circuits to false on the first
-				// non-granted subject slice. (Single-key call: this is just one check.)
-				for _, e := range entries {
-					var checkErr error
-					if caveatCtx == nil {
-						checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
-					} else {
-						ctxMap := structpbToMap(caveatCtx)
-						checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-					}
-					granted, fatal := checkOneGranted(checkErr)
-					if fatal != nil {
-						return nil, fatal
-					}
-					if !granted {
-						return ast.BooleanTerm(false), nil
-					}
-				}
-				return ast.BooleanTerm(true), nil
-			},
+			}
+			return ast.BooleanTerm(true), nil
+		},
 	)
 	rego.RegisterBuiltin2(
 		&rego.Function{
-				Name: "extsvc.lookup_document_edit_resources",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: see check_* above — same object shape.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.NewArray(nil, types.S),
+			Name: "extsvc.lookup_document_edit_resources",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: see check_* above — same object shape.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.NewArray(nil, types.S),
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
-				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
-					return ast.ArrayTerm(), nil
-				}
-				// First present subject-type key wins — matches the typed
-				// Lookup<Perm><Resource>Resources method. Pass exactly one
-				// key for predictable results.
-				e := entries[0]
-				resType := authz.Type("extsvc/document")
-				perm := authz.Permission("edit")
-				// Returns LookupResult.Definite only; Conditional entries dropped per
-				// scope-opa-go-builtins-codegen.md Out of Scope item 8.
-				var result authz.LookupResult
-				if caveatCtx == nil {
-					result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
-				} else {
-					ctxMap := structpbToMap(caveatCtx)
-					result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-				}
-				if err != nil {
-					return nil, fmt.Errorf("LookupResources: %v", err)
-				}
-				terms := make([]*ast.Term, len(result.Definite))
-				for i, id := range result.Definite {
-					terms[i] = ast.StringTerm(string(id))
-				}
-				return ast.ArrayTerm(terms...), nil
-			},
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.ArrayTerm(), nil
+			}
+			// First present subject-type key wins — matches the typed
+			// Lookup<Perm><Resource>Resources method. Pass exactly one
+			// key for predictable results.
+			e := entries[0]
+			resType := authz.Type("extsvc/document")
+			perm := authz.Permission("edit")
+			// Returns LookupResult.Definite only; Conditional entries dropped per
+			// scope-opa-go-builtins-codegen.md Out of Scope item 8.
+			var result authz.LookupResult
+			if caveatCtx == nil {
+				result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
+			} else {
+				ctxMap := structpbToMap(caveatCtx)
+				result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
+			}
+			if err != nil {
+				return nil, fmt.Errorf("LookupResources: %v", err)
+			}
+			terms := make([]*ast.Term, len(result.Definite))
+			for i, id := range result.Definite {
+				terms[i] = ast.StringTerm(string(id))
+			}
+			return ast.ArrayTerm(terms...), nil
+		},
 	)
 	rego.RegisterBuiltin3(
 		&rego.Function{
-				Name: "extsvc.check_document_inherited_collab",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: object keyed by SpiceDB subject type, value
-						// a string id or a list of string ids. Fully dynamic —
-						// OPA's static-property object types are effectively
-						// required-all, so per-permission key sets can't be
-						// declared without breaking single-key calls; bogus
-						// subject types surface as a runtime error from SpiceDB.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.S,
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.B,
+			Name: "extsvc.check_document_inherited_collab",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: object keyed by SpiceDB subject type, value
+					// a string id or a list of string ids. Fully dynamic —
+					// OPA's static-property object types are effectively
+					// required-all, so per-permission key sets can't be
+					// declared without breaking single-key calls; bogus
+					// subject types surface as a runtime error from SpiceDB.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.S,
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.B,
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, resTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				resID, ok := resTerm.Value.(ast.String)
-				if !ok {
-					return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			resID, ok := resTerm.Value.(ast.String)
+			if !ok {
+				return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			}
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.BooleanTerm(false), nil
+			}
+
+			res := authz.Resource{Type: authz.Type("extsvc/document"), ID: authz.ID(resID)}
+			perm := authz.Permission("inherited_collab")
+			// AND across present subject-type keys — matches the typed
+			// Check<X> method, which short-circuits to false on the first
+			// non-granted subject slice. (Single-key call: this is just one check.)
+			for _, e := range entries {
+				var checkErr error
+				if caveatCtx == nil {
+					checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
+				} else {
+					ctxMap := structpbToMap(caveatCtx)
+					checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 				}
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
+				granted, fatal := checkOneGranted(checkErr)
+				if fatal != nil {
+					return nil, fatal
 				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
+				if !granted {
 					return ast.BooleanTerm(false), nil
 				}
-
-				res := authz.Resource{Type: authz.Type("extsvc/document"), ID: authz.ID(resID)}
-				perm := authz.Permission("inherited_collab")
-				// AND across present subject-type keys — matches the typed
-				// Check<X> method, which short-circuits to false on the first
-				// non-granted subject slice. (Single-key call: this is just one check.)
-				for _, e := range entries {
-					var checkErr error
-					if caveatCtx == nil {
-						checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
-					} else {
-						ctxMap := structpbToMap(caveatCtx)
-						checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-					}
-					granted, fatal := checkOneGranted(checkErr)
-					if fatal != nil {
-						return nil, fatal
-					}
-					if !granted {
-						return ast.BooleanTerm(false), nil
-					}
-				}
-				return ast.BooleanTerm(true), nil
-			},
+			}
+			return ast.BooleanTerm(true), nil
+		},
 	)
 	rego.RegisterBuiltin2(
 		&rego.Function{
-				Name: "extsvc.lookup_document_inherited_collab_resources",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: see check_* above — same object shape.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.NewArray(nil, types.S),
+			Name: "extsvc.lookup_document_inherited_collab_resources",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: see check_* above — same object shape.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.NewArray(nil, types.S),
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
-				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
-					return ast.ArrayTerm(), nil
-				}
-				// First present subject-type key wins — matches the typed
-				// Lookup<Perm><Resource>Resources method. Pass exactly one
-				// key for predictable results.
-				e := entries[0]
-				resType := authz.Type("extsvc/document")
-				perm := authz.Permission("inherited_collab")
-				// Returns LookupResult.Definite only; Conditional entries dropped per
-				// scope-opa-go-builtins-codegen.md Out of Scope item 8.
-				var result authz.LookupResult
-				if caveatCtx == nil {
-					result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
-				} else {
-					ctxMap := structpbToMap(caveatCtx)
-					result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-				}
-				if err != nil {
-					return nil, fmt.Errorf("LookupResources: %v", err)
-				}
-				terms := make([]*ast.Term, len(result.Definite))
-				for i, id := range result.Definite {
-					terms[i] = ast.StringTerm(string(id))
-				}
-				return ast.ArrayTerm(terms...), nil
-			},
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.ArrayTerm(), nil
+			}
+			// First present subject-type key wins — matches the typed
+			// Lookup<Perm><Resource>Resources method. Pass exactly one
+			// key for predictable results.
+			e := entries[0]
+			resType := authz.Type("extsvc/document")
+			perm := authz.Permission("inherited_collab")
+			// Returns LookupResult.Definite only; Conditional entries dropped per
+			// scope-opa-go-builtins-codegen.md Out of Scope item 8.
+			var result authz.LookupResult
+			if caveatCtx == nil {
+				result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
+			} else {
+				ctxMap := structpbToMap(caveatCtx)
+				result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
+			}
+			if err != nil {
+				return nil, fmt.Errorf("LookupResources: %v", err)
+			}
+			terms := make([]*ast.Term, len(result.Definite))
+			for i, id := range result.Definite {
+				terms[i] = ast.StringTerm(string(id))
+			}
+			return ast.ArrayTerm(terms...), nil
+		},
 	)
 	rego.RegisterBuiltin3(
 		&rego.Function{
-				Name: "extsvc.check_document_view",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: object keyed by SpiceDB subject type, value
-						// a string id or a list of string ids. Fully dynamic —
-						// OPA's static-property object types are effectively
-						// required-all, so per-permission key sets can't be
-						// declared without breaking single-key calls; bogus
-						// subject types surface as a runtime error from SpiceDB.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.S,
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.B,
+			Name: "extsvc.check_document_view",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: object keyed by SpiceDB subject type, value
+					// a string id or a list of string ids. Fully dynamic —
+					// OPA's static-property object types are effectively
+					// required-all, so per-permission key sets can't be
+					// declared without breaking single-key calls; bogus
+					// subject types surface as a runtime error from SpiceDB.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.S,
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.B,
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, resTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				resID, ok := resTerm.Value.(ast.String)
-				if !ok {
-					return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			resID, ok := resTerm.Value.(ast.String)
+			if !ok {
+				return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			}
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.BooleanTerm(false), nil
+			}
+
+			res := authz.Resource{Type: authz.Type("extsvc/document"), ID: authz.ID(resID)}
+			perm := authz.Permission("view")
+			// AND across present subject-type keys — matches the typed
+			// Check<X> method, which short-circuits to false on the first
+			// non-granted subject slice. (Single-key call: this is just one check.)
+			for _, e := range entries {
+				var checkErr error
+				if caveatCtx == nil {
+					checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
+				} else {
+					ctxMap := structpbToMap(caveatCtx)
+					checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 				}
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
+				granted, fatal := checkOneGranted(checkErr)
+				if fatal != nil {
+					return nil, fatal
 				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
+				if !granted {
 					return ast.BooleanTerm(false), nil
 				}
-
-				res := authz.Resource{Type: authz.Type("extsvc/document"), ID: authz.ID(resID)}
-				perm := authz.Permission("view")
-				// AND across present subject-type keys — matches the typed
-				// Check<X> method, which short-circuits to false on the first
-				// non-granted subject slice. (Single-key call: this is just one check.)
-				for _, e := range entries {
-					var checkErr error
-					if caveatCtx == nil {
-						checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
-					} else {
-						ctxMap := structpbToMap(caveatCtx)
-						checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-					}
-					granted, fatal := checkOneGranted(checkErr)
-					if fatal != nil {
-						return nil, fatal
-					}
-					if !granted {
-						return ast.BooleanTerm(false), nil
-					}
-				}
-				return ast.BooleanTerm(true), nil
-			},
+			}
+			return ast.BooleanTerm(true), nil
+		},
 	)
 	rego.RegisterBuiltin2(
 		&rego.Function{
-				Name: "extsvc.lookup_document_view_resources",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: see check_* above — same object shape.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.NewArray(nil, types.S),
+			Name: "extsvc.lookup_document_view_resources",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: see check_* above — same object shape.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.NewArray(nil, types.S),
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
-				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
-					return ast.ArrayTerm(), nil
-				}
-				// First present subject-type key wins — matches the typed
-				// Lookup<Perm><Resource>Resources method. Pass exactly one
-				// key for predictable results.
-				e := entries[0]
-				resType := authz.Type("extsvc/document")
-				perm := authz.Permission("view")
-				// Returns LookupResult.Definite only; Conditional entries dropped per
-				// scope-opa-go-builtins-codegen.md Out of Scope item 8.
-				var result authz.LookupResult
-				if caveatCtx == nil {
-					result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
-				} else {
-					ctxMap := structpbToMap(caveatCtx)
-					result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-				}
-				if err != nil {
-					return nil, fmt.Errorf("LookupResources: %v", err)
-				}
-				terms := make([]*ast.Term, len(result.Definite))
-				for i, id := range result.Definite {
-					terms[i] = ast.StringTerm(string(id))
-				}
-				return ast.ArrayTerm(terms...), nil
-			},
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.ArrayTerm(), nil
+			}
+			// First present subject-type key wins — matches the typed
+			// Lookup<Perm><Resource>Resources method. Pass exactly one
+			// key for predictable results.
+			e := entries[0]
+			resType := authz.Type("extsvc/document")
+			perm := authz.Permission("view")
+			// Returns LookupResult.Definite only; Conditional entries dropped per
+			// scope-opa-go-builtins-codegen.md Out of Scope item 8.
+			var result authz.LookupResult
+			if caveatCtx == nil {
+				result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
+			} else {
+				ctxMap := structpbToMap(caveatCtx)
+				result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
+			}
+			if err != nil {
+				return nil, fmt.Errorf("LookupResources: %v", err)
+			}
+			terms := make([]*ast.Term, len(result.Definite))
+			for i, id := range result.Definite {
+				terms[i] = ast.StringTerm(string(id))
+			}
+			return ast.ArrayTerm(terms...), nil
+		},
 	)
 	rego.RegisterBuiltin3(
 		&rego.Function{
-				Name: "extsvc.check_folder_act",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: object keyed by SpiceDB subject type, value
-						// a string id or a list of string ids. Fully dynamic —
-						// OPA's static-property object types are effectively
-						// required-all, so per-permission key sets can't be
-						// declared without breaking single-key calls; bogus
-						// subject types surface as a runtime error from SpiceDB.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.S,
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.B,
+			Name: "extsvc.check_folder_act",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: object keyed by SpiceDB subject type, value
+					// a string id or a list of string ids. Fully dynamic —
+					// OPA's static-property object types are effectively
+					// required-all, so per-permission key sets can't be
+					// declared without breaking single-key calls; bogus
+					// subject types surface as a runtime error from SpiceDB.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.S,
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.B,
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, resTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				resID, ok := resTerm.Value.(ast.String)
-				if !ok {
-					return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			resID, ok := resTerm.Value.(ast.String)
+			if !ok {
+				return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			}
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.BooleanTerm(false), nil
+			}
+
+			res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
+			perm := authz.Permission("act")
+			// AND across present subject-type keys — matches the typed
+			// Check<X> method, which short-circuits to false on the first
+			// non-granted subject slice. (Single-key call: this is just one check.)
+			for _, e := range entries {
+				var checkErr error
+				if caveatCtx == nil {
+					checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
+				} else {
+					ctxMap := structpbToMap(caveatCtx)
+					checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 				}
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
+				granted, fatal := checkOneGranted(checkErr)
+				if fatal != nil {
+					return nil, fatal
 				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
+				if !granted {
 					return ast.BooleanTerm(false), nil
 				}
-
-				res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
-				perm := authz.Permission("act")
-				// AND across present subject-type keys — matches the typed
-				// Check<X> method, which short-circuits to false on the first
-				// non-granted subject slice. (Single-key call: this is just one check.)
-				for _, e := range entries {
-					var checkErr error
-					if caveatCtx == nil {
-						checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
-					} else {
-						ctxMap := structpbToMap(caveatCtx)
-						checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-					}
-					granted, fatal := checkOneGranted(checkErr)
-					if fatal != nil {
-						return nil, fatal
-					}
-					if !granted {
-						return ast.BooleanTerm(false), nil
-					}
-				}
-				return ast.BooleanTerm(true), nil
-			},
+			}
+			return ast.BooleanTerm(true), nil
+		},
 	)
 	rego.RegisterBuiltin2(
 		&rego.Function{
-				Name: "extsvc.lookup_folder_act_resources",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: see check_* above — same object shape.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.NewArray(nil, types.S),
+			Name: "extsvc.lookup_folder_act_resources",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: see check_* above — same object shape.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.NewArray(nil, types.S),
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
-				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
-					return ast.ArrayTerm(), nil
-				}
-				// First present subject-type key wins — matches the typed
-				// Lookup<Perm><Resource>Resources method. Pass exactly one
-				// key for predictable results.
-				e := entries[0]
-				resType := authz.Type("extsvc/folder")
-				perm := authz.Permission("act")
-				// Returns LookupResult.Definite only; Conditional entries dropped per
-				// scope-opa-go-builtins-codegen.md Out of Scope item 8.
-				var result authz.LookupResult
-				if caveatCtx == nil {
-					result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
-				} else {
-					ctxMap := structpbToMap(caveatCtx)
-					result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-				}
-				if err != nil {
-					return nil, fmt.Errorf("LookupResources: %v", err)
-				}
-				terms := make([]*ast.Term, len(result.Definite))
-				for i, id := range result.Definite {
-					terms[i] = ast.StringTerm(string(id))
-				}
-				return ast.ArrayTerm(terms...), nil
-			},
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.ArrayTerm(), nil
+			}
+			// First present subject-type key wins — matches the typed
+			// Lookup<Perm><Resource>Resources method. Pass exactly one
+			// key for predictable results.
+			e := entries[0]
+			resType := authz.Type("extsvc/folder")
+			perm := authz.Permission("act")
+			// Returns LookupResult.Definite only; Conditional entries dropped per
+			// scope-opa-go-builtins-codegen.md Out of Scope item 8.
+			var result authz.LookupResult
+			if caveatCtx == nil {
+				result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
+			} else {
+				ctxMap := structpbToMap(caveatCtx)
+				result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
+			}
+			if err != nil {
+				return nil, fmt.Errorf("LookupResources: %v", err)
+			}
+			terms := make([]*ast.Term, len(result.Definite))
+			for i, id := range result.Definite {
+				terms[i] = ast.StringTerm(string(id))
+			}
+			return ast.ArrayTerm(terms...), nil
+		},
 	)
 	rego.RegisterBuiltin3(
 		&rego.Function{
-				Name: "extsvc.check_folder_all_via",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: object keyed by SpiceDB subject type, value
-						// a string id or a list of string ids. Fully dynamic —
-						// OPA's static-property object types are effectively
-						// required-all, so per-permission key sets can't be
-						// declared without breaking single-key calls; bogus
-						// subject types surface as a runtime error from SpiceDB.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.S,
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.B,
+			Name: "extsvc.check_folder_all_via",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: object keyed by SpiceDB subject type, value
+					// a string id or a list of string ids. Fully dynamic —
+					// OPA's static-property object types are effectively
+					// required-all, so per-permission key sets can't be
+					// declared without breaking single-key calls; bogus
+					// subject types surface as a runtime error from SpiceDB.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.S,
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.B,
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, resTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				resID, ok := resTerm.Value.(ast.String)
-				if !ok {
-					return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			resID, ok := resTerm.Value.(ast.String)
+			if !ok {
+				return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			}
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.BooleanTerm(false), nil
+			}
+
+			res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
+			perm := authz.Permission("all_via")
+			// AND across present subject-type keys — matches the typed
+			// Check<X> method, which short-circuits to false on the first
+			// non-granted subject slice. (Single-key call: this is just one check.)
+			for _, e := range entries {
+				var checkErr error
+				if caveatCtx == nil {
+					checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
+				} else {
+					ctxMap := structpbToMap(caveatCtx)
+					checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 				}
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
+				granted, fatal := checkOneGranted(checkErr)
+				if fatal != nil {
+					return nil, fatal
 				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
+				if !granted {
 					return ast.BooleanTerm(false), nil
 				}
-
-				res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
-				perm := authz.Permission("all_via")
-				// AND across present subject-type keys — matches the typed
-				// Check<X> method, which short-circuits to false on the first
-				// non-granted subject slice. (Single-key call: this is just one check.)
-				for _, e := range entries {
-					var checkErr error
-					if caveatCtx == nil {
-						checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
-					} else {
-						ctxMap := structpbToMap(caveatCtx)
-						checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-					}
-					granted, fatal := checkOneGranted(checkErr)
-					if fatal != nil {
-						return nil, fatal
-					}
-					if !granted {
-						return ast.BooleanTerm(false), nil
-					}
-				}
-				return ast.BooleanTerm(true), nil
-			},
+			}
+			return ast.BooleanTerm(true), nil
+		},
 	)
 	rego.RegisterBuiltin2(
 		&rego.Function{
-				Name: "extsvc.lookup_folder_all_via_resources",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: see check_* above — same object shape.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.NewArray(nil, types.S),
+			Name: "extsvc.lookup_folder_all_via_resources",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: see check_* above — same object shape.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.NewArray(nil, types.S),
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
-				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
-					return ast.ArrayTerm(), nil
-				}
-				// First present subject-type key wins — matches the typed
-				// Lookup<Perm><Resource>Resources method. Pass exactly one
-				// key for predictable results.
-				e := entries[0]
-				resType := authz.Type("extsvc/folder")
-				perm := authz.Permission("all_via")
-				// Returns LookupResult.Definite only; Conditional entries dropped per
-				// scope-opa-go-builtins-codegen.md Out of Scope item 8.
-				var result authz.LookupResult
-				if caveatCtx == nil {
-					result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
-				} else {
-					ctxMap := structpbToMap(caveatCtx)
-					result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-				}
-				if err != nil {
-					return nil, fmt.Errorf("LookupResources: %v", err)
-				}
-				terms := make([]*ast.Term, len(result.Definite))
-				for i, id := range result.Definite {
-					terms[i] = ast.StringTerm(string(id))
-				}
-				return ast.ArrayTerm(terms...), nil
-			},
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.ArrayTerm(), nil
+			}
+			// First present subject-type key wins — matches the typed
+			// Lookup<Perm><Resource>Resources method. Pass exactly one
+			// key for predictable results.
+			e := entries[0]
+			resType := authz.Type("extsvc/folder")
+			perm := authz.Permission("all_via")
+			// Returns LookupResult.Definite only; Conditional entries dropped per
+			// scope-opa-go-builtins-codegen.md Out of Scope item 8.
+			var result authz.LookupResult
+			if caveatCtx == nil {
+				result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
+			} else {
+				ctxMap := structpbToMap(caveatCtx)
+				result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
+			}
+			if err != nil {
+				return nil, fmt.Errorf("LookupResources: %v", err)
+			}
+			terms := make([]*ast.Term, len(result.Definite))
+			for i, id := range result.Definite {
+				terms[i] = ast.StringTerm(string(id))
+			}
+			return ast.ArrayTerm(terms...), nil
+		},
 	)
 	rego.RegisterBuiltin3(
 		&rego.Function{
-				Name: "extsvc.check_folder_ancestor_or_self",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: object keyed by SpiceDB subject type, value
-						// a string id or a list of string ids. Fully dynamic —
-						// OPA's static-property object types are effectively
-						// required-all, so per-permission key sets can't be
-						// declared without breaking single-key calls; bogus
-						// subject types surface as a runtime error from SpiceDB.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.S,
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.B,
+			Name: "extsvc.check_folder_ancestor_or_self",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: object keyed by SpiceDB subject type, value
+					// a string id or a list of string ids. Fully dynamic —
+					// OPA's static-property object types are effectively
+					// required-all, so per-permission key sets can't be
+					// declared without breaking single-key calls; bogus
+					// subject types surface as a runtime error from SpiceDB.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.S,
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.B,
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, resTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				resID, ok := resTerm.Value.(ast.String)
-				if !ok {
-					return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			resID, ok := resTerm.Value.(ast.String)
+			if !ok {
+				return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			}
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.BooleanTerm(false), nil
+			}
+
+			res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
+			perm := authz.Permission("ancestor_or_self")
+			// AND across present subject-type keys — matches the typed
+			// Check<X> method, which short-circuits to false on the first
+			// non-granted subject slice. (Single-key call: this is just one check.)
+			for _, e := range entries {
+				var checkErr error
+				if caveatCtx == nil {
+					checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
+				} else {
+					ctxMap := structpbToMap(caveatCtx)
+					checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 				}
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
+				granted, fatal := checkOneGranted(checkErr)
+				if fatal != nil {
+					return nil, fatal
 				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
+				if !granted {
 					return ast.BooleanTerm(false), nil
 				}
-
-				res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
-				perm := authz.Permission("ancestor_or_self")
-				// AND across present subject-type keys — matches the typed
-				// Check<X> method, which short-circuits to false on the first
-				// non-granted subject slice. (Single-key call: this is just one check.)
-				for _, e := range entries {
-					var checkErr error
-					if caveatCtx == nil {
-						checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
-					} else {
-						ctxMap := structpbToMap(caveatCtx)
-						checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-					}
-					granted, fatal := checkOneGranted(checkErr)
-					if fatal != nil {
-						return nil, fatal
-					}
-					if !granted {
-						return ast.BooleanTerm(false), nil
-					}
-				}
-				return ast.BooleanTerm(true), nil
-			},
+			}
+			return ast.BooleanTerm(true), nil
+		},
 	)
 	rego.RegisterBuiltin2(
 		&rego.Function{
-				Name: "extsvc.lookup_folder_ancestor_or_self_resources",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: see check_* above — same object shape.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.NewArray(nil, types.S),
+			Name: "extsvc.lookup_folder_ancestor_or_self_resources",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: see check_* above — same object shape.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.NewArray(nil, types.S),
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
-				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
-					return ast.ArrayTerm(), nil
-				}
-				// First present subject-type key wins — matches the typed
-				// Lookup<Perm><Resource>Resources method. Pass exactly one
-				// key for predictable results.
-				e := entries[0]
-				resType := authz.Type("extsvc/folder")
-				perm := authz.Permission("ancestor_or_self")
-				// Returns LookupResult.Definite only; Conditional entries dropped per
-				// scope-opa-go-builtins-codegen.md Out of Scope item 8.
-				var result authz.LookupResult
-				if caveatCtx == nil {
-					result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
-				} else {
-					ctxMap := structpbToMap(caveatCtx)
-					result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-				}
-				if err != nil {
-					return nil, fmt.Errorf("LookupResources: %v", err)
-				}
-				terms := make([]*ast.Term, len(result.Definite))
-				for i, id := range result.Definite {
-					terms[i] = ast.StringTerm(string(id))
-				}
-				return ast.ArrayTerm(terms...), nil
-			},
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.ArrayTerm(), nil
+			}
+			// First present subject-type key wins — matches the typed
+			// Lookup<Perm><Resource>Resources method. Pass exactly one
+			// key for predictable results.
+			e := entries[0]
+			resType := authz.Type("extsvc/folder")
+			perm := authz.Permission("ancestor_or_self")
+			// Returns LookupResult.Definite only; Conditional entries dropped per
+			// scope-opa-go-builtins-codegen.md Out of Scope item 8.
+			var result authz.LookupResult
+			if caveatCtx == nil {
+				result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
+			} else {
+				ctxMap := structpbToMap(caveatCtx)
+				result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
+			}
+			if err != nil {
+				return nil, fmt.Errorf("LookupResources: %v", err)
+			}
+			terms := make([]*ast.Term, len(result.Definite))
+			for i, id := range result.Definite {
+				terms[i] = ast.StringTerm(string(id))
+			}
+			return ast.ArrayTerm(terms...), nil
+		},
 	)
 	rego.RegisterBuiltin3(
 		&rego.Function{
-				Name: "extsvc.check_folder_any_via",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: object keyed by SpiceDB subject type, value
-						// a string id or a list of string ids. Fully dynamic —
-						// OPA's static-property object types are effectively
-						// required-all, so per-permission key sets can't be
-						// declared without breaking single-key calls; bogus
-						// subject types surface as a runtime error from SpiceDB.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.S,
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.B,
+			Name: "extsvc.check_folder_any_via",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: object keyed by SpiceDB subject type, value
+					// a string id or a list of string ids. Fully dynamic —
+					// OPA's static-property object types are effectively
+					// required-all, so per-permission key sets can't be
+					// declared without breaking single-key calls; bogus
+					// subject types surface as a runtime error from SpiceDB.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.S,
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.B,
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, resTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				resID, ok := resTerm.Value.(ast.String)
-				if !ok {
-					return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			resID, ok := resTerm.Value.(ast.String)
+			if !ok {
+				return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			}
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.BooleanTerm(false), nil
+			}
+
+			res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
+			perm := authz.Permission("any_via")
+			// AND across present subject-type keys — matches the typed
+			// Check<X> method, which short-circuits to false on the first
+			// non-granted subject slice. (Single-key call: this is just one check.)
+			for _, e := range entries {
+				var checkErr error
+				if caveatCtx == nil {
+					checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
+				} else {
+					ctxMap := structpbToMap(caveatCtx)
+					checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 				}
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
+				granted, fatal := checkOneGranted(checkErr)
+				if fatal != nil {
+					return nil, fatal
 				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
+				if !granted {
 					return ast.BooleanTerm(false), nil
 				}
-
-				res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
-				perm := authz.Permission("any_via")
-				// AND across present subject-type keys — matches the typed
-				// Check<X> method, which short-circuits to false on the first
-				// non-granted subject slice. (Single-key call: this is just one check.)
-				for _, e := range entries {
-					var checkErr error
-					if caveatCtx == nil {
-						checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
-					} else {
-						ctxMap := structpbToMap(caveatCtx)
-						checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-					}
-					granted, fatal := checkOneGranted(checkErr)
-					if fatal != nil {
-						return nil, fatal
-					}
-					if !granted {
-						return ast.BooleanTerm(false), nil
-					}
-				}
-				return ast.BooleanTerm(true), nil
-			},
+			}
+			return ast.BooleanTerm(true), nil
+		},
 	)
 	rego.RegisterBuiltin2(
 		&rego.Function{
-				Name: "extsvc.lookup_folder_any_via_resources",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: see check_* above — same object shape.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.NewArray(nil, types.S),
+			Name: "extsvc.lookup_folder_any_via_resources",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: see check_* above — same object shape.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.NewArray(nil, types.S),
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
-				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
-					return ast.ArrayTerm(), nil
-				}
-				// First present subject-type key wins — matches the typed
-				// Lookup<Perm><Resource>Resources method. Pass exactly one
-				// key for predictable results.
-				e := entries[0]
-				resType := authz.Type("extsvc/folder")
-				perm := authz.Permission("any_via")
-				// Returns LookupResult.Definite only; Conditional entries dropped per
-				// scope-opa-go-builtins-codegen.md Out of Scope item 8.
-				var result authz.LookupResult
-				if caveatCtx == nil {
-					result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
-				} else {
-					ctxMap := structpbToMap(caveatCtx)
-					result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-				}
-				if err != nil {
-					return nil, fmt.Errorf("LookupResources: %v", err)
-				}
-				terms := make([]*ast.Term, len(result.Definite))
-				for i, id := range result.Definite {
-					terms[i] = ast.StringTerm(string(id))
-				}
-				return ast.ArrayTerm(terms...), nil
-			},
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.ArrayTerm(), nil
+			}
+			// First present subject-type key wins — matches the typed
+			// Lookup<Perm><Resource>Resources method. Pass exactly one
+			// key for predictable results.
+			e := entries[0]
+			resType := authz.Type("extsvc/folder")
+			perm := authz.Permission("any_via")
+			// Returns LookupResult.Definite only; Conditional entries dropped per
+			// scope-opa-go-builtins-codegen.md Out of Scope item 8.
+			var result authz.LookupResult
+			if caveatCtx == nil {
+				result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
+			} else {
+				ctxMap := structpbToMap(caveatCtx)
+				result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
+			}
+			if err != nil {
+				return nil, fmt.Errorf("LookupResources: %v", err)
+			}
+			terms := make([]*ast.Term, len(result.Definite))
+			for i, id := range result.Definite {
+				terms[i] = ast.StringTerm(string(id))
+			}
+			return ast.ArrayTerm(terms...), nil
+		},
 	)
 	rego.RegisterBuiltin3(
 		&rego.Function{
-				Name: "extsvc.check_folder_browse",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: object keyed by SpiceDB subject type, value
-						// a string id or a list of string ids. Fully dynamic —
-						// OPA's static-property object types are effectively
-						// required-all, so per-permission key sets can't be
-						// declared without breaking single-key calls; bogus
-						// subject types surface as a runtime error from SpiceDB.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.S,
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.B,
+			Name: "extsvc.check_folder_browse",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: object keyed by SpiceDB subject type, value
+					// a string id or a list of string ids. Fully dynamic —
+					// OPA's static-property object types are effectively
+					// required-all, so per-permission key sets can't be
+					// declared without breaking single-key calls; bogus
+					// subject types surface as a runtime error from SpiceDB.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.S,
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.B,
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, resTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				resID, ok := resTerm.Value.(ast.String)
-				if !ok {
-					return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			resID, ok := resTerm.Value.(ast.String)
+			if !ok {
+				return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			}
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.BooleanTerm(false), nil
+			}
+
+			res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
+			perm := authz.Permission("browse")
+			// AND across present subject-type keys — matches the typed
+			// Check<X> method, which short-circuits to false on the first
+			// non-granted subject slice. (Single-key call: this is just one check.)
+			for _, e := range entries {
+				var checkErr error
+				if caveatCtx == nil {
+					checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
+				} else {
+					ctxMap := structpbToMap(caveatCtx)
+					checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 				}
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
+				granted, fatal := checkOneGranted(checkErr)
+				if fatal != nil {
+					return nil, fatal
 				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
+				if !granted {
 					return ast.BooleanTerm(false), nil
 				}
-
-				res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
-				perm := authz.Permission("browse")
-				// AND across present subject-type keys — matches the typed
-				// Check<X> method, which short-circuits to false on the first
-				// non-granted subject slice. (Single-key call: this is just one check.)
-				for _, e := range entries {
-					var checkErr error
-					if caveatCtx == nil {
-						checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
-					} else {
-						ctxMap := structpbToMap(caveatCtx)
-						checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-					}
-					granted, fatal := checkOneGranted(checkErr)
-					if fatal != nil {
-						return nil, fatal
-					}
-					if !granted {
-						return ast.BooleanTerm(false), nil
-					}
-				}
-				return ast.BooleanTerm(true), nil
-			},
+			}
+			return ast.BooleanTerm(true), nil
+		},
 	)
 	rego.RegisterBuiltin2(
 		&rego.Function{
-				Name: "extsvc.lookup_folder_browse_resources",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: see check_* above — same object shape.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.NewArray(nil, types.S),
+			Name: "extsvc.lookup_folder_browse_resources",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: see check_* above — same object shape.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.NewArray(nil, types.S),
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
-				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
-					return ast.ArrayTerm(), nil
-				}
-				// First present subject-type key wins — matches the typed
-				// Lookup<Perm><Resource>Resources method. Pass exactly one
-				// key for predictable results.
-				e := entries[0]
-				resType := authz.Type("extsvc/folder")
-				perm := authz.Permission("browse")
-				// Returns LookupResult.Definite only; Conditional entries dropped per
-				// scope-opa-go-builtins-codegen.md Out of Scope item 8.
-				var result authz.LookupResult
-				if caveatCtx == nil {
-					result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
-				} else {
-					ctxMap := structpbToMap(caveatCtx)
-					result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-				}
-				if err != nil {
-					return nil, fmt.Errorf("LookupResources: %v", err)
-				}
-				terms := make([]*ast.Term, len(result.Definite))
-				for i, id := range result.Definite {
-					terms[i] = ast.StringTerm(string(id))
-				}
-				return ast.ArrayTerm(terms...), nil
-			},
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.ArrayTerm(), nil
+			}
+			// First present subject-type key wins — matches the typed
+			// Lookup<Perm><Resource>Resources method. Pass exactly one
+			// key for predictable results.
+			e := entries[0]
+			resType := authz.Type("extsvc/folder")
+			perm := authz.Permission("browse")
+			// Returns LookupResult.Definite only; Conditional entries dropped per
+			// scope-opa-go-builtins-codegen.md Out of Scope item 8.
+			var result authz.LookupResult
+			if caveatCtx == nil {
+				result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
+			} else {
+				ctxMap := structpbToMap(caveatCtx)
+				result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
+			}
+			if err != nil {
+				return nil, fmt.Errorf("LookupResources: %v", err)
+			}
+			terms := make([]*ast.Term, len(result.Definite))
+			for i, id := range result.Definite {
+				terms[i] = ast.StringTerm(string(id))
+			}
+			return ast.ArrayTerm(terms...), nil
+		},
 	)
 	rego.RegisterBuiltin3(
 		&rego.Function{
-				Name: "extsvc.check_folder_collab_view",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: object keyed by SpiceDB subject type, value
-						// a string id or a list of string ids. Fully dynamic —
-						// OPA's static-property object types are effectively
-						// required-all, so per-permission key sets can't be
-						// declared without breaking single-key calls; bogus
-						// subject types surface as a runtime error from SpiceDB.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.S,
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.B,
+			Name: "extsvc.check_folder_collab_view",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: object keyed by SpiceDB subject type, value
+					// a string id or a list of string ids. Fully dynamic —
+					// OPA's static-property object types are effectively
+					// required-all, so per-permission key sets can't be
+					// declared without breaking single-key calls; bogus
+					// subject types surface as a runtime error from SpiceDB.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.S,
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.B,
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, resTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				resID, ok := resTerm.Value.(ast.String)
-				if !ok {
-					return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			resID, ok := resTerm.Value.(ast.String)
+			if !ok {
+				return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			}
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.BooleanTerm(false), nil
+			}
+
+			res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
+			perm := authz.Permission("collab_view")
+			// AND across present subject-type keys — matches the typed
+			// Check<X> method, which short-circuits to false on the first
+			// non-granted subject slice. (Single-key call: this is just one check.)
+			for _, e := range entries {
+				var checkErr error
+				if caveatCtx == nil {
+					checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
+				} else {
+					ctxMap := structpbToMap(caveatCtx)
+					checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 				}
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
+				granted, fatal := checkOneGranted(checkErr)
+				if fatal != nil {
+					return nil, fatal
 				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
+				if !granted {
 					return ast.BooleanTerm(false), nil
 				}
-
-				res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
-				perm := authz.Permission("collab_view")
-				// AND across present subject-type keys — matches the typed
-				// Check<X> method, which short-circuits to false on the first
-				// non-granted subject slice. (Single-key call: this is just one check.)
-				for _, e := range entries {
-					var checkErr error
-					if caveatCtx == nil {
-						checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
-					} else {
-						ctxMap := structpbToMap(caveatCtx)
-						checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-					}
-					granted, fatal := checkOneGranted(checkErr)
-					if fatal != nil {
-						return nil, fatal
-					}
-					if !granted {
-						return ast.BooleanTerm(false), nil
-					}
-				}
-				return ast.BooleanTerm(true), nil
-			},
+			}
+			return ast.BooleanTerm(true), nil
+		},
 	)
 	rego.RegisterBuiltin2(
 		&rego.Function{
-				Name: "extsvc.lookup_folder_collab_view_resources",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: see check_* above — same object shape.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.NewArray(nil, types.S),
+			Name: "extsvc.lookup_folder_collab_view_resources",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: see check_* above — same object shape.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.NewArray(nil, types.S),
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
-				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
-					return ast.ArrayTerm(), nil
-				}
-				// First present subject-type key wins — matches the typed
-				// Lookup<Perm><Resource>Resources method. Pass exactly one
-				// key for predictable results.
-				e := entries[0]
-				resType := authz.Type("extsvc/folder")
-				perm := authz.Permission("collab_view")
-				// Returns LookupResult.Definite only; Conditional entries dropped per
-				// scope-opa-go-builtins-codegen.md Out of Scope item 8.
-				var result authz.LookupResult
-				if caveatCtx == nil {
-					result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
-				} else {
-					ctxMap := structpbToMap(caveatCtx)
-					result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-				}
-				if err != nil {
-					return nil, fmt.Errorf("LookupResources: %v", err)
-				}
-				terms := make([]*ast.Term, len(result.Definite))
-				for i, id := range result.Definite {
-					terms[i] = ast.StringTerm(string(id))
-				}
-				return ast.ArrayTerm(terms...), nil
-			},
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.ArrayTerm(), nil
+			}
+			// First present subject-type key wins — matches the typed
+			// Lookup<Perm><Resource>Resources method. Pass exactly one
+			// key for predictable results.
+			e := entries[0]
+			resType := authz.Type("extsvc/folder")
+			perm := authz.Permission("collab_view")
+			// Returns LookupResult.Definite only; Conditional entries dropped per
+			// scope-opa-go-builtins-codegen.md Out of Scope item 8.
+			var result authz.LookupResult
+			if caveatCtx == nil {
+				result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
+			} else {
+				ctxMap := structpbToMap(caveatCtx)
+				result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
+			}
+			if err != nil {
+				return nil, fmt.Errorf("LookupResources: %v", err)
+			}
+			terms := make([]*ast.Term, len(result.Definite))
+			for i, id := range result.Definite {
+				terms[i] = ast.StringTerm(string(id))
+			}
+			return ast.ArrayTerm(terms...), nil
+		},
 	)
 	rego.RegisterBuiltin3(
 		&rego.Function{
-				Name: "extsvc.check_folder_collaborate",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: object keyed by SpiceDB subject type, value
-						// a string id or a list of string ids. Fully dynamic —
-						// OPA's static-property object types are effectively
-						// required-all, so per-permission key sets can't be
-						// declared without breaking single-key calls; bogus
-						// subject types surface as a runtime error from SpiceDB.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.S,
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.B,
+			Name: "extsvc.check_folder_collaborate",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: object keyed by SpiceDB subject type, value
+					// a string id or a list of string ids. Fully dynamic —
+					// OPA's static-property object types are effectively
+					// required-all, so per-permission key sets can't be
+					// declared without breaking single-key calls; bogus
+					// subject types surface as a runtime error from SpiceDB.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.S,
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.B,
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, resTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				resID, ok := resTerm.Value.(ast.String)
-				if !ok {
-					return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			resID, ok := resTerm.Value.(ast.String)
+			if !ok {
+				return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			}
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.BooleanTerm(false), nil
+			}
+
+			res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
+			perm := authz.Permission("collaborate")
+			// AND across present subject-type keys — matches the typed
+			// Check<X> method, which short-circuits to false on the first
+			// non-granted subject slice. (Single-key call: this is just one check.)
+			for _, e := range entries {
+				var checkErr error
+				if caveatCtx == nil {
+					checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
+				} else {
+					ctxMap := structpbToMap(caveatCtx)
+					checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 				}
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
+				granted, fatal := checkOneGranted(checkErr)
+				if fatal != nil {
+					return nil, fatal
 				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
+				if !granted {
 					return ast.BooleanTerm(false), nil
 				}
-
-				res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
-				perm := authz.Permission("collaborate")
-				// AND across present subject-type keys — matches the typed
-				// Check<X> method, which short-circuits to false on the first
-				// non-granted subject slice. (Single-key call: this is just one check.)
-				for _, e := range entries {
-					var checkErr error
-					if caveatCtx == nil {
-						checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
-					} else {
-						ctxMap := structpbToMap(caveatCtx)
-						checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-					}
-					granted, fatal := checkOneGranted(checkErr)
-					if fatal != nil {
-						return nil, fatal
-					}
-					if !granted {
-						return ast.BooleanTerm(false), nil
-					}
-				}
-				return ast.BooleanTerm(true), nil
-			},
+			}
+			return ast.BooleanTerm(true), nil
+		},
 	)
 	rego.RegisterBuiltin2(
 		&rego.Function{
-				Name: "extsvc.lookup_folder_collaborate_resources",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: see check_* above — same object shape.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.NewArray(nil, types.S),
+			Name: "extsvc.lookup_folder_collaborate_resources",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: see check_* above — same object shape.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.NewArray(nil, types.S),
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
-				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
-					return ast.ArrayTerm(), nil
-				}
-				// First present subject-type key wins — matches the typed
-				// Lookup<Perm><Resource>Resources method. Pass exactly one
-				// key for predictable results.
-				e := entries[0]
-				resType := authz.Type("extsvc/folder")
-				perm := authz.Permission("collaborate")
-				// Returns LookupResult.Definite only; Conditional entries dropped per
-				// scope-opa-go-builtins-codegen.md Out of Scope item 8.
-				var result authz.LookupResult
-				if caveatCtx == nil {
-					result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
-				} else {
-					ctxMap := structpbToMap(caveatCtx)
-					result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-				}
-				if err != nil {
-					return nil, fmt.Errorf("LookupResources: %v", err)
-				}
-				terms := make([]*ast.Term, len(result.Definite))
-				for i, id := range result.Definite {
-					terms[i] = ast.StringTerm(string(id))
-				}
-				return ast.ArrayTerm(terms...), nil
-			},
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.ArrayTerm(), nil
+			}
+			// First present subject-type key wins — matches the typed
+			// Lookup<Perm><Resource>Resources method. Pass exactly one
+			// key for predictable results.
+			e := entries[0]
+			resType := authz.Type("extsvc/folder")
+			perm := authz.Permission("collaborate")
+			// Returns LookupResult.Definite only; Conditional entries dropped per
+			// scope-opa-go-builtins-codegen.md Out of Scope item 8.
+			var result authz.LookupResult
+			if caveatCtx == nil {
+				result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
+			} else {
+				ctxMap := structpbToMap(caveatCtx)
+				result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
+			}
+			if err != nil {
+				return nil, fmt.Errorf("LookupResources: %v", err)
+			}
+			terms := make([]*ast.Term, len(result.Definite))
+			for i, id := range result.Definite {
+				terms[i] = ast.StringTerm(string(id))
+			}
+			return ast.ArrayTerm(terms...), nil
+		},
 	)
 	rego.RegisterBuiltin3(
 		&rego.Function{
-				Name: "extsvc.check_folder_deadline_check",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: object keyed by SpiceDB subject type, value
-						// a string id or a list of string ids. Fully dynamic —
-						// OPA's static-property object types are effectively
-						// required-all, so per-permission key sets can't be
-						// declared without breaking single-key calls; bogus
-						// subject types surface as a runtime error from SpiceDB.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.S,
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.B,
+			Name: "extsvc.check_folder_deadline_check",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: object keyed by SpiceDB subject type, value
+					// a string id or a list of string ids. Fully dynamic —
+					// OPA's static-property object types are effectively
+					// required-all, so per-permission key sets can't be
+					// declared without breaking single-key calls; bogus
+					// subject types surface as a runtime error from SpiceDB.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.S,
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.B,
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, resTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				resID, ok := resTerm.Value.(ast.String)
-				if !ok {
-					return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			resID, ok := resTerm.Value.(ast.String)
+			if !ok {
+				return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			}
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.BooleanTerm(false), nil
+			}
+
+			res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
+			perm := authz.Permission("deadline_check")
+			// AND across present subject-type keys — matches the typed
+			// Check<X> method, which short-circuits to false on the first
+			// non-granted subject slice. (Single-key call: this is just one check.)
+			for _, e := range entries {
+				var checkErr error
+				if caveatCtx == nil {
+					checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
+				} else {
+					ctxMap := structpbToMap(caveatCtx)
+					checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 				}
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
+				granted, fatal := checkOneGranted(checkErr)
+				if fatal != nil {
+					return nil, fatal
 				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
+				if !granted {
 					return ast.BooleanTerm(false), nil
 				}
-
-				res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
-				perm := authz.Permission("deadline_check")
-				// AND across present subject-type keys — matches the typed
-				// Check<X> method, which short-circuits to false on the first
-				// non-granted subject slice. (Single-key call: this is just one check.)
-				for _, e := range entries {
-					var checkErr error
-					if caveatCtx == nil {
-						checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
-					} else {
-						ctxMap := structpbToMap(caveatCtx)
-						checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-					}
-					granted, fatal := checkOneGranted(checkErr)
-					if fatal != nil {
-						return nil, fatal
-					}
-					if !granted {
-						return ast.BooleanTerm(false), nil
-					}
-				}
-				return ast.BooleanTerm(true), nil
-			},
+			}
+			return ast.BooleanTerm(true), nil
+		},
 	)
 	rego.RegisterBuiltin2(
 		&rego.Function{
-				Name: "extsvc.lookup_folder_deadline_check_resources",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: see check_* above — same object shape.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.NewArray(nil, types.S),
+			Name: "extsvc.lookup_folder_deadline_check_resources",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: see check_* above — same object shape.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.NewArray(nil, types.S),
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
-				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
-					return ast.ArrayTerm(), nil
-				}
-				// First present subject-type key wins — matches the typed
-				// Lookup<Perm><Resource>Resources method. Pass exactly one
-				// key for predictable results.
-				e := entries[0]
-				resType := authz.Type("extsvc/folder")
-				perm := authz.Permission("deadline_check")
-				// Returns LookupResult.Definite only; Conditional entries dropped per
-				// scope-opa-go-builtins-codegen.md Out of Scope item 8.
-				var result authz.LookupResult
-				if caveatCtx == nil {
-					result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
-				} else {
-					ctxMap := structpbToMap(caveatCtx)
-					result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-				}
-				if err != nil {
-					return nil, fmt.Errorf("LookupResources: %v", err)
-				}
-				terms := make([]*ast.Term, len(result.Definite))
-				for i, id := range result.Definite {
-					terms[i] = ast.StringTerm(string(id))
-				}
-				return ast.ArrayTerm(terms...), nil
-			},
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.ArrayTerm(), nil
+			}
+			// First present subject-type key wins — matches the typed
+			// Lookup<Perm><Resource>Resources method. Pass exactly one
+			// key for predictable results.
+			e := entries[0]
+			resType := authz.Type("extsvc/folder")
+			perm := authz.Permission("deadline_check")
+			// Returns LookupResult.Definite only; Conditional entries dropped per
+			// scope-opa-go-builtins-codegen.md Out of Scope item 8.
+			var result authz.LookupResult
+			if caveatCtx == nil {
+				result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
+			} else {
+				ctxMap := structpbToMap(caveatCtx)
+				result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
+			}
+			if err != nil {
+				return nil, fmt.Errorf("LookupResources: %v", err)
+			}
+			terms := make([]*ast.Term, len(result.Definite))
+			for i, id := range result.Definite {
+				terms[i] = ast.StringTerm(string(id))
+			}
+			return ast.ArrayTerm(terms...), nil
+		},
 	)
 	rego.RegisterBuiltin3(
 		&rego.Function{
-				Name: "extsvc.check_folder_duration_check",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: object keyed by SpiceDB subject type, value
-						// a string id or a list of string ids. Fully dynamic —
-						// OPA's static-property object types are effectively
-						// required-all, so per-permission key sets can't be
-						// declared without breaking single-key calls; bogus
-						// subject types surface as a runtime error from SpiceDB.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.S,
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.B,
+			Name: "extsvc.check_folder_duration_check",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: object keyed by SpiceDB subject type, value
+					// a string id or a list of string ids. Fully dynamic —
+					// OPA's static-property object types are effectively
+					// required-all, so per-permission key sets can't be
+					// declared without breaking single-key calls; bogus
+					// subject types surface as a runtime error from SpiceDB.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.S,
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.B,
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, resTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				resID, ok := resTerm.Value.(ast.String)
-				if !ok {
-					return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			resID, ok := resTerm.Value.(ast.String)
+			if !ok {
+				return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			}
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.BooleanTerm(false), nil
+			}
+
+			res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
+			perm := authz.Permission("duration_check")
+			// AND across present subject-type keys — matches the typed
+			// Check<X> method, which short-circuits to false on the first
+			// non-granted subject slice. (Single-key call: this is just one check.)
+			for _, e := range entries {
+				var checkErr error
+				if caveatCtx == nil {
+					checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
+				} else {
+					ctxMap := structpbToMap(caveatCtx)
+					checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 				}
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
+				granted, fatal := checkOneGranted(checkErr)
+				if fatal != nil {
+					return nil, fatal
 				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
+				if !granted {
 					return ast.BooleanTerm(false), nil
 				}
-
-				res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
-				perm := authz.Permission("duration_check")
-				// AND across present subject-type keys — matches the typed
-				// Check<X> method, which short-circuits to false on the first
-				// non-granted subject slice. (Single-key call: this is just one check.)
-				for _, e := range entries {
-					var checkErr error
-					if caveatCtx == nil {
-						checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
-					} else {
-						ctxMap := structpbToMap(caveatCtx)
-						checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-					}
-					granted, fatal := checkOneGranted(checkErr)
-					if fatal != nil {
-						return nil, fatal
-					}
-					if !granted {
-						return ast.BooleanTerm(false), nil
-					}
-				}
-				return ast.BooleanTerm(true), nil
-			},
+			}
+			return ast.BooleanTerm(true), nil
+		},
 	)
 	rego.RegisterBuiltin2(
 		&rego.Function{
-				Name: "extsvc.lookup_folder_duration_check_resources",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: see check_* above — same object shape.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.NewArray(nil, types.S),
+			Name: "extsvc.lookup_folder_duration_check_resources",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: see check_* above — same object shape.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.NewArray(nil, types.S),
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
-				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
-					return ast.ArrayTerm(), nil
-				}
-				// First present subject-type key wins — matches the typed
-				// Lookup<Perm><Resource>Resources method. Pass exactly one
-				// key for predictable results.
-				e := entries[0]
-				resType := authz.Type("extsvc/folder")
-				perm := authz.Permission("duration_check")
-				// Returns LookupResult.Definite only; Conditional entries dropped per
-				// scope-opa-go-builtins-codegen.md Out of Scope item 8.
-				var result authz.LookupResult
-				if caveatCtx == nil {
-					result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
-				} else {
-					ctxMap := structpbToMap(caveatCtx)
-					result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-				}
-				if err != nil {
-					return nil, fmt.Errorf("LookupResources: %v", err)
-				}
-				terms := make([]*ast.Term, len(result.Definite))
-				for i, id := range result.Definite {
-					terms[i] = ast.StringTerm(string(id))
-				}
-				return ast.ArrayTerm(terms...), nil
-			},
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.ArrayTerm(), nil
+			}
+			// First present subject-type key wins — matches the typed
+			// Lookup<Perm><Resource>Resources method. Pass exactly one
+			// key for predictable results.
+			e := entries[0]
+			resType := authz.Type("extsvc/folder")
+			perm := authz.Permission("duration_check")
+			// Returns LookupResult.Definite only; Conditional entries dropped per
+			// scope-opa-go-builtins-codegen.md Out of Scope item 8.
+			var result authz.LookupResult
+			if caveatCtx == nil {
+				result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
+			} else {
+				ctxMap := structpbToMap(caveatCtx)
+				result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
+			}
+			if err != nil {
+				return nil, fmt.Errorf("LookupResources: %v", err)
+			}
+			terms := make([]*ast.Term, len(result.Definite))
+			for i, id := range result.Definite {
+				terms[i] = ast.StringTerm(string(id))
+			}
+			return ast.ArrayTerm(terms...), nil
+		},
 	)
 	rego.RegisterBuiltin3(
 		&rego.Function{
-				Name: "extsvc.check_folder_elite_access",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: object keyed by SpiceDB subject type, value
-						// a string id or a list of string ids. Fully dynamic —
-						// OPA's static-property object types are effectively
-						// required-all, so per-permission key sets can't be
-						// declared without breaking single-key calls; bogus
-						// subject types surface as a runtime error from SpiceDB.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.S,
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.B,
+			Name: "extsvc.check_folder_elite_access",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: object keyed by SpiceDB subject type, value
+					// a string id or a list of string ids. Fully dynamic —
+					// OPA's static-property object types are effectively
+					// required-all, so per-permission key sets can't be
+					// declared without breaking single-key calls; bogus
+					// subject types surface as a runtime error from SpiceDB.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.S,
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.B,
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, resTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				resID, ok := resTerm.Value.(ast.String)
-				if !ok {
-					return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			resID, ok := resTerm.Value.(ast.String)
+			if !ok {
+				return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			}
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.BooleanTerm(false), nil
+			}
+
+			res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
+			perm := authz.Permission("elite_access")
+			// AND across present subject-type keys — matches the typed
+			// Check<X> method, which short-circuits to false on the first
+			// non-granted subject slice. (Single-key call: this is just one check.)
+			for _, e := range entries {
+				var checkErr error
+				if caveatCtx == nil {
+					checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
+				} else {
+					ctxMap := structpbToMap(caveatCtx)
+					checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 				}
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
+				granted, fatal := checkOneGranted(checkErr)
+				if fatal != nil {
+					return nil, fatal
 				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
+				if !granted {
 					return ast.BooleanTerm(false), nil
 				}
-
-				res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
-				perm := authz.Permission("elite_access")
-				// AND across present subject-type keys — matches the typed
-				// Check<X> method, which short-circuits to false on the first
-				// non-granted subject slice. (Single-key call: this is just one check.)
-				for _, e := range entries {
-					var checkErr error
-					if caveatCtx == nil {
-						checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
-					} else {
-						ctxMap := structpbToMap(caveatCtx)
-						checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-					}
-					granted, fatal := checkOneGranted(checkErr)
-					if fatal != nil {
-						return nil, fatal
-					}
-					if !granted {
-						return ast.BooleanTerm(false), nil
-					}
-				}
-				return ast.BooleanTerm(true), nil
-			},
+			}
+			return ast.BooleanTerm(true), nil
+		},
 	)
 	rego.RegisterBuiltin2(
 		&rego.Function{
-				Name: "extsvc.lookup_folder_elite_access_resources",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: see check_* above — same object shape.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.NewArray(nil, types.S),
+			Name: "extsvc.lookup_folder_elite_access_resources",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: see check_* above — same object shape.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.NewArray(nil, types.S),
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
-				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
-					return ast.ArrayTerm(), nil
-				}
-				// First present subject-type key wins — matches the typed
-				// Lookup<Perm><Resource>Resources method. Pass exactly one
-				// key for predictable results.
-				e := entries[0]
-				resType := authz.Type("extsvc/folder")
-				perm := authz.Permission("elite_access")
-				// Returns LookupResult.Definite only; Conditional entries dropped per
-				// scope-opa-go-builtins-codegen.md Out of Scope item 8.
-				var result authz.LookupResult
-				if caveatCtx == nil {
-					result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
-				} else {
-					ctxMap := structpbToMap(caveatCtx)
-					result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-				}
-				if err != nil {
-					return nil, fmt.Errorf("LookupResources: %v", err)
-				}
-				terms := make([]*ast.Term, len(result.Definite))
-				for i, id := range result.Definite {
-					terms[i] = ast.StringTerm(string(id))
-				}
-				return ast.ArrayTerm(terms...), nil
-			},
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.ArrayTerm(), nil
+			}
+			// First present subject-type key wins — matches the typed
+			// Lookup<Perm><Resource>Resources method. Pass exactly one
+			// key for predictable results.
+			e := entries[0]
+			resType := authz.Type("extsvc/folder")
+			perm := authz.Permission("elite_access")
+			// Returns LookupResult.Definite only; Conditional entries dropped per
+			// scope-opa-go-builtins-codegen.md Out of Scope item 8.
+			var result authz.LookupResult
+			if caveatCtx == nil {
+				result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
+			} else {
+				ctxMap := structpbToMap(caveatCtx)
+				result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
+			}
+			if err != nil {
+				return nil, fmt.Errorf("LookupResources: %v", err)
+			}
+			terms := make([]*ast.Term, len(result.Definite))
+			for i, id := range result.Definite {
+				terms[i] = ast.StringTerm(string(id))
+			}
+			return ast.ArrayTerm(terms...), nil
+		},
 	)
 	rego.RegisterBuiltin3(
 		&rego.Function{
-				Name: "extsvc.check_folder_expiring_browse",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: object keyed by SpiceDB subject type, value
-						// a string id or a list of string ids. Fully dynamic —
-						// OPA's static-property object types are effectively
-						// required-all, so per-permission key sets can't be
-						// declared without breaking single-key calls; bogus
-						// subject types surface as a runtime error from SpiceDB.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.S,
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.B,
+			Name: "extsvc.check_folder_expiring_browse",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: object keyed by SpiceDB subject type, value
+					// a string id or a list of string ids. Fully dynamic —
+					// OPA's static-property object types are effectively
+					// required-all, so per-permission key sets can't be
+					// declared without breaking single-key calls; bogus
+					// subject types surface as a runtime error from SpiceDB.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.S,
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.B,
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, resTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				resID, ok := resTerm.Value.(ast.String)
-				if !ok {
-					return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			resID, ok := resTerm.Value.(ast.String)
+			if !ok {
+				return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			}
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.BooleanTerm(false), nil
+			}
+
+			res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
+			perm := authz.Permission("expiring_browse")
+			// AND across present subject-type keys — matches the typed
+			// Check<X> method, which short-circuits to false on the first
+			// non-granted subject slice. (Single-key call: this is just one check.)
+			for _, e := range entries {
+				var checkErr error
+				if caveatCtx == nil {
+					checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
+				} else {
+					ctxMap := structpbToMap(caveatCtx)
+					checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 				}
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
+				granted, fatal := checkOneGranted(checkErr)
+				if fatal != nil {
+					return nil, fatal
 				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
+				if !granted {
 					return ast.BooleanTerm(false), nil
 				}
-
-				res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
-				perm := authz.Permission("expiring_browse")
-				// AND across present subject-type keys — matches the typed
-				// Check<X> method, which short-circuits to false on the first
-				// non-granted subject slice. (Single-key call: this is just one check.)
-				for _, e := range entries {
-					var checkErr error
-					if caveatCtx == nil {
-						checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
-					} else {
-						ctxMap := structpbToMap(caveatCtx)
-						checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-					}
-					granted, fatal := checkOneGranted(checkErr)
-					if fatal != nil {
-						return nil, fatal
-					}
-					if !granted {
-						return ast.BooleanTerm(false), nil
-					}
-				}
-				return ast.BooleanTerm(true), nil
-			},
+			}
+			return ast.BooleanTerm(true), nil
+		},
 	)
 	rego.RegisterBuiltin2(
 		&rego.Function{
-				Name: "extsvc.lookup_folder_expiring_browse_resources",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: see check_* above — same object shape.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.NewArray(nil, types.S),
+			Name: "extsvc.lookup_folder_expiring_browse_resources",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: see check_* above — same object shape.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.NewArray(nil, types.S),
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
-				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
-					return ast.ArrayTerm(), nil
-				}
-				// First present subject-type key wins — matches the typed
-				// Lookup<Perm><Resource>Resources method. Pass exactly one
-				// key for predictable results.
-				e := entries[0]
-				resType := authz.Type("extsvc/folder")
-				perm := authz.Permission("expiring_browse")
-				// Returns LookupResult.Definite only; Conditional entries dropped per
-				// scope-opa-go-builtins-codegen.md Out of Scope item 8.
-				var result authz.LookupResult
-				if caveatCtx == nil {
-					result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
-				} else {
-					ctxMap := structpbToMap(caveatCtx)
-					result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-				}
-				if err != nil {
-					return nil, fmt.Errorf("LookupResources: %v", err)
-				}
-				terms := make([]*ast.Term, len(result.Definite))
-				for i, id := range result.Definite {
-					terms[i] = ast.StringTerm(string(id))
-				}
-				return ast.ArrayTerm(terms...), nil
-			},
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.ArrayTerm(), nil
+			}
+			// First present subject-type key wins — matches the typed
+			// Lookup<Perm><Resource>Resources method. Pass exactly one
+			// key for predictable results.
+			e := entries[0]
+			resType := authz.Type("extsvc/folder")
+			perm := authz.Permission("expiring_browse")
+			// Returns LookupResult.Definite only; Conditional entries dropped per
+			// scope-opa-go-builtins-codegen.md Out of Scope item 8.
+			var result authz.LookupResult
+			if caveatCtx == nil {
+				result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
+			} else {
+				ctxMap := structpbToMap(caveatCtx)
+				result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
+			}
+			if err != nil {
+				return nil, fmt.Errorf("LookupResources: %v", err)
+			}
+			terms := make([]*ast.Term, len(result.Definite))
+			for i, id := range result.Definite {
+				terms[i] = ast.StringTerm(string(id))
+			}
+			return ast.ArrayTerm(terms...), nil
+		},
 	)
 	rego.RegisterBuiltin3(
 		&rego.Function{
-				Name: "extsvc.check_folder_gated_all_via",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: object keyed by SpiceDB subject type, value
-						// a string id or a list of string ids. Fully dynamic —
-						// OPA's static-property object types are effectively
-						// required-all, so per-permission key sets can't be
-						// declared without breaking single-key calls; bogus
-						// subject types surface as a runtime error from SpiceDB.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.S,
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.B,
+			Name: "extsvc.check_folder_gated_all_via",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: object keyed by SpiceDB subject type, value
+					// a string id or a list of string ids. Fully dynamic —
+					// OPA's static-property object types are effectively
+					// required-all, so per-permission key sets can't be
+					// declared without breaking single-key calls; bogus
+					// subject types surface as a runtime error from SpiceDB.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.S,
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.B,
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, resTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				resID, ok := resTerm.Value.(ast.String)
-				if !ok {
-					return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			resID, ok := resTerm.Value.(ast.String)
+			if !ok {
+				return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			}
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.BooleanTerm(false), nil
+			}
+
+			res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
+			perm := authz.Permission("gated_all_via")
+			// AND across present subject-type keys — matches the typed
+			// Check<X> method, which short-circuits to false on the first
+			// non-granted subject slice. (Single-key call: this is just one check.)
+			for _, e := range entries {
+				var checkErr error
+				if caveatCtx == nil {
+					checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
+				} else {
+					ctxMap := structpbToMap(caveatCtx)
+					checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 				}
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
+				granted, fatal := checkOneGranted(checkErr)
+				if fatal != nil {
+					return nil, fatal
 				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
+				if !granted {
 					return ast.BooleanTerm(false), nil
 				}
-
-				res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
-				perm := authz.Permission("gated_all_via")
-				// AND across present subject-type keys — matches the typed
-				// Check<X> method, which short-circuits to false on the first
-				// non-granted subject slice. (Single-key call: this is just one check.)
-				for _, e := range entries {
-					var checkErr error
-					if caveatCtx == nil {
-						checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
-					} else {
-						ctxMap := structpbToMap(caveatCtx)
-						checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-					}
-					granted, fatal := checkOneGranted(checkErr)
-					if fatal != nil {
-						return nil, fatal
-					}
-					if !granted {
-						return ast.BooleanTerm(false), nil
-					}
-				}
-				return ast.BooleanTerm(true), nil
-			},
+			}
+			return ast.BooleanTerm(true), nil
+		},
 	)
 	rego.RegisterBuiltin2(
 		&rego.Function{
-				Name: "extsvc.lookup_folder_gated_all_via_resources",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: see check_* above — same object shape.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.NewArray(nil, types.S),
+			Name: "extsvc.lookup_folder_gated_all_via_resources",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: see check_* above — same object shape.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.NewArray(nil, types.S),
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
-				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
-					return ast.ArrayTerm(), nil
-				}
-				// First present subject-type key wins — matches the typed
-				// Lookup<Perm><Resource>Resources method. Pass exactly one
-				// key for predictable results.
-				e := entries[0]
-				resType := authz.Type("extsvc/folder")
-				perm := authz.Permission("gated_all_via")
-				// Returns LookupResult.Definite only; Conditional entries dropped per
-				// scope-opa-go-builtins-codegen.md Out of Scope item 8.
-				var result authz.LookupResult
-				if caveatCtx == nil {
-					result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
-				} else {
-					ctxMap := structpbToMap(caveatCtx)
-					result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-				}
-				if err != nil {
-					return nil, fmt.Errorf("LookupResources: %v", err)
-				}
-				terms := make([]*ast.Term, len(result.Definite))
-				for i, id := range result.Definite {
-					terms[i] = ast.StringTerm(string(id))
-				}
-				return ast.ArrayTerm(terms...), nil
-			},
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.ArrayTerm(), nil
+			}
+			// First present subject-type key wins — matches the typed
+			// Lookup<Perm><Resource>Resources method. Pass exactly one
+			// key for predictable results.
+			e := entries[0]
+			resType := authz.Type("extsvc/folder")
+			perm := authz.Permission("gated_all_via")
+			// Returns LookupResult.Definite only; Conditional entries dropped per
+			// scope-opa-go-builtins-codegen.md Out of Scope item 8.
+			var result authz.LookupResult
+			if caveatCtx == nil {
+				result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
+			} else {
+				ctxMap := structpbToMap(caveatCtx)
+				result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
+			}
+			if err != nil {
+				return nil, fmt.Errorf("LookupResources: %v", err)
+			}
+			terms := make([]*ast.Term, len(result.Definite))
+			for i, id := range result.Definite {
+				terms[i] = ast.StringTerm(string(id))
+			}
+			return ast.ArrayTerm(terms...), nil
+		},
 	)
 	rego.RegisterBuiltin3(
 		&rego.Function{
-				Name: "extsvc.check_folder_gated_collab_view",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: object keyed by SpiceDB subject type, value
-						// a string id or a list of string ids. Fully dynamic —
-						// OPA's static-property object types are effectively
-						// required-all, so per-permission key sets can't be
-						// declared without breaking single-key calls; bogus
-						// subject types surface as a runtime error from SpiceDB.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.S,
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.B,
+			Name: "extsvc.check_folder_gated_collab_view",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: object keyed by SpiceDB subject type, value
+					// a string id or a list of string ids. Fully dynamic —
+					// OPA's static-property object types are effectively
+					// required-all, so per-permission key sets can't be
+					// declared without breaking single-key calls; bogus
+					// subject types surface as a runtime error from SpiceDB.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.S,
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.B,
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, resTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				resID, ok := resTerm.Value.(ast.String)
-				if !ok {
-					return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			resID, ok := resTerm.Value.(ast.String)
+			if !ok {
+				return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			}
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.BooleanTerm(false), nil
+			}
+
+			res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
+			perm := authz.Permission("gated_collab_view")
+			// AND across present subject-type keys — matches the typed
+			// Check<X> method, which short-circuits to false on the first
+			// non-granted subject slice. (Single-key call: this is just one check.)
+			for _, e := range entries {
+				var checkErr error
+				if caveatCtx == nil {
+					checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
+				} else {
+					ctxMap := structpbToMap(caveatCtx)
+					checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 				}
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
+				granted, fatal := checkOneGranted(checkErr)
+				if fatal != nil {
+					return nil, fatal
 				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
+				if !granted {
 					return ast.BooleanTerm(false), nil
 				}
-
-				res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
-				perm := authz.Permission("gated_collab_view")
-				// AND across present subject-type keys — matches the typed
-				// Check<X> method, which short-circuits to false on the first
-				// non-granted subject slice. (Single-key call: this is just one check.)
-				for _, e := range entries {
-					var checkErr error
-					if caveatCtx == nil {
-						checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
-					} else {
-						ctxMap := structpbToMap(caveatCtx)
-						checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-					}
-					granted, fatal := checkOneGranted(checkErr)
-					if fatal != nil {
-						return nil, fatal
-					}
-					if !granted {
-						return ast.BooleanTerm(false), nil
-					}
-				}
-				return ast.BooleanTerm(true), nil
-			},
+			}
+			return ast.BooleanTerm(true), nil
+		},
 	)
 	rego.RegisterBuiltin2(
 		&rego.Function{
-				Name: "extsvc.lookup_folder_gated_collab_view_resources",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: see check_* above — same object shape.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.NewArray(nil, types.S),
+			Name: "extsvc.lookup_folder_gated_collab_view_resources",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: see check_* above — same object shape.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.NewArray(nil, types.S),
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
-				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
-					return ast.ArrayTerm(), nil
-				}
-				// First present subject-type key wins — matches the typed
-				// Lookup<Perm><Resource>Resources method. Pass exactly one
-				// key for predictable results.
-				e := entries[0]
-				resType := authz.Type("extsvc/folder")
-				perm := authz.Permission("gated_collab_view")
-				// Returns LookupResult.Definite only; Conditional entries dropped per
-				// scope-opa-go-builtins-codegen.md Out of Scope item 8.
-				var result authz.LookupResult
-				if caveatCtx == nil {
-					result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
-				} else {
-					ctxMap := structpbToMap(caveatCtx)
-					result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-				}
-				if err != nil {
-					return nil, fmt.Errorf("LookupResources: %v", err)
-				}
-				terms := make([]*ast.Term, len(result.Definite))
-				for i, id := range result.Definite {
-					terms[i] = ast.StringTerm(string(id))
-				}
-				return ast.ArrayTerm(terms...), nil
-			},
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.ArrayTerm(), nil
+			}
+			// First present subject-type key wins — matches the typed
+			// Lookup<Perm><Resource>Resources method. Pass exactly one
+			// key for predictable results.
+			e := entries[0]
+			resType := authz.Type("extsvc/folder")
+			perm := authz.Permission("gated_collab_view")
+			// Returns LookupResult.Definite only; Conditional entries dropped per
+			// scope-opa-go-builtins-codegen.md Out of Scope item 8.
+			var result authz.LookupResult
+			if caveatCtx == nil {
+				result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
+			} else {
+				ctxMap := structpbToMap(caveatCtx)
+				result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
+			}
+			if err != nil {
+				return nil, fmt.Errorf("LookupResources: %v", err)
+			}
+			terms := make([]*ast.Term, len(result.Definite))
+			for i, id := range result.Definite {
+				terms[i] = ast.StringTerm(string(id))
+			}
+			return ast.ArrayTerm(terms...), nil
+		},
 	)
 	rego.RegisterBuiltin3(
 		&rego.Function{
-				Name: "extsvc.check_folder_gated_token_check",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: object keyed by SpiceDB subject type, value
-						// a string id or a list of string ids. Fully dynamic —
-						// OPA's static-property object types are effectively
-						// required-all, so per-permission key sets can't be
-						// declared without breaking single-key calls; bogus
-						// subject types surface as a runtime error from SpiceDB.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.S,
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.B,
+			Name: "extsvc.check_folder_gated_token_check",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: object keyed by SpiceDB subject type, value
+					// a string id or a list of string ids. Fully dynamic —
+					// OPA's static-property object types are effectively
+					// required-all, so per-permission key sets can't be
+					// declared without breaking single-key calls; bogus
+					// subject types surface as a runtime error from SpiceDB.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.S,
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.B,
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, resTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				resID, ok := resTerm.Value.(ast.String)
-				if !ok {
-					return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			resID, ok := resTerm.Value.(ast.String)
+			if !ok {
+				return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			}
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.BooleanTerm(false), nil
+			}
+
+			res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
+			perm := authz.Permission("gated_token_check")
+			// AND across present subject-type keys — matches the typed
+			// Check<X> method, which short-circuits to false on the first
+			// non-granted subject slice. (Single-key call: this is just one check.)
+			for _, e := range entries {
+				var checkErr error
+				if caveatCtx == nil {
+					checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
+				} else {
+					ctxMap := structpbToMap(caveatCtx)
+					checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 				}
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
+				granted, fatal := checkOneGranted(checkErr)
+				if fatal != nil {
+					return nil, fatal
 				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
+				if !granted {
 					return ast.BooleanTerm(false), nil
 				}
-
-				res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
-				perm := authz.Permission("gated_token_check")
-				// AND across present subject-type keys — matches the typed
-				// Check<X> method, which short-circuits to false on the first
-				// non-granted subject slice. (Single-key call: this is just one check.)
-				for _, e := range entries {
-					var checkErr error
-					if caveatCtx == nil {
-						checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
-					} else {
-						ctxMap := structpbToMap(caveatCtx)
-						checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-					}
-					granted, fatal := checkOneGranted(checkErr)
-					if fatal != nil {
-						return nil, fatal
-					}
-					if !granted {
-						return ast.BooleanTerm(false), nil
-					}
-				}
-				return ast.BooleanTerm(true), nil
-			},
+			}
+			return ast.BooleanTerm(true), nil
+		},
 	)
 	rego.RegisterBuiltin2(
 		&rego.Function{
-				Name: "extsvc.lookup_folder_gated_token_check_resources",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: see check_* above — same object shape.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.NewArray(nil, types.S),
+			Name: "extsvc.lookup_folder_gated_token_check_resources",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: see check_* above — same object shape.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.NewArray(nil, types.S),
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
-				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
-					return ast.ArrayTerm(), nil
-				}
-				// First present subject-type key wins — matches the typed
-				// Lookup<Perm><Resource>Resources method. Pass exactly one
-				// key for predictable results.
-				e := entries[0]
-				resType := authz.Type("extsvc/folder")
-				perm := authz.Permission("gated_token_check")
-				// Returns LookupResult.Definite only; Conditional entries dropped per
-				// scope-opa-go-builtins-codegen.md Out of Scope item 8.
-				var result authz.LookupResult
-				if caveatCtx == nil {
-					result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
-				} else {
-					ctxMap := structpbToMap(caveatCtx)
-					result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-				}
-				if err != nil {
-					return nil, fmt.Errorf("LookupResources: %v", err)
-				}
-				terms := make([]*ast.Term, len(result.Definite))
-				for i, id := range result.Definite {
-					terms[i] = ast.StringTerm(string(id))
-				}
-				return ast.ArrayTerm(terms...), nil
-			},
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.ArrayTerm(), nil
+			}
+			// First present subject-type key wins — matches the typed
+			// Lookup<Perm><Resource>Resources method. Pass exactly one
+			// key for predictable results.
+			e := entries[0]
+			resType := authz.Type("extsvc/folder")
+			perm := authz.Permission("gated_token_check")
+			// Returns LookupResult.Definite only; Conditional entries dropped per
+			// scope-opa-go-builtins-codegen.md Out of Scope item 8.
+			var result authz.LookupResult
+			if caveatCtx == nil {
+				result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
+			} else {
+				ctxMap := structpbToMap(caveatCtx)
+				result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
+			}
+			if err != nil {
+				return nil, fmt.Errorf("LookupResources: %v", err)
+			}
+			terms := make([]*ast.Term, len(result.Definite))
+			for i, id := range result.Definite {
+				terms[i] = ast.StringTerm(string(id))
+			}
+			return ast.ArrayTerm(terms...), nil
+		},
 	)
 	rego.RegisterBuiltin3(
 		&rego.Function{
-				Name: "extsvc.check_folder_guarded_browse",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: object keyed by SpiceDB subject type, value
-						// a string id or a list of string ids. Fully dynamic —
-						// OPA's static-property object types are effectively
-						// required-all, so per-permission key sets can't be
-						// declared without breaking single-key calls; bogus
-						// subject types surface as a runtime error from SpiceDB.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.S,
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.B,
+			Name: "extsvc.check_folder_guarded_browse",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: object keyed by SpiceDB subject type, value
+					// a string id or a list of string ids. Fully dynamic —
+					// OPA's static-property object types are effectively
+					// required-all, so per-permission key sets can't be
+					// declared without breaking single-key calls; bogus
+					// subject types surface as a runtime error from SpiceDB.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.S,
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.B,
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, resTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				resID, ok := resTerm.Value.(ast.String)
-				if !ok {
-					return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			resID, ok := resTerm.Value.(ast.String)
+			if !ok {
+				return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			}
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.BooleanTerm(false), nil
+			}
+
+			res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
+			perm := authz.Permission("guarded_browse")
+			// AND across present subject-type keys — matches the typed
+			// Check<X> method, which short-circuits to false on the first
+			// non-granted subject slice. (Single-key call: this is just one check.)
+			for _, e := range entries {
+				var checkErr error
+				if caveatCtx == nil {
+					checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
+				} else {
+					ctxMap := structpbToMap(caveatCtx)
+					checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 				}
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
+				granted, fatal := checkOneGranted(checkErr)
+				if fatal != nil {
+					return nil, fatal
 				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
+				if !granted {
 					return ast.BooleanTerm(false), nil
 				}
-
-				res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
-				perm := authz.Permission("guarded_browse")
-				// AND across present subject-type keys — matches the typed
-				// Check<X> method, which short-circuits to false on the first
-				// non-granted subject slice. (Single-key call: this is just one check.)
-				for _, e := range entries {
-					var checkErr error
-					if caveatCtx == nil {
-						checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
-					} else {
-						ctxMap := structpbToMap(caveatCtx)
-						checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-					}
-					granted, fatal := checkOneGranted(checkErr)
-					if fatal != nil {
-						return nil, fatal
-					}
-					if !granted {
-						return ast.BooleanTerm(false), nil
-					}
-				}
-				return ast.BooleanTerm(true), nil
-			},
+			}
+			return ast.BooleanTerm(true), nil
+		},
 	)
 	rego.RegisterBuiltin2(
 		&rego.Function{
-				Name: "extsvc.lookup_folder_guarded_browse_resources",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: see check_* above — same object shape.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.NewArray(nil, types.S),
+			Name: "extsvc.lookup_folder_guarded_browse_resources",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: see check_* above — same object shape.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.NewArray(nil, types.S),
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
-				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
-					return ast.ArrayTerm(), nil
-				}
-				// First present subject-type key wins — matches the typed
-				// Lookup<Perm><Resource>Resources method. Pass exactly one
-				// key for predictable results.
-				e := entries[0]
-				resType := authz.Type("extsvc/folder")
-				perm := authz.Permission("guarded_browse")
-				// Returns LookupResult.Definite only; Conditional entries dropped per
-				// scope-opa-go-builtins-codegen.md Out of Scope item 8.
-				var result authz.LookupResult
-				if caveatCtx == nil {
-					result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
-				} else {
-					ctxMap := structpbToMap(caveatCtx)
-					result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-				}
-				if err != nil {
-					return nil, fmt.Errorf("LookupResources: %v", err)
-				}
-				terms := make([]*ast.Term, len(result.Definite))
-				for i, id := range result.Definite {
-					terms[i] = ast.StringTerm(string(id))
-				}
-				return ast.ArrayTerm(terms...), nil
-			},
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.ArrayTerm(), nil
+			}
+			// First present subject-type key wins — matches the typed
+			// Lookup<Perm><Resource>Resources method. Pass exactly one
+			// key for predictable results.
+			e := entries[0]
+			resType := authz.Type("extsvc/folder")
+			perm := authz.Permission("guarded_browse")
+			// Returns LookupResult.Definite only; Conditional entries dropped per
+			// scope-opa-go-builtins-codegen.md Out of Scope item 8.
+			var result authz.LookupResult
+			if caveatCtx == nil {
+				result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
+			} else {
+				ctxMap := structpbToMap(caveatCtx)
+				result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
+			}
+			if err != nil {
+				return nil, fmt.Errorf("LookupResources: %v", err)
+			}
+			terms := make([]*ast.Term, len(result.Definite))
+			for i, id := range result.Definite {
+				terms[i] = ast.StringTerm(string(id))
+			}
+			return ast.ArrayTerm(terms...), nil
+		},
 	)
 	rego.RegisterBuiltin3(
 		&rego.Function{
-				Name: "extsvc.check_folder_matrix_check_perm",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: object keyed by SpiceDB subject type, value
-						// a string id or a list of string ids. Fully dynamic —
-						// OPA's static-property object types are effectively
-						// required-all, so per-permission key sets can't be
-						// declared without breaking single-key calls; bogus
-						// subject types surface as a runtime error from SpiceDB.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.S,
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.B,
+			Name: "extsvc.check_folder_matrix_check_perm",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: object keyed by SpiceDB subject type, value
+					// a string id or a list of string ids. Fully dynamic —
+					// OPA's static-property object types are effectively
+					// required-all, so per-permission key sets can't be
+					// declared without breaking single-key calls; bogus
+					// subject types surface as a runtime error from SpiceDB.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.S,
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.B,
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, resTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				resID, ok := resTerm.Value.(ast.String)
-				if !ok {
-					return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			resID, ok := resTerm.Value.(ast.String)
+			if !ok {
+				return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			}
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.BooleanTerm(false), nil
+			}
+
+			res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
+			perm := authz.Permission("matrix_check_perm")
+			// AND across present subject-type keys — matches the typed
+			// Check<X> method, which short-circuits to false on the first
+			// non-granted subject slice. (Single-key call: this is just one check.)
+			for _, e := range entries {
+				var checkErr error
+				if caveatCtx == nil {
+					checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
+				} else {
+					ctxMap := structpbToMap(caveatCtx)
+					checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 				}
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
+				granted, fatal := checkOneGranted(checkErr)
+				if fatal != nil {
+					return nil, fatal
 				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
+				if !granted {
 					return ast.BooleanTerm(false), nil
 				}
-
-				res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
-				perm := authz.Permission("matrix_check_perm")
-				// AND across present subject-type keys — matches the typed
-				// Check<X> method, which short-circuits to false on the first
-				// non-granted subject slice. (Single-key call: this is just one check.)
-				for _, e := range entries {
-					var checkErr error
-					if caveatCtx == nil {
-						checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
-					} else {
-						ctxMap := structpbToMap(caveatCtx)
-						checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-					}
-					granted, fatal := checkOneGranted(checkErr)
-					if fatal != nil {
-						return nil, fatal
-					}
-					if !granted {
-						return ast.BooleanTerm(false), nil
-					}
-				}
-				return ast.BooleanTerm(true), nil
-			},
+			}
+			return ast.BooleanTerm(true), nil
+		},
 	)
 	rego.RegisterBuiltin2(
 		&rego.Function{
-				Name: "extsvc.lookup_folder_matrix_check_perm_resources",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: see check_* above — same object shape.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.NewArray(nil, types.S),
+			Name: "extsvc.lookup_folder_matrix_check_perm_resources",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: see check_* above — same object shape.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.NewArray(nil, types.S),
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
-				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
-					return ast.ArrayTerm(), nil
-				}
-				// First present subject-type key wins — matches the typed
-				// Lookup<Perm><Resource>Resources method. Pass exactly one
-				// key for predictable results.
-				e := entries[0]
-				resType := authz.Type("extsvc/folder")
-				perm := authz.Permission("matrix_check_perm")
-				// Returns LookupResult.Definite only; Conditional entries dropped per
-				// scope-opa-go-builtins-codegen.md Out of Scope item 8.
-				var result authz.LookupResult
-				if caveatCtx == nil {
-					result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
-				} else {
-					ctxMap := structpbToMap(caveatCtx)
-					result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-				}
-				if err != nil {
-					return nil, fmt.Errorf("LookupResources: %v", err)
-				}
-				terms := make([]*ast.Term, len(result.Definite))
-				for i, id := range result.Definite {
-					terms[i] = ast.StringTerm(string(id))
-				}
-				return ast.ArrayTerm(terms...), nil
-			},
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.ArrayTerm(), nil
+			}
+			// First present subject-type key wins — matches the typed
+			// Lookup<Perm><Resource>Resources method. Pass exactly one
+			// key for predictable results.
+			e := entries[0]
+			resType := authz.Type("extsvc/folder")
+			perm := authz.Permission("matrix_check_perm")
+			// Returns LookupResult.Definite only; Conditional entries dropped per
+			// scope-opa-go-builtins-codegen.md Out of Scope item 8.
+			var result authz.LookupResult
+			if caveatCtx == nil {
+				result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
+			} else {
+				ctxMap := structpbToMap(caveatCtx)
+				result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
+			}
+			if err != nil {
+				return nil, fmt.Errorf("LookupResources: %v", err)
+			}
+			terms := make([]*ast.Term, len(result.Definite))
+			for i, id := range result.Definite {
+				terms[i] = ast.StringTerm(string(id))
+			}
+			return ast.ArrayTerm(terms...), nil
+		},
 	)
 	rego.RegisterBuiltin3(
 		&rego.Function{
-				Name: "extsvc.check_folder_mixed_all",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: object keyed by SpiceDB subject type, value
-						// a string id or a list of string ids. Fully dynamic —
-						// OPA's static-property object types are effectively
-						// required-all, so per-permission key sets can't be
-						// declared without breaking single-key calls; bogus
-						// subject types surface as a runtime error from SpiceDB.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.S,
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.B,
+			Name: "extsvc.check_folder_mixed_all",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: object keyed by SpiceDB subject type, value
+					// a string id or a list of string ids. Fully dynamic —
+					// OPA's static-property object types are effectively
+					// required-all, so per-permission key sets can't be
+					// declared without breaking single-key calls; bogus
+					// subject types surface as a runtime error from SpiceDB.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.S,
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.B,
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, resTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				resID, ok := resTerm.Value.(ast.String)
-				if !ok {
-					return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			resID, ok := resTerm.Value.(ast.String)
+			if !ok {
+				return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			}
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.BooleanTerm(false), nil
+			}
+
+			res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
+			perm := authz.Permission("mixed_all")
+			// AND across present subject-type keys — matches the typed
+			// Check<X> method, which short-circuits to false on the first
+			// non-granted subject slice. (Single-key call: this is just one check.)
+			for _, e := range entries {
+				var checkErr error
+				if caveatCtx == nil {
+					checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
+				} else {
+					ctxMap := structpbToMap(caveatCtx)
+					checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 				}
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
+				granted, fatal := checkOneGranted(checkErr)
+				if fatal != nil {
+					return nil, fatal
 				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
+				if !granted {
 					return ast.BooleanTerm(false), nil
 				}
-
-				res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
-				perm := authz.Permission("mixed_all")
-				// AND across present subject-type keys — matches the typed
-				// Check<X> method, which short-circuits to false on the first
-				// non-granted subject slice. (Single-key call: this is just one check.)
-				for _, e := range entries {
-					var checkErr error
-					if caveatCtx == nil {
-						checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
-					} else {
-						ctxMap := structpbToMap(caveatCtx)
-						checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-					}
-					granted, fatal := checkOneGranted(checkErr)
-					if fatal != nil {
-						return nil, fatal
-					}
-					if !granted {
-						return ast.BooleanTerm(false), nil
-					}
-				}
-				return ast.BooleanTerm(true), nil
-			},
+			}
+			return ast.BooleanTerm(true), nil
+		},
 	)
 	rego.RegisterBuiltin2(
 		&rego.Function{
-				Name: "extsvc.lookup_folder_mixed_all_resources",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: see check_* above — same object shape.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.NewArray(nil, types.S),
+			Name: "extsvc.lookup_folder_mixed_all_resources",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: see check_* above — same object shape.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.NewArray(nil, types.S),
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
-				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
-					return ast.ArrayTerm(), nil
-				}
-				// First present subject-type key wins — matches the typed
-				// Lookup<Perm><Resource>Resources method. Pass exactly one
-				// key for predictable results.
-				e := entries[0]
-				resType := authz.Type("extsvc/folder")
-				perm := authz.Permission("mixed_all")
-				// Returns LookupResult.Definite only; Conditional entries dropped per
-				// scope-opa-go-builtins-codegen.md Out of Scope item 8.
-				var result authz.LookupResult
-				if caveatCtx == nil {
-					result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
-				} else {
-					ctxMap := structpbToMap(caveatCtx)
-					result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-				}
-				if err != nil {
-					return nil, fmt.Errorf("LookupResources: %v", err)
-				}
-				terms := make([]*ast.Term, len(result.Definite))
-				for i, id := range result.Definite {
-					terms[i] = ast.StringTerm(string(id))
-				}
-				return ast.ArrayTerm(terms...), nil
-			},
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.ArrayTerm(), nil
+			}
+			// First present subject-type key wins — matches the typed
+			// Lookup<Perm><Resource>Resources method. Pass exactly one
+			// key for predictable results.
+			e := entries[0]
+			resType := authz.Type("extsvc/folder")
+			perm := authz.Permission("mixed_all")
+			// Returns LookupResult.Definite only; Conditional entries dropped per
+			// scope-opa-go-builtins-codegen.md Out of Scope item 8.
+			var result authz.LookupResult
+			if caveatCtx == nil {
+				result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
+			} else {
+				ctxMap := structpbToMap(caveatCtx)
+				result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
+			}
+			if err != nil {
+				return nil, fmt.Errorf("LookupResources: %v", err)
+			}
+			terms := make([]*ast.Term, len(result.Definite))
+			for i, id := range result.Definite {
+				terms[i] = ast.StringTerm(string(id))
+			}
+			return ast.ArrayTerm(terms...), nil
+		},
 	)
 	rego.RegisterBuiltin3(
 		&rego.Function{
-				Name: "extsvc.check_folder_mixed_browse",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: object keyed by SpiceDB subject type, value
-						// a string id or a list of string ids. Fully dynamic —
-						// OPA's static-property object types are effectively
-						// required-all, so per-permission key sets can't be
-						// declared without breaking single-key calls; bogus
-						// subject types surface as a runtime error from SpiceDB.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.S,
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.B,
+			Name: "extsvc.check_folder_mixed_browse",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: object keyed by SpiceDB subject type, value
+					// a string id or a list of string ids. Fully dynamic —
+					// OPA's static-property object types are effectively
+					// required-all, so per-permission key sets can't be
+					// declared without breaking single-key calls; bogus
+					// subject types surface as a runtime error from SpiceDB.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.S,
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.B,
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, resTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				resID, ok := resTerm.Value.(ast.String)
-				if !ok {
-					return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			resID, ok := resTerm.Value.(ast.String)
+			if !ok {
+				return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			}
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.BooleanTerm(false), nil
+			}
+
+			res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
+			perm := authz.Permission("mixed_browse")
+			// AND across present subject-type keys — matches the typed
+			// Check<X> method, which short-circuits to false on the first
+			// non-granted subject slice. (Single-key call: this is just one check.)
+			for _, e := range entries {
+				var checkErr error
+				if caveatCtx == nil {
+					checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
+				} else {
+					ctxMap := structpbToMap(caveatCtx)
+					checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 				}
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
+				granted, fatal := checkOneGranted(checkErr)
+				if fatal != nil {
+					return nil, fatal
 				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
+				if !granted {
 					return ast.BooleanTerm(false), nil
 				}
-
-				res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
-				perm := authz.Permission("mixed_browse")
-				// AND across present subject-type keys — matches the typed
-				// Check<X> method, which short-circuits to false on the first
-				// non-granted subject slice. (Single-key call: this is just one check.)
-				for _, e := range entries {
-					var checkErr error
-					if caveatCtx == nil {
-						checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
-					} else {
-						ctxMap := structpbToMap(caveatCtx)
-						checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-					}
-					granted, fatal := checkOneGranted(checkErr)
-					if fatal != nil {
-						return nil, fatal
-					}
-					if !granted {
-						return ast.BooleanTerm(false), nil
-					}
-				}
-				return ast.BooleanTerm(true), nil
-			},
+			}
+			return ast.BooleanTerm(true), nil
+		},
 	)
 	rego.RegisterBuiltin2(
 		&rego.Function{
-				Name: "extsvc.lookup_folder_mixed_browse_resources",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: see check_* above — same object shape.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.NewArray(nil, types.S),
+			Name: "extsvc.lookup_folder_mixed_browse_resources",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: see check_* above — same object shape.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.NewArray(nil, types.S),
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
-				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
-					return ast.ArrayTerm(), nil
-				}
-				// First present subject-type key wins — matches the typed
-				// Lookup<Perm><Resource>Resources method. Pass exactly one
-				// key for predictable results.
-				e := entries[0]
-				resType := authz.Type("extsvc/folder")
-				perm := authz.Permission("mixed_browse")
-				// Returns LookupResult.Definite only; Conditional entries dropped per
-				// scope-opa-go-builtins-codegen.md Out of Scope item 8.
-				var result authz.LookupResult
-				if caveatCtx == nil {
-					result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
-				} else {
-					ctxMap := structpbToMap(caveatCtx)
-					result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-				}
-				if err != nil {
-					return nil, fmt.Errorf("LookupResources: %v", err)
-				}
-				terms := make([]*ast.Term, len(result.Definite))
-				for i, id := range result.Definite {
-					terms[i] = ast.StringTerm(string(id))
-				}
-				return ast.ArrayTerm(terms...), nil
-			},
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.ArrayTerm(), nil
+			}
+			// First present subject-type key wins — matches the typed
+			// Lookup<Perm><Resource>Resources method. Pass exactly one
+			// key for predictable results.
+			e := entries[0]
+			resType := authz.Type("extsvc/folder")
+			perm := authz.Permission("mixed_browse")
+			// Returns LookupResult.Definite only; Conditional entries dropped per
+			// scope-opa-go-builtins-codegen.md Out of Scope item 8.
+			var result authz.LookupResult
+			if caveatCtx == nil {
+				result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
+			} else {
+				ctxMap := structpbToMap(caveatCtx)
+				result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
+			}
+			if err != nil {
+				return nil, fmt.Errorf("LookupResources: %v", err)
+			}
+			terms := make([]*ast.Term, len(result.Definite))
+			for i, id := range result.Definite {
+				terms[i] = ast.StringTerm(string(id))
+			}
+			return ast.ArrayTerm(terms...), nil
+		},
 	)
 	rego.RegisterBuiltin3(
 		&rego.Function{
-				Name: "extsvc.check_folder_multi_check",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: object keyed by SpiceDB subject type, value
-						// a string id or a list of string ids. Fully dynamic —
-						// OPA's static-property object types are effectively
-						// required-all, so per-permission key sets can't be
-						// declared without breaking single-key calls; bogus
-						// subject types surface as a runtime error from SpiceDB.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.S,
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.B,
+			Name: "extsvc.check_folder_multi_check",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: object keyed by SpiceDB subject type, value
+					// a string id or a list of string ids. Fully dynamic —
+					// OPA's static-property object types are effectively
+					// required-all, so per-permission key sets can't be
+					// declared without breaking single-key calls; bogus
+					// subject types surface as a runtime error from SpiceDB.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.S,
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.B,
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, resTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				resID, ok := resTerm.Value.(ast.String)
-				if !ok {
-					return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			resID, ok := resTerm.Value.(ast.String)
+			if !ok {
+				return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			}
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.BooleanTerm(false), nil
+			}
+
+			res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
+			perm := authz.Permission("multi_check")
+			// AND across present subject-type keys — matches the typed
+			// Check<X> method, which short-circuits to false on the first
+			// non-granted subject slice. (Single-key call: this is just one check.)
+			for _, e := range entries {
+				var checkErr error
+				if caveatCtx == nil {
+					checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
+				} else {
+					ctxMap := structpbToMap(caveatCtx)
+					checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 				}
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
+				granted, fatal := checkOneGranted(checkErr)
+				if fatal != nil {
+					return nil, fatal
 				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
+				if !granted {
 					return ast.BooleanTerm(false), nil
 				}
-
-				res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
-				perm := authz.Permission("multi_check")
-				// AND across present subject-type keys — matches the typed
-				// Check<X> method, which short-circuits to false on the first
-				// non-granted subject slice. (Single-key call: this is just one check.)
-				for _, e := range entries {
-					var checkErr error
-					if caveatCtx == nil {
-						checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
-					} else {
-						ctxMap := structpbToMap(caveatCtx)
-						checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-					}
-					granted, fatal := checkOneGranted(checkErr)
-					if fatal != nil {
-						return nil, fatal
-					}
-					if !granted {
-						return ast.BooleanTerm(false), nil
-					}
-				}
-				return ast.BooleanTerm(true), nil
-			},
+			}
+			return ast.BooleanTerm(true), nil
+		},
 	)
 	rego.RegisterBuiltin2(
 		&rego.Function{
-				Name: "extsvc.lookup_folder_multi_check_resources",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: see check_* above — same object shape.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.NewArray(nil, types.S),
+			Name: "extsvc.lookup_folder_multi_check_resources",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: see check_* above — same object shape.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.NewArray(nil, types.S),
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
-				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
-					return ast.ArrayTerm(), nil
-				}
-				// First present subject-type key wins — matches the typed
-				// Lookup<Perm><Resource>Resources method. Pass exactly one
-				// key for predictable results.
-				e := entries[0]
-				resType := authz.Type("extsvc/folder")
-				perm := authz.Permission("multi_check")
-				// Returns LookupResult.Definite only; Conditional entries dropped per
-				// scope-opa-go-builtins-codegen.md Out of Scope item 8.
-				var result authz.LookupResult
-				if caveatCtx == nil {
-					result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
-				} else {
-					ctxMap := structpbToMap(caveatCtx)
-					result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-				}
-				if err != nil {
-					return nil, fmt.Errorf("LookupResources: %v", err)
-				}
-				terms := make([]*ast.Term, len(result.Definite))
-				for i, id := range result.Definite {
-					terms[i] = ast.StringTerm(string(id))
-				}
-				return ast.ArrayTerm(terms...), nil
-			},
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.ArrayTerm(), nil
+			}
+			// First present subject-type key wins — matches the typed
+			// Lookup<Perm><Resource>Resources method. Pass exactly one
+			// key for predictable results.
+			e := entries[0]
+			resType := authz.Type("extsvc/folder")
+			perm := authz.Permission("multi_check")
+			// Returns LookupResult.Definite only; Conditional entries dropped per
+			// scope-opa-go-builtins-codegen.md Out of Scope item 8.
+			var result authz.LookupResult
+			if caveatCtx == nil {
+				result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
+			} else {
+				ctxMap := structpbToMap(caveatCtx)
+				result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
+			}
+			if err != nil {
+				return nil, fmt.Errorf("LookupResources: %v", err)
+			}
+			terms := make([]*ast.Term, len(result.Definite))
+			for i, id := range result.Definite {
+				terms[i] = ast.StringTerm(string(id))
+			}
+			return ast.ArrayTerm(terms...), nil
+		},
 	)
 	rego.RegisterBuiltin3(
 		&rego.Function{
-				Name: "extsvc.check_folder_public_browse",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: object keyed by SpiceDB subject type, value
-						// a string id or a list of string ids. Fully dynamic —
-						// OPA's static-property object types are effectively
-						// required-all, so per-permission key sets can't be
-						// declared without breaking single-key calls; bogus
-						// subject types surface as a runtime error from SpiceDB.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.S,
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.B,
+			Name: "extsvc.check_folder_public_browse",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: object keyed by SpiceDB subject type, value
+					// a string id or a list of string ids. Fully dynamic —
+					// OPA's static-property object types are effectively
+					// required-all, so per-permission key sets can't be
+					// declared without breaking single-key calls; bogus
+					// subject types surface as a runtime error from SpiceDB.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.S,
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.B,
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, resTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				resID, ok := resTerm.Value.(ast.String)
-				if !ok {
-					return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			resID, ok := resTerm.Value.(ast.String)
+			if !ok {
+				return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			}
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.BooleanTerm(false), nil
+			}
+
+			res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
+			perm := authz.Permission("public_browse")
+			// AND across present subject-type keys — matches the typed
+			// Check<X> method, which short-circuits to false on the first
+			// non-granted subject slice. (Single-key call: this is just one check.)
+			for _, e := range entries {
+				var checkErr error
+				if caveatCtx == nil {
+					checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
+				} else {
+					ctxMap := structpbToMap(caveatCtx)
+					checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 				}
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
+				granted, fatal := checkOneGranted(checkErr)
+				if fatal != nil {
+					return nil, fatal
 				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
+				if !granted {
 					return ast.BooleanTerm(false), nil
 				}
-
-				res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
-				perm := authz.Permission("public_browse")
-				// AND across present subject-type keys — matches the typed
-				// Check<X> method, which short-circuits to false on the first
-				// non-granted subject slice. (Single-key call: this is just one check.)
-				for _, e := range entries {
-					var checkErr error
-					if caveatCtx == nil {
-						checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
-					} else {
-						ctxMap := structpbToMap(caveatCtx)
-						checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-					}
-					granted, fatal := checkOneGranted(checkErr)
-					if fatal != nil {
-						return nil, fatal
-					}
-					if !granted {
-						return ast.BooleanTerm(false), nil
-					}
-				}
-				return ast.BooleanTerm(true), nil
-			},
+			}
+			return ast.BooleanTerm(true), nil
+		},
 	)
 	rego.RegisterBuiltin2(
 		&rego.Function{
-				Name: "extsvc.lookup_folder_public_browse_resources",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: see check_* above — same object shape.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.NewArray(nil, types.S),
+			Name: "extsvc.lookup_folder_public_browse_resources",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: see check_* above — same object shape.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.NewArray(nil, types.S),
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
-				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
-					return ast.ArrayTerm(), nil
-				}
-				// First present subject-type key wins — matches the typed
-				// Lookup<Perm><Resource>Resources method. Pass exactly one
-				// key for predictable results.
-				e := entries[0]
-				resType := authz.Type("extsvc/folder")
-				perm := authz.Permission("public_browse")
-				// Returns LookupResult.Definite only; Conditional entries dropped per
-				// scope-opa-go-builtins-codegen.md Out of Scope item 8.
-				var result authz.LookupResult
-				if caveatCtx == nil {
-					result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
-				} else {
-					ctxMap := structpbToMap(caveatCtx)
-					result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-				}
-				if err != nil {
-					return nil, fmt.Errorf("LookupResources: %v", err)
-				}
-				terms := make([]*ast.Term, len(result.Definite))
-				for i, id := range result.Definite {
-					terms[i] = ast.StringTerm(string(id))
-				}
-				return ast.ArrayTerm(terms...), nil
-			},
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.ArrayTerm(), nil
+			}
+			// First present subject-type key wins — matches the typed
+			// Lookup<Perm><Resource>Resources method. Pass exactly one
+			// key for predictable results.
+			e := entries[0]
+			resType := authz.Type("extsvc/folder")
+			perm := authz.Permission("public_browse")
+			// Returns LookupResult.Definite only; Conditional entries dropped per
+			// scope-opa-go-builtins-codegen.md Out of Scope item 8.
+			var result authz.LookupResult
+			if caveatCtx == nil {
+				result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
+			} else {
+				ctxMap := structpbToMap(caveatCtx)
+				result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
+			}
+			if err != nil {
+				return nil, fmt.Errorf("LookupResources: %v", err)
+			}
+			terms := make([]*ast.Term, len(result.Definite))
+			for i, id := range result.Definite {
+				terms[i] = ast.StringTerm(string(id))
+			}
+			return ast.ArrayTerm(terms...), nil
+		},
 	)
 	rego.RegisterBuiltin3(
 		&rego.Function{
-				Name: "extsvc.check_folder_public_gated_check",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: object keyed by SpiceDB subject type, value
-						// a string id or a list of string ids. Fully dynamic —
-						// OPA's static-property object types are effectively
-						// required-all, so per-permission key sets can't be
-						// declared without breaking single-key calls; bogus
-						// subject types surface as a runtime error from SpiceDB.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.S,
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.B,
+			Name: "extsvc.check_folder_public_gated_check",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: object keyed by SpiceDB subject type, value
+					// a string id or a list of string ids. Fully dynamic —
+					// OPA's static-property object types are effectively
+					// required-all, so per-permission key sets can't be
+					// declared without breaking single-key calls; bogus
+					// subject types surface as a runtime error from SpiceDB.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.S,
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.B,
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, resTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				resID, ok := resTerm.Value.(ast.String)
-				if !ok {
-					return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			resID, ok := resTerm.Value.(ast.String)
+			if !ok {
+				return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			}
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.BooleanTerm(false), nil
+			}
+
+			res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
+			perm := authz.Permission("public_gated_check")
+			// AND across present subject-type keys — matches the typed
+			// Check<X> method, which short-circuits to false on the first
+			// non-granted subject slice. (Single-key call: this is just one check.)
+			for _, e := range entries {
+				var checkErr error
+				if caveatCtx == nil {
+					checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
+				} else {
+					ctxMap := structpbToMap(caveatCtx)
+					checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 				}
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
+				granted, fatal := checkOneGranted(checkErr)
+				if fatal != nil {
+					return nil, fatal
 				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
+				if !granted {
 					return ast.BooleanTerm(false), nil
 				}
-
-				res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
-				perm := authz.Permission("public_gated_check")
-				// AND across present subject-type keys — matches the typed
-				// Check<X> method, which short-circuits to false on the first
-				// non-granted subject slice. (Single-key call: this is just one check.)
-				for _, e := range entries {
-					var checkErr error
-					if caveatCtx == nil {
-						checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
-					} else {
-						ctxMap := structpbToMap(caveatCtx)
-						checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-					}
-					granted, fatal := checkOneGranted(checkErr)
-					if fatal != nil {
-						return nil, fatal
-					}
-					if !granted {
-						return ast.BooleanTerm(false), nil
-					}
-				}
-				return ast.BooleanTerm(true), nil
-			},
+			}
+			return ast.BooleanTerm(true), nil
+		},
 	)
 	rego.RegisterBuiltin2(
 		&rego.Function{
-				Name: "extsvc.lookup_folder_public_gated_check_resources",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: see check_* above — same object shape.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.NewArray(nil, types.S),
+			Name: "extsvc.lookup_folder_public_gated_check_resources",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: see check_* above — same object shape.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.NewArray(nil, types.S),
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
-				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
-					return ast.ArrayTerm(), nil
-				}
-				// First present subject-type key wins — matches the typed
-				// Lookup<Perm><Resource>Resources method. Pass exactly one
-				// key for predictable results.
-				e := entries[0]
-				resType := authz.Type("extsvc/folder")
-				perm := authz.Permission("public_gated_check")
-				// Returns LookupResult.Definite only; Conditional entries dropped per
-				// scope-opa-go-builtins-codegen.md Out of Scope item 8.
-				var result authz.LookupResult
-				if caveatCtx == nil {
-					result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
-				} else {
-					ctxMap := structpbToMap(caveatCtx)
-					result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-				}
-				if err != nil {
-					return nil, fmt.Errorf("LookupResources: %v", err)
-				}
-				terms := make([]*ast.Term, len(result.Definite))
-				for i, id := range result.Definite {
-					terms[i] = ast.StringTerm(string(id))
-				}
-				return ast.ArrayTerm(terms...), nil
-			},
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.ArrayTerm(), nil
+			}
+			// First present subject-type key wins — matches the typed
+			// Lookup<Perm><Resource>Resources method. Pass exactly one
+			// key for predictable results.
+			e := entries[0]
+			resType := authz.Type("extsvc/folder")
+			perm := authz.Permission("public_gated_check")
+			// Returns LookupResult.Definite only; Conditional entries dropped per
+			// scope-opa-go-builtins-codegen.md Out of Scope item 8.
+			var result authz.LookupResult
+			if caveatCtx == nil {
+				result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
+			} else {
+				ctxMap := structpbToMap(caveatCtx)
+				result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
+			}
+			if err != nil {
+				return nil, fmt.Errorf("LookupResources: %v", err)
+			}
+			terms := make([]*ast.Term, len(result.Definite))
+			for i, id := range result.Definite {
+				terms[i] = ast.StringTerm(string(id))
+			}
+			return ast.ArrayTerm(terms...), nil
+		},
 	)
 	rego.RegisterBuiltin3(
 		&rego.Function{
-				Name: "extsvc.check_folder_rate_check",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: object keyed by SpiceDB subject type, value
-						// a string id or a list of string ids. Fully dynamic —
-						// OPA's static-property object types are effectively
-						// required-all, so per-permission key sets can't be
-						// declared without breaking single-key calls; bogus
-						// subject types surface as a runtime error from SpiceDB.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.S,
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.B,
+			Name: "extsvc.check_folder_rate_check",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: object keyed by SpiceDB subject type, value
+					// a string id or a list of string ids. Fully dynamic —
+					// OPA's static-property object types are effectively
+					// required-all, so per-permission key sets can't be
+					// declared without breaking single-key calls; bogus
+					// subject types surface as a runtime error from SpiceDB.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.S,
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.B,
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, resTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				resID, ok := resTerm.Value.(ast.String)
-				if !ok {
-					return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			resID, ok := resTerm.Value.(ast.String)
+			if !ok {
+				return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			}
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.BooleanTerm(false), nil
+			}
+
+			res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
+			perm := authz.Permission("rate_check")
+			// AND across present subject-type keys — matches the typed
+			// Check<X> method, which short-circuits to false on the first
+			// non-granted subject slice. (Single-key call: this is just one check.)
+			for _, e := range entries {
+				var checkErr error
+				if caveatCtx == nil {
+					checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
+				} else {
+					ctxMap := structpbToMap(caveatCtx)
+					checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 				}
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
+				granted, fatal := checkOneGranted(checkErr)
+				if fatal != nil {
+					return nil, fatal
 				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
+				if !granted {
 					return ast.BooleanTerm(false), nil
 				}
-
-				res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
-				perm := authz.Permission("rate_check")
-				// AND across present subject-type keys — matches the typed
-				// Check<X> method, which short-circuits to false on the first
-				// non-granted subject slice. (Single-key call: this is just one check.)
-				for _, e := range entries {
-					var checkErr error
-					if caveatCtx == nil {
-						checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
-					} else {
-						ctxMap := structpbToMap(caveatCtx)
-						checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-					}
-					granted, fatal := checkOneGranted(checkErr)
-					if fatal != nil {
-						return nil, fatal
-					}
-					if !granted {
-						return ast.BooleanTerm(false), nil
-					}
-				}
-				return ast.BooleanTerm(true), nil
-			},
+			}
+			return ast.BooleanTerm(true), nil
+		},
 	)
 	rego.RegisterBuiltin2(
 		&rego.Function{
-				Name: "extsvc.lookup_folder_rate_check_resources",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: see check_* above — same object shape.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.NewArray(nil, types.S),
+			Name: "extsvc.lookup_folder_rate_check_resources",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: see check_* above — same object shape.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.NewArray(nil, types.S),
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
-				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
-					return ast.ArrayTerm(), nil
-				}
-				// First present subject-type key wins — matches the typed
-				// Lookup<Perm><Resource>Resources method. Pass exactly one
-				// key for predictable results.
-				e := entries[0]
-				resType := authz.Type("extsvc/folder")
-				perm := authz.Permission("rate_check")
-				// Returns LookupResult.Definite only; Conditional entries dropped per
-				// scope-opa-go-builtins-codegen.md Out of Scope item 8.
-				var result authz.LookupResult
-				if caveatCtx == nil {
-					result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
-				} else {
-					ctxMap := structpbToMap(caveatCtx)
-					result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-				}
-				if err != nil {
-					return nil, fmt.Errorf("LookupResources: %v", err)
-				}
-				terms := make([]*ast.Term, len(result.Definite))
-				for i, id := range result.Definite {
-					terms[i] = ast.StringTerm(string(id))
-				}
-				return ast.ArrayTerm(terms...), nil
-			},
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.ArrayTerm(), nil
+			}
+			// First present subject-type key wins — matches the typed
+			// Lookup<Perm><Resource>Resources method. Pass exactly one
+			// key for predictable results.
+			e := entries[0]
+			resType := authz.Type("extsvc/folder")
+			perm := authz.Permission("rate_check")
+			// Returns LookupResult.Definite only; Conditional entries dropped per
+			// scope-opa-go-builtins-codegen.md Out of Scope item 8.
+			var result authz.LookupResult
+			if caveatCtx == nil {
+				result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
+			} else {
+				ctxMap := structpbToMap(caveatCtx)
+				result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
+			}
+			if err != nil {
+				return nil, fmt.Errorf("LookupResources: %v", err)
+			}
+			terms := make([]*ast.Term, len(result.Definite))
+			for i, id := range result.Definite {
+				terms[i] = ast.StringTerm(string(id))
+			}
+			return ast.ArrayTerm(terms...), nil
+		},
 	)
 	rego.RegisterBuiltin3(
 		&rego.Function{
-				Name: "extsvc.check_folder_score_check",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: object keyed by SpiceDB subject type, value
-						// a string id or a list of string ids. Fully dynamic —
-						// OPA's static-property object types are effectively
-						// required-all, so per-permission key sets can't be
-						// declared without breaking single-key calls; bogus
-						// subject types surface as a runtime error from SpiceDB.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.S,
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.B,
+			Name: "extsvc.check_folder_score_check",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: object keyed by SpiceDB subject type, value
+					// a string id or a list of string ids. Fully dynamic —
+					// OPA's static-property object types are effectively
+					// required-all, so per-permission key sets can't be
+					// declared without breaking single-key calls; bogus
+					// subject types surface as a runtime error from SpiceDB.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.S,
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.B,
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, resTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				resID, ok := resTerm.Value.(ast.String)
-				if !ok {
-					return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			resID, ok := resTerm.Value.(ast.String)
+			if !ok {
+				return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			}
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.BooleanTerm(false), nil
+			}
+
+			res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
+			perm := authz.Permission("score_check")
+			// AND across present subject-type keys — matches the typed
+			// Check<X> method, which short-circuits to false on the first
+			// non-granted subject slice. (Single-key call: this is just one check.)
+			for _, e := range entries {
+				var checkErr error
+				if caveatCtx == nil {
+					checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
+				} else {
+					ctxMap := structpbToMap(caveatCtx)
+					checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 				}
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
+				granted, fatal := checkOneGranted(checkErr)
+				if fatal != nil {
+					return nil, fatal
 				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
+				if !granted {
 					return ast.BooleanTerm(false), nil
 				}
-
-				res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
-				perm := authz.Permission("score_check")
-				// AND across present subject-type keys — matches the typed
-				// Check<X> method, which short-circuits to false on the first
-				// non-granted subject slice. (Single-key call: this is just one check.)
-				for _, e := range entries {
-					var checkErr error
-					if caveatCtx == nil {
-						checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
-					} else {
-						ctxMap := structpbToMap(caveatCtx)
-						checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-					}
-					granted, fatal := checkOneGranted(checkErr)
-					if fatal != nil {
-						return nil, fatal
-					}
-					if !granted {
-						return ast.BooleanTerm(false), nil
-					}
-				}
-				return ast.BooleanTerm(true), nil
-			},
+			}
+			return ast.BooleanTerm(true), nil
+		},
 	)
 	rego.RegisterBuiltin2(
 		&rego.Function{
-				Name: "extsvc.lookup_folder_score_check_resources",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: see check_* above — same object shape.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.NewArray(nil, types.S),
+			Name: "extsvc.lookup_folder_score_check_resources",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: see check_* above — same object shape.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.NewArray(nil, types.S),
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
-				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
-					return ast.ArrayTerm(), nil
-				}
-				// First present subject-type key wins — matches the typed
-				// Lookup<Perm><Resource>Resources method. Pass exactly one
-				// key for predictable results.
-				e := entries[0]
-				resType := authz.Type("extsvc/folder")
-				perm := authz.Permission("score_check")
-				// Returns LookupResult.Definite only; Conditional entries dropped per
-				// scope-opa-go-builtins-codegen.md Out of Scope item 8.
-				var result authz.LookupResult
-				if caveatCtx == nil {
-					result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
-				} else {
-					ctxMap := structpbToMap(caveatCtx)
-					result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-				}
-				if err != nil {
-					return nil, fmt.Errorf("LookupResources: %v", err)
-				}
-				terms := make([]*ast.Term, len(result.Definite))
-				for i, id := range result.Definite {
-					terms[i] = ast.StringTerm(string(id))
-				}
-				return ast.ArrayTerm(terms...), nil
-			},
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.ArrayTerm(), nil
+			}
+			// First present subject-type key wins — matches the typed
+			// Lookup<Perm><Resource>Resources method. Pass exactly one
+			// key for predictable results.
+			e := entries[0]
+			resType := authz.Type("extsvc/folder")
+			perm := authz.Permission("score_check")
+			// Returns LookupResult.Definite only; Conditional entries dropped per
+			// scope-opa-go-builtins-codegen.md Out of Scope item 8.
+			var result authz.LookupResult
+			if caveatCtx == nil {
+				result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
+			} else {
+				ctxMap := structpbToMap(caveatCtx)
+				result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
+			}
+			if err != nil {
+				return nil, fmt.Errorf("LookupResources: %v", err)
+			}
+			terms := make([]*ast.Term, len(result.Definite))
+			for i, id := range result.Definite {
+				terms[i] = ast.StringTerm(string(id))
+			}
+			return ast.ArrayTerm(terms...), nil
+		},
 	)
 	rego.RegisterBuiltin3(
 		&rego.Function{
-				Name: "extsvc.check_folder_scored_minus_token",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: object keyed by SpiceDB subject type, value
-						// a string id or a list of string ids. Fully dynamic —
-						// OPA's static-property object types are effectively
-						// required-all, so per-permission key sets can't be
-						// declared without breaking single-key calls; bogus
-						// subject types surface as a runtime error from SpiceDB.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.S,
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.B,
+			Name: "extsvc.check_folder_scored_minus_token",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: object keyed by SpiceDB subject type, value
+					// a string id or a list of string ids. Fully dynamic —
+					// OPA's static-property object types are effectively
+					// required-all, so per-permission key sets can't be
+					// declared without breaking single-key calls; bogus
+					// subject types surface as a runtime error from SpiceDB.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.S,
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.B,
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, resTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				resID, ok := resTerm.Value.(ast.String)
-				if !ok {
-					return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			resID, ok := resTerm.Value.(ast.String)
+			if !ok {
+				return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			}
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.BooleanTerm(false), nil
+			}
+
+			res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
+			perm := authz.Permission("scored_minus_token")
+			// AND across present subject-type keys — matches the typed
+			// Check<X> method, which short-circuits to false on the first
+			// non-granted subject slice. (Single-key call: this is just one check.)
+			for _, e := range entries {
+				var checkErr error
+				if caveatCtx == nil {
+					checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
+				} else {
+					ctxMap := structpbToMap(caveatCtx)
+					checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 				}
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
+				granted, fatal := checkOneGranted(checkErr)
+				if fatal != nil {
+					return nil, fatal
 				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
+				if !granted {
 					return ast.BooleanTerm(false), nil
 				}
-
-				res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
-				perm := authz.Permission("scored_minus_token")
-				// AND across present subject-type keys — matches the typed
-				// Check<X> method, which short-circuits to false on the first
-				// non-granted subject slice. (Single-key call: this is just one check.)
-				for _, e := range entries {
-					var checkErr error
-					if caveatCtx == nil {
-						checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
-					} else {
-						ctxMap := structpbToMap(caveatCtx)
-						checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-					}
-					granted, fatal := checkOneGranted(checkErr)
-					if fatal != nil {
-						return nil, fatal
-					}
-					if !granted {
-						return ast.BooleanTerm(false), nil
-					}
-				}
-				return ast.BooleanTerm(true), nil
-			},
+			}
+			return ast.BooleanTerm(true), nil
+		},
 	)
 	rego.RegisterBuiltin2(
 		&rego.Function{
-				Name: "extsvc.lookup_folder_scored_minus_token_resources",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: see check_* above — same object shape.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.NewArray(nil, types.S),
+			Name: "extsvc.lookup_folder_scored_minus_token_resources",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: see check_* above — same object shape.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.NewArray(nil, types.S),
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
-				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
-					return ast.ArrayTerm(), nil
-				}
-				// First present subject-type key wins — matches the typed
-				// Lookup<Perm><Resource>Resources method. Pass exactly one
-				// key for predictable results.
-				e := entries[0]
-				resType := authz.Type("extsvc/folder")
-				perm := authz.Permission("scored_minus_token")
-				// Returns LookupResult.Definite only; Conditional entries dropped per
-				// scope-opa-go-builtins-codegen.md Out of Scope item 8.
-				var result authz.LookupResult
-				if caveatCtx == nil {
-					result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
-				} else {
-					ctxMap := structpbToMap(caveatCtx)
-					result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-				}
-				if err != nil {
-					return nil, fmt.Errorf("LookupResources: %v", err)
-				}
-				terms := make([]*ast.Term, len(result.Definite))
-				for i, id := range result.Definite {
-					terms[i] = ast.StringTerm(string(id))
-				}
-				return ast.ArrayTerm(terms...), nil
-			},
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.ArrayTerm(), nil
+			}
+			// First present subject-type key wins — matches the typed
+			// Lookup<Perm><Resource>Resources method. Pass exactly one
+			// key for predictable results.
+			e := entries[0]
+			resType := authz.Type("extsvc/folder")
+			perm := authz.Permission("scored_minus_token")
+			// Returns LookupResult.Definite only; Conditional entries dropped per
+			// scope-opa-go-builtins-codegen.md Out of Scope item 8.
+			var result authz.LookupResult
+			if caveatCtx == nil {
+				result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
+			} else {
+				ctxMap := structpbToMap(caveatCtx)
+				result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
+			}
+			if err != nil {
+				return nil, fmt.Errorf("LookupResources: %v", err)
+			}
+			terms := make([]*ast.Term, len(result.Definite))
+			for i, id := range result.Definite {
+				terms[i] = ast.StringTerm(string(id))
+			}
+			return ast.ArrayTerm(terms...), nil
+		},
 	)
 	rego.RegisterBuiltin3(
 		&rego.Function{
-				Name: "extsvc.check_folder_subnet_check",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: object keyed by SpiceDB subject type, value
-						// a string id or a list of string ids. Fully dynamic —
-						// OPA's static-property object types are effectively
-						// required-all, so per-permission key sets can't be
-						// declared without breaking single-key calls; bogus
-						// subject types surface as a runtime error from SpiceDB.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.S,
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.B,
+			Name: "extsvc.check_folder_subnet_check",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: object keyed by SpiceDB subject type, value
+					// a string id or a list of string ids. Fully dynamic —
+					// OPA's static-property object types are effectively
+					// required-all, so per-permission key sets can't be
+					// declared without breaking single-key calls; bogus
+					// subject types surface as a runtime error from SpiceDB.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.S,
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.B,
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, resTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				resID, ok := resTerm.Value.(ast.String)
-				if !ok {
-					return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			resID, ok := resTerm.Value.(ast.String)
+			if !ok {
+				return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			}
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.BooleanTerm(false), nil
+			}
+
+			res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
+			perm := authz.Permission("subnet_check")
+			// AND across present subject-type keys — matches the typed
+			// Check<X> method, which short-circuits to false on the first
+			// non-granted subject slice. (Single-key call: this is just one check.)
+			for _, e := range entries {
+				var checkErr error
+				if caveatCtx == nil {
+					checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
+				} else {
+					ctxMap := structpbToMap(caveatCtx)
+					checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 				}
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
+				granted, fatal := checkOneGranted(checkErr)
+				if fatal != nil {
+					return nil, fatal
 				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
+				if !granted {
 					return ast.BooleanTerm(false), nil
 				}
-
-				res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
-				perm := authz.Permission("subnet_check")
-				// AND across present subject-type keys — matches the typed
-				// Check<X> method, which short-circuits to false on the first
-				// non-granted subject slice. (Single-key call: this is just one check.)
-				for _, e := range entries {
-					var checkErr error
-					if caveatCtx == nil {
-						checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
-					} else {
-						ctxMap := structpbToMap(caveatCtx)
-						checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-					}
-					granted, fatal := checkOneGranted(checkErr)
-					if fatal != nil {
-						return nil, fatal
-					}
-					if !granted {
-						return ast.BooleanTerm(false), nil
-					}
-				}
-				return ast.BooleanTerm(true), nil
-			},
+			}
+			return ast.BooleanTerm(true), nil
+		},
 	)
 	rego.RegisterBuiltin2(
 		&rego.Function{
-				Name: "extsvc.lookup_folder_subnet_check_resources",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: see check_* above — same object shape.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.NewArray(nil, types.S),
+			Name: "extsvc.lookup_folder_subnet_check_resources",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: see check_* above — same object shape.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.NewArray(nil, types.S),
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
-				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
-					return ast.ArrayTerm(), nil
-				}
-				// First present subject-type key wins — matches the typed
-				// Lookup<Perm><Resource>Resources method. Pass exactly one
-				// key for predictable results.
-				e := entries[0]
-				resType := authz.Type("extsvc/folder")
-				perm := authz.Permission("subnet_check")
-				// Returns LookupResult.Definite only; Conditional entries dropped per
-				// scope-opa-go-builtins-codegen.md Out of Scope item 8.
-				var result authz.LookupResult
-				if caveatCtx == nil {
-					result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
-				} else {
-					ctxMap := structpbToMap(caveatCtx)
-					result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-				}
-				if err != nil {
-					return nil, fmt.Errorf("LookupResources: %v", err)
-				}
-				terms := make([]*ast.Term, len(result.Definite))
-				for i, id := range result.Definite {
-					terms[i] = ast.StringTerm(string(id))
-				}
-				return ast.ArrayTerm(terms...), nil
-			},
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.ArrayTerm(), nil
+			}
+			// First present subject-type key wins — matches the typed
+			// Lookup<Perm><Resource>Resources method. Pass exactly one
+			// key for predictable results.
+			e := entries[0]
+			resType := authz.Type("extsvc/folder")
+			perm := authz.Permission("subnet_check")
+			// Returns LookupResult.Definite only; Conditional entries dropped per
+			// scope-opa-go-builtins-codegen.md Out of Scope item 8.
+			var result authz.LookupResult
+			if caveatCtx == nil {
+				result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
+			} else {
+				ctxMap := structpbToMap(caveatCtx)
+				result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
+			}
+			if err != nil {
+				return nil, fmt.Errorf("LookupResources: %v", err)
+			}
+			terms := make([]*ast.Term, len(result.Definite))
+			for i, id := range result.Definite {
+				terms[i] = ast.StringTerm(string(id))
+			}
+			return ast.ArrayTerm(terms...), nil
+		},
 	)
 	rego.RegisterBuiltin3(
 		&rego.Function{
-				Name: "extsvc.check_folder_temp_collab_view",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: object keyed by SpiceDB subject type, value
-						// a string id or a list of string ids. Fully dynamic —
-						// OPA's static-property object types are effectively
-						// required-all, so per-permission key sets can't be
-						// declared without breaking single-key calls; bogus
-						// subject types surface as a runtime error from SpiceDB.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.S,
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.B,
+			Name: "extsvc.check_folder_temp_collab_view",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: object keyed by SpiceDB subject type, value
+					// a string id or a list of string ids. Fully dynamic —
+					// OPA's static-property object types are effectively
+					// required-all, so per-permission key sets can't be
+					// declared without breaking single-key calls; bogus
+					// subject types surface as a runtime error from SpiceDB.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.S,
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.B,
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, resTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				resID, ok := resTerm.Value.(ast.String)
-				if !ok {
-					return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			resID, ok := resTerm.Value.(ast.String)
+			if !ok {
+				return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			}
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.BooleanTerm(false), nil
+			}
+
+			res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
+			perm := authz.Permission("temp_collab_view")
+			// AND across present subject-type keys — matches the typed
+			// Check<X> method, which short-circuits to false on the first
+			// non-granted subject slice. (Single-key call: this is just one check.)
+			for _, e := range entries {
+				var checkErr error
+				if caveatCtx == nil {
+					checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
+				} else {
+					ctxMap := structpbToMap(caveatCtx)
+					checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 				}
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
+				granted, fatal := checkOneGranted(checkErr)
+				if fatal != nil {
+					return nil, fatal
 				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
+				if !granted {
 					return ast.BooleanTerm(false), nil
 				}
-
-				res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
-				perm := authz.Permission("temp_collab_view")
-				// AND across present subject-type keys — matches the typed
-				// Check<X> method, which short-circuits to false on the first
-				// non-granted subject slice. (Single-key call: this is just one check.)
-				for _, e := range entries {
-					var checkErr error
-					if caveatCtx == nil {
-						checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
-					} else {
-						ctxMap := structpbToMap(caveatCtx)
-						checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-					}
-					granted, fatal := checkOneGranted(checkErr)
-					if fatal != nil {
-						return nil, fatal
-					}
-					if !granted {
-						return ast.BooleanTerm(false), nil
-					}
-				}
-				return ast.BooleanTerm(true), nil
-			},
+			}
+			return ast.BooleanTerm(true), nil
+		},
 	)
 	rego.RegisterBuiltin2(
 		&rego.Function{
-				Name: "extsvc.lookup_folder_temp_collab_view_resources",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: see check_* above — same object shape.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.NewArray(nil, types.S),
+			Name: "extsvc.lookup_folder_temp_collab_view_resources",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: see check_* above — same object shape.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.NewArray(nil, types.S),
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
-				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
-					return ast.ArrayTerm(), nil
-				}
-				// First present subject-type key wins — matches the typed
-				// Lookup<Perm><Resource>Resources method. Pass exactly one
-				// key for predictable results.
-				e := entries[0]
-				resType := authz.Type("extsvc/folder")
-				perm := authz.Permission("temp_collab_view")
-				// Returns LookupResult.Definite only; Conditional entries dropped per
-				// scope-opa-go-builtins-codegen.md Out of Scope item 8.
-				var result authz.LookupResult
-				if caveatCtx == nil {
-					result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
-				} else {
-					ctxMap := structpbToMap(caveatCtx)
-					result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-				}
-				if err != nil {
-					return nil, fmt.Errorf("LookupResources: %v", err)
-				}
-				terms := make([]*ast.Term, len(result.Definite))
-				for i, id := range result.Definite {
-					terms[i] = ast.StringTerm(string(id))
-				}
-				return ast.ArrayTerm(terms...), nil
-			},
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.ArrayTerm(), nil
+			}
+			// First present subject-type key wins — matches the typed
+			// Lookup<Perm><Resource>Resources method. Pass exactly one
+			// key for predictable results.
+			e := entries[0]
+			resType := authz.Type("extsvc/folder")
+			perm := authz.Permission("temp_collab_view")
+			// Returns LookupResult.Definite only; Conditional entries dropped per
+			// scope-opa-go-builtins-codegen.md Out of Scope item 8.
+			var result authz.LookupResult
+			if caveatCtx == nil {
+				result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
+			} else {
+				ctxMap := structpbToMap(caveatCtx)
+				result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
+			}
+			if err != nil {
+				return nil, fmt.Errorf("LookupResources: %v", err)
+			}
+			terms := make([]*ast.Term, len(result.Definite))
+			for i, id := range result.Definite {
+				terms[i] = ast.StringTerm(string(id))
+			}
+			return ast.ArrayTerm(terms...), nil
+		},
 	)
 	rego.RegisterBuiltin3(
 		&rego.Function{
-				Name: "extsvc.check_folder_tenanted_browse",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: object keyed by SpiceDB subject type, value
-						// a string id or a list of string ids. Fully dynamic —
-						// OPA's static-property object types are effectively
-						// required-all, so per-permission key sets can't be
-						// declared without breaking single-key calls; bogus
-						// subject types surface as a runtime error from SpiceDB.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.S,
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.B,
+			Name: "extsvc.check_folder_tenanted_browse",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: object keyed by SpiceDB subject type, value
+					// a string id or a list of string ids. Fully dynamic —
+					// OPA's static-property object types are effectively
+					// required-all, so per-permission key sets can't be
+					// declared without breaking single-key calls; bogus
+					// subject types surface as a runtime error from SpiceDB.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.S,
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.B,
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, resTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				resID, ok := resTerm.Value.(ast.String)
-				if !ok {
-					return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			resID, ok := resTerm.Value.(ast.String)
+			if !ok {
+				return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			}
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.BooleanTerm(false), nil
+			}
+
+			res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
+			perm := authz.Permission("tenanted_browse")
+			// AND across present subject-type keys — matches the typed
+			// Check<X> method, which short-circuits to false on the first
+			// non-granted subject slice. (Single-key call: this is just one check.)
+			for _, e := range entries {
+				var checkErr error
+				if caveatCtx == nil {
+					checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
+				} else {
+					ctxMap := structpbToMap(caveatCtx)
+					checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 				}
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
+				granted, fatal := checkOneGranted(checkErr)
+				if fatal != nil {
+					return nil, fatal
 				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
+				if !granted {
 					return ast.BooleanTerm(false), nil
 				}
-
-				res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
-				perm := authz.Permission("tenanted_browse")
-				// AND across present subject-type keys — matches the typed
-				// Check<X> method, which short-circuits to false on the first
-				// non-granted subject slice. (Single-key call: this is just one check.)
-				for _, e := range entries {
-					var checkErr error
-					if caveatCtx == nil {
-						checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
-					} else {
-						ctxMap := structpbToMap(caveatCtx)
-						checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-					}
-					granted, fatal := checkOneGranted(checkErr)
-					if fatal != nil {
-						return nil, fatal
-					}
-					if !granted {
-						return ast.BooleanTerm(false), nil
-					}
-				}
-				return ast.BooleanTerm(true), nil
-			},
+			}
+			return ast.BooleanTerm(true), nil
+		},
 	)
 	rego.RegisterBuiltin2(
 		&rego.Function{
-				Name: "extsvc.lookup_folder_tenanted_browse_resources",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: see check_* above — same object shape.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.NewArray(nil, types.S),
+			Name: "extsvc.lookup_folder_tenanted_browse_resources",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: see check_* above — same object shape.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.NewArray(nil, types.S),
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
-				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
-					return ast.ArrayTerm(), nil
-				}
-				// First present subject-type key wins — matches the typed
-				// Lookup<Perm><Resource>Resources method. Pass exactly one
-				// key for predictable results.
-				e := entries[0]
-				resType := authz.Type("extsvc/folder")
-				perm := authz.Permission("tenanted_browse")
-				// Returns LookupResult.Definite only; Conditional entries dropped per
-				// scope-opa-go-builtins-codegen.md Out of Scope item 8.
-				var result authz.LookupResult
-				if caveatCtx == nil {
-					result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
-				} else {
-					ctxMap := structpbToMap(caveatCtx)
-					result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-				}
-				if err != nil {
-					return nil, fmt.Errorf("LookupResources: %v", err)
-				}
-				terms := make([]*ast.Term, len(result.Definite))
-				for i, id := range result.Definite {
-					terms[i] = ast.StringTerm(string(id))
-				}
-				return ast.ArrayTerm(terms...), nil
-			},
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.ArrayTerm(), nil
+			}
+			// First present subject-type key wins — matches the typed
+			// Lookup<Perm><Resource>Resources method. Pass exactly one
+			// key for predictable results.
+			e := entries[0]
+			resType := authz.Type("extsvc/folder")
+			perm := authz.Permission("tenanted_browse")
+			// Returns LookupResult.Definite only; Conditional entries dropped per
+			// scope-opa-go-builtins-codegen.md Out of Scope item 8.
+			var result authz.LookupResult
+			if caveatCtx == nil {
+				result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
+			} else {
+				ctxMap := structpbToMap(caveatCtx)
+				result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
+			}
+			if err != nil {
+				return nil, fmt.Errorf("LookupResources: %v", err)
+			}
+			terms := make([]*ast.Term, len(result.Definite))
+			for i, id := range result.Definite {
+				terms[i] = ast.StringTerm(string(id))
+			}
+			return ast.ArrayTerm(terms...), nil
+		},
 	)
 	rego.RegisterBuiltin3(
 		&rego.Function{
-				Name: "extsvc.check_folder_token_check",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: object keyed by SpiceDB subject type, value
-						// a string id or a list of string ids. Fully dynamic —
-						// OPA's static-property object types are effectively
-						// required-all, so per-permission key sets can't be
-						// declared without breaking single-key calls; bogus
-						// subject types surface as a runtime error from SpiceDB.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.S,
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.B,
+			Name: "extsvc.check_folder_token_check",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: object keyed by SpiceDB subject type, value
+					// a string id or a list of string ids. Fully dynamic —
+					// OPA's static-property object types are effectively
+					// required-all, so per-permission key sets can't be
+					// declared without breaking single-key calls; bogus
+					// subject types surface as a runtime error from SpiceDB.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.S,
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.B,
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, resTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				resID, ok := resTerm.Value.(ast.String)
-				if !ok {
-					return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			resID, ok := resTerm.Value.(ast.String)
+			if !ok {
+				return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			}
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.BooleanTerm(false), nil
+			}
+
+			res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
+			perm := authz.Permission("token_check")
+			// AND across present subject-type keys — matches the typed
+			// Check<X> method, which short-circuits to false on the first
+			// non-granted subject slice. (Single-key call: this is just one check.)
+			for _, e := range entries {
+				var checkErr error
+				if caveatCtx == nil {
+					checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
+				} else {
+					ctxMap := structpbToMap(caveatCtx)
+					checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 				}
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
+				granted, fatal := checkOneGranted(checkErr)
+				if fatal != nil {
+					return nil, fatal
 				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
+				if !granted {
 					return ast.BooleanTerm(false), nil
 				}
-
-				res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
-				perm := authz.Permission("token_check")
-				// AND across present subject-type keys — matches the typed
-				// Check<X> method, which short-circuits to false on the first
-				// non-granted subject slice. (Single-key call: this is just one check.)
-				for _, e := range entries {
-					var checkErr error
-					if caveatCtx == nil {
-						checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
-					} else {
-						ctxMap := structpbToMap(caveatCtx)
-						checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-					}
-					granted, fatal := checkOneGranted(checkErr)
-					if fatal != nil {
-						return nil, fatal
-					}
-					if !granted {
-						return ast.BooleanTerm(false), nil
-					}
-				}
-				return ast.BooleanTerm(true), nil
-			},
+			}
+			return ast.BooleanTerm(true), nil
+		},
 	)
 	rego.RegisterBuiltin2(
 		&rego.Function{
-				Name: "extsvc.lookup_folder_token_check_resources",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: see check_* above — same object shape.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.NewArray(nil, types.S),
+			Name: "extsvc.lookup_folder_token_check_resources",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: see check_* above — same object shape.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.NewArray(nil, types.S),
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
-				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
-					return ast.ArrayTerm(), nil
-				}
-				// First present subject-type key wins — matches the typed
-				// Lookup<Perm><Resource>Resources method. Pass exactly one
-				// key for predictable results.
-				e := entries[0]
-				resType := authz.Type("extsvc/folder")
-				perm := authz.Permission("token_check")
-				// Returns LookupResult.Definite only; Conditional entries dropped per
-				// scope-opa-go-builtins-codegen.md Out of Scope item 8.
-				var result authz.LookupResult
-				if caveatCtx == nil {
-					result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
-				} else {
-					ctxMap := structpbToMap(caveatCtx)
-					result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-				}
-				if err != nil {
-					return nil, fmt.Errorf("LookupResources: %v", err)
-				}
-				terms := make([]*ast.Term, len(result.Definite))
-				for i, id := range result.Definite {
-					terms[i] = ast.StringTerm(string(id))
-				}
-				return ast.ArrayTerm(terms...), nil
-			},
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.ArrayTerm(), nil
+			}
+			// First present subject-type key wins — matches the typed
+			// Lookup<Perm><Resource>Resources method. Pass exactly one
+			// key for predictable results.
+			e := entries[0]
+			resType := authz.Type("extsvc/folder")
+			perm := authz.Permission("token_check")
+			// Returns LookupResult.Definite only; Conditional entries dropped per
+			// scope-opa-go-builtins-codegen.md Out of Scope item 8.
+			var result authz.LookupResult
+			if caveatCtx == nil {
+				result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
+			} else {
+				ctxMap := structpbToMap(caveatCtx)
+				result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
+			}
+			if err != nil {
+				return nil, fmt.Errorf("LookupResources: %v", err)
+			}
+			terms := make([]*ast.Term, len(result.Definite))
+			for i, id := range result.Definite {
+				terms[i] = ast.StringTerm(string(id))
+			}
+			return ast.ArrayTerm(terms...), nil
+		},
 	)
 	rego.RegisterBuiltin3(
 		&rego.Function{
-				Name: "extsvc.check_folder_version_check_perm",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: object keyed by SpiceDB subject type, value
-						// a string id or a list of string ids. Fully dynamic —
-						// OPA's static-property object types are effectively
-						// required-all, so per-permission key sets can't be
-						// declared without breaking single-key calls; bogus
-						// subject types surface as a runtime error from SpiceDB.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.S,
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.B,
+			Name: "extsvc.check_folder_version_check_perm",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: object keyed by SpiceDB subject type, value
+					// a string id or a list of string ids. Fully dynamic —
+					// OPA's static-property object types are effectively
+					// required-all, so per-permission key sets can't be
+					// declared without breaking single-key calls; bogus
+					// subject types surface as a runtime error from SpiceDB.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.S,
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.B,
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, resTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				resID, ok := resTerm.Value.(ast.String)
-				if !ok {
-					return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			resID, ok := resTerm.Value.(ast.String)
+			if !ok {
+				return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			}
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.BooleanTerm(false), nil
+			}
+
+			res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
+			perm := authz.Permission("version_check_perm")
+			// AND across present subject-type keys — matches the typed
+			// Check<X> method, which short-circuits to false on the first
+			// non-granted subject slice. (Single-key call: this is just one check.)
+			for _, e := range entries {
+				var checkErr error
+				if caveatCtx == nil {
+					checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
+				} else {
+					ctxMap := structpbToMap(caveatCtx)
+					checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 				}
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
+				granted, fatal := checkOneGranted(checkErr)
+				if fatal != nil {
+					return nil, fatal
 				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
+				if !granted {
 					return ast.BooleanTerm(false), nil
 				}
-
-				res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
-				perm := authz.Permission("version_check_perm")
-				// AND across present subject-type keys — matches the typed
-				// Check<X> method, which short-circuits to false on the first
-				// non-granted subject slice. (Single-key call: this is just one check.)
-				for _, e := range entries {
-					var checkErr error
-					if caveatCtx == nil {
-						checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
-					} else {
-						ctxMap := structpbToMap(caveatCtx)
-						checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-					}
-					granted, fatal := checkOneGranted(checkErr)
-					if fatal != nil {
-						return nil, fatal
-					}
-					if !granted {
-						return ast.BooleanTerm(false), nil
-					}
-				}
-				return ast.BooleanTerm(true), nil
-			},
+			}
+			return ast.BooleanTerm(true), nil
+		},
 	)
 	rego.RegisterBuiltin2(
 		&rego.Function{
-				Name: "extsvc.lookup_folder_version_check_perm_resources",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: see check_* above — same object shape.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.NewArray(nil, types.S),
+			Name: "extsvc.lookup_folder_version_check_perm_resources",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: see check_* above — same object shape.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.NewArray(nil, types.S),
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
-				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
-					return ast.ArrayTerm(), nil
-				}
-				// First present subject-type key wins — matches the typed
-				// Lookup<Perm><Resource>Resources method. Pass exactly one
-				// key for predictable results.
-				e := entries[0]
-				resType := authz.Type("extsvc/folder")
-				perm := authz.Permission("version_check_perm")
-				// Returns LookupResult.Definite only; Conditional entries dropped per
-				// scope-opa-go-builtins-codegen.md Out of Scope item 8.
-				var result authz.LookupResult
-				if caveatCtx == nil {
-					result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
-				} else {
-					ctxMap := structpbToMap(caveatCtx)
-					result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-				}
-				if err != nil {
-					return nil, fmt.Errorf("LookupResources: %v", err)
-				}
-				terms := make([]*ast.Term, len(result.Definite))
-				for i, id := range result.Definite {
-					terms[i] = ast.StringTerm(string(id))
-				}
-				return ast.ArrayTerm(terms...), nil
-			},
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.ArrayTerm(), nil
+			}
+			// First present subject-type key wins — matches the typed
+			// Lookup<Perm><Resource>Resources method. Pass exactly one
+			// key for predictable results.
+			e := entries[0]
+			resType := authz.Type("extsvc/folder")
+			perm := authz.Permission("version_check_perm")
+			// Returns LookupResult.Definite only; Conditional entries dropped per
+			// scope-opa-go-builtins-codegen.md Out of Scope item 8.
+			var result authz.LookupResult
+			if caveatCtx == nil {
+				result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
+			} else {
+				ctxMap := structpbToMap(caveatCtx)
+				result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
+			}
+			if err != nil {
+				return nil, fmt.Errorf("LookupResources: %v", err)
+			}
+			terms := make([]*ast.Term, len(result.Definite))
+			for i, id := range result.Definite {
+				terms[i] = ast.StringTerm(string(id))
+			}
+			return ast.ArrayTerm(terms...), nil
+		},
 	)
 	rego.RegisterBuiltin3(
 		&rego.Function{
-				Name: "extsvc.check_folder_via_gated_root",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: object keyed by SpiceDB subject type, value
-						// a string id or a list of string ids. Fully dynamic —
-						// OPA's static-property object types are effectively
-						// required-all, so per-permission key sets can't be
-						// declared without breaking single-key calls; bogus
-						// subject types surface as a runtime error from SpiceDB.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.S,
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.B,
+			Name: "extsvc.check_folder_via_gated_root",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: object keyed by SpiceDB subject type, value
+					// a string id or a list of string ids. Fully dynamic —
+					// OPA's static-property object types are effectively
+					// required-all, so per-permission key sets can't be
+					// declared without breaking single-key calls; bogus
+					// subject types surface as a runtime error from SpiceDB.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.S,
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.B,
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, resTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				resID, ok := resTerm.Value.(ast.String)
-				if !ok {
-					return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			resID, ok := resTerm.Value.(ast.String)
+			if !ok {
+				return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			}
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.BooleanTerm(false), nil
+			}
+
+			res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
+			perm := authz.Permission("via_gated_root")
+			// AND across present subject-type keys — matches the typed
+			// Check<X> method, which short-circuits to false on the first
+			// non-granted subject slice. (Single-key call: this is just one check.)
+			for _, e := range entries {
+				var checkErr error
+				if caveatCtx == nil {
+					checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
+				} else {
+					ctxMap := structpbToMap(caveatCtx)
+					checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 				}
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
+				granted, fatal := checkOneGranted(checkErr)
+				if fatal != nil {
+					return nil, fatal
 				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
+				if !granted {
 					return ast.BooleanTerm(false), nil
 				}
-
-				res := authz.Resource{Type: authz.Type("extsvc/folder"), ID: authz.ID(resID)}
-				perm := authz.Permission("via_gated_root")
-				// AND across present subject-type keys — matches the typed
-				// Check<X> method, which short-circuits to false on the first
-				// non-granted subject slice. (Single-key call: this is just one check.)
-				for _, e := range entries {
-					var checkErr error
-					if caveatCtx == nil {
-						checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
-					} else {
-						ctxMap := structpbToMap(caveatCtx)
-						checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-					}
-					granted, fatal := checkOneGranted(checkErr)
-					if fatal != nil {
-						return nil, fatal
-					}
-					if !granted {
-						return ast.BooleanTerm(false), nil
-					}
-				}
-				return ast.BooleanTerm(true), nil
-			},
+			}
+			return ast.BooleanTerm(true), nil
+		},
 	)
 	rego.RegisterBuiltin2(
 		&rego.Function{
-				Name: "extsvc.lookup_folder_via_gated_root_resources",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: see check_* above — same object shape.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.NewArray(nil, types.S),
+			Name: "extsvc.lookup_folder_via_gated_root_resources",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: see check_* above — same object shape.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.NewArray(nil, types.S),
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
-				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
-					return ast.ArrayTerm(), nil
-				}
-				// First present subject-type key wins — matches the typed
-				// Lookup<Perm><Resource>Resources method. Pass exactly one
-				// key for predictable results.
-				e := entries[0]
-				resType := authz.Type("extsvc/folder")
-				perm := authz.Permission("via_gated_root")
-				// Returns LookupResult.Definite only; Conditional entries dropped per
-				// scope-opa-go-builtins-codegen.md Out of Scope item 8.
-				var result authz.LookupResult
-				if caveatCtx == nil {
-					result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
-				} else {
-					ctxMap := structpbToMap(caveatCtx)
-					result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-				}
-				if err != nil {
-					return nil, fmt.Errorf("LookupResources: %v", err)
-				}
-				terms := make([]*ast.Term, len(result.Definite))
-				for i, id := range result.Definite {
-					terms[i] = ast.StringTerm(string(id))
-				}
-				return ast.ArrayTerm(terms...), nil
-			},
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.ArrayTerm(), nil
+			}
+			// First present subject-type key wins — matches the typed
+			// Lookup<Perm><Resource>Resources method. Pass exactly one
+			// key for predictable results.
+			e := entries[0]
+			resType := authz.Type("extsvc/folder")
+			perm := authz.Permission("via_gated_root")
+			// Returns LookupResult.Definite only; Conditional entries dropped per
+			// scope-opa-go-builtins-codegen.md Out of Scope item 8.
+			var result authz.LookupResult
+			if caveatCtx == nil {
+				result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
+			} else {
+				ctxMap := structpbToMap(caveatCtx)
+				result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
+			}
+			if err != nil {
+				return nil, fmt.Errorf("LookupResources: %v", err)
+			}
+			terms := make([]*ast.Term, len(result.Definite))
+			for i, id := range result.Definite {
+				terms[i] = ast.StringTerm(string(id))
+			}
+			return ast.ArrayTerm(terms...), nil
+		},
 	)
 	rego.RegisterBuiltin3(
 		&rego.Function{
-				Name: "extsvc.check_team_admin",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: object keyed by SpiceDB subject type, value
-						// a string id or a list of string ids. Fully dynamic —
-						// OPA's static-property object types are effectively
-						// required-all, so per-permission key sets can't be
-						// declared without breaking single-key calls; bogus
-						// subject types surface as a runtime error from SpiceDB.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.S,
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.B,
+			Name: "extsvc.check_team_admin",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: object keyed by SpiceDB subject type, value
+					// a string id or a list of string ids. Fully dynamic —
+					// OPA's static-property object types are effectively
+					// required-all, so per-permission key sets can't be
+					// declared without breaking single-key calls; bogus
+					// subject types surface as a runtime error from SpiceDB.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.S,
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.B,
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, resTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				resID, ok := resTerm.Value.(ast.String)
-				if !ok {
-					return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			resID, ok := resTerm.Value.(ast.String)
+			if !ok {
+				return nil, fmt.Errorf("expected resource_id string, got %T", resTerm.Value)
+			}
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.BooleanTerm(false), nil
+			}
+
+			res := authz.Resource{Type: authz.Type("extsvc/team"), ID: authz.ID(resID)}
+			perm := authz.Permission("admin")
+			// AND across present subject-type keys — matches the typed
+			// Check<X> method, which short-circuits to false on the first
+			// non-granted subject slice. (Single-key call: this is just one check.)
+			for _, e := range entries {
+				var checkErr error
+				if caveatCtx == nil {
+					checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
+				} else {
+					ctxMap := structpbToMap(caveatCtx)
+					checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 				}
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
+				granted, fatal := checkOneGranted(checkErr)
+				if fatal != nil {
+					return nil, fatal
 				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
+				if !granted {
 					return ast.BooleanTerm(false), nil
 				}
-
-				res := authz.Resource{Type: authz.Type("extsvc/team"), ID: authz.ID(resID)}
-				perm := authz.Permission("admin")
-				// AND across present subject-type keys — matches the typed
-				// Check<X> method, which short-circuits to false on the first
-				// non-granted subject slice. (Single-key call: this is just one check.)
-				for _, e := range entries {
-					var checkErr error
-					if caveatCtx == nil {
-						checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
-					} else {
-						ctxMap := structpbToMap(caveatCtx)
-						checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-					}
-					granted, fatal := checkOneGranted(checkErr)
-					if fatal != nil {
-						return nil, fatal
-					}
-					if !granted {
-						return ast.BooleanTerm(false), nil
-					}
-				}
-				return ast.BooleanTerm(true), nil
-			},
+			}
+			return ast.BooleanTerm(true), nil
+		},
 	)
 	rego.RegisterBuiltin2(
 		&rego.Function{
-				Name: "extsvc.lookup_team_admin_resources",
-				Decl: types.NewFunction(
-					types.Args(
-						// subject: see check_* above — same object shape.
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
-						types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
-					),
-					types.NewArray(nil, types.S),
+			Name: "extsvc.lookup_team_admin_resources",
+			Decl: types.NewFunction(
+				types.Args(
+					// subject: see check_* above — same object shape.
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.NewAny(types.S, types.NewArray(nil, types.S)))),
+					types.NewObject(nil, types.NewDynamicProperty(types.S, types.A)),
 				),
-			},
+				types.NewArray(nil, types.S),
+			),
+		},
 		func(_ rego.BuiltinContext, subjTerm, ctxTerm *ast.Term) (*ast.Term, error) {
-				entries, err := subjectEntries(subjTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid subject: %v", err)
-				}
-				caveatCtx, err := termToStructpb(ctxTerm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid caveat_context: %v", err)
-				}
-				if len(entries) == 0 {
-					return ast.ArrayTerm(), nil
-				}
-				// First present subject-type key wins — matches the typed
-				// Lookup<Perm><Resource>Resources method. Pass exactly one
-				// key for predictable results.
-				e := entries[0]
-				resType := authz.Type("extsvc/team")
-				perm := authz.Permission("admin")
-				// Returns LookupResult.Definite only; Conditional entries dropped per
-				// scope-opa-go-builtins-codegen.md Out of Scope item 8.
-				var result authz.LookupResult
-				if caveatCtx == nil {
-					result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
-				} else {
-					ctxMap := structpbToMap(caveatCtx)
-					result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
-				}
-				if err != nil {
-					return nil, fmt.Errorf("LookupResources: %v", err)
-				}
-				terms := make([]*ast.Term, len(result.Definite))
-				for i, id := range result.Definite {
-					terms[i] = ast.StringTerm(string(id))
-				}
-				return ast.ArrayTerm(terms...), nil
-			},
+			entries, err := subjectEntries(subjTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid subject: %v", err)
+			}
+			caveatCtx, err := termToStructpb(ctxTerm)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caveat_context: %v", err)
+			}
+			if len(entries) == 0 {
+				return ast.ArrayTerm(), nil
+			}
+			// First present subject-type key wins — matches the typed
+			// Lookup<Perm><Resource>Resources method. Pass exactly one
+			// key for predictable results.
+			e := entries[0]
+			resType := authz.Type("extsvc/team")
+			perm := authz.Permission("admin")
+			// Returns LookupResult.Definite only; Conditional entries dropped per
+			// scope-opa-go-builtins-codegen.md Out of Scope item 8.
+			var result authz.LookupResult
+			if caveatCtx == nil {
+				result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
+			} else {
+				ctxMap := structpbToMap(caveatCtx)
+				result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
+			}
+			if err != nil {
+				return nil, fmt.Errorf("LookupResources: %v", err)
+			}
+			terms := make([]*ast.Term, len(result.Definite))
+			for i, id := range result.Definite {
+				terms[i] = ast.StringTerm(string(id))
+			}
+			return ast.ArrayTerm(terms...), nil
+		},
 	)
 }
 
