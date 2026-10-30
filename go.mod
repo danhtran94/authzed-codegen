@@ -1,6 +1,6 @@
 module github.com/danhtran94/authzed-codegen
 
-go 1.26.6
+go 1.26.9
 
 require (
 	github.com/authzed/authzed-go v1.10.0
