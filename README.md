@@ -196,6 +196,20 @@ folder.CreateExpiringViewerRelations(ctx, extsvc.FolderExpiringViewerObjects{
 
 Combined with caveats — `relation gated: extsvc/user with extsvc/tenant_match and expiration` — both `Caveats` and `Expirations` sub-structs are populated independently. The codegen routes through `CreateRelationsWithExpiration` (auto-switching to `OPERATION_TOUCH` because un-garbage-collected expired tuples may collide on tuple identity). See `docs/spec-004-expiration-codegen.md`.
 
+> [!WARNING]
+> Run a SpiceDB server **≥ v1.57.1** if you use `with expiration` at all:
+>
+> - **[GHSA-w278-32qg-48q5](https://github.com/authzed/spicedb/security/advisories/GHSA-w278-32qg-48q5)** (patched v1.57.1): a relation that unions an expiring allowed type with a
+>   sub-relation reference of the *same* type — e.g. `relation viewer: extsvc/user with expiration | extsvc/team#admin` — can return `HAS_PERMISSION` for an
+>   already-expired tuple, within the datastore's GC window. This codegen supports both `with expiration` and `foo#bar` references as independent features
+>   (see [Sub-relation References](#sub-relation-references) below); a schema combining them on one relation hits exactly this case.
+> - Separately (no CVE, fixed alongside in v1.57.1): since v1.54.0's move to the Otter cache, a cached dispatch/relation-cache entry's TTL was pushed out on every
+>   *read*, not just on write — so an expiring relationship read more often than its TTL never actually expired from the cache, keeping stale grants alive
+>   indefinitely under `fully_consistent` on datastores (e.g. MySQL) where the revision only advances on writes.
+>
+> Both are server-side evaluation/caching bugs — bumping this repo's `spicedb` Go dependency doesn't fix either for you; the fix has to ship in the SpiceDB
+> server binary/image you deploy.
+
 ## Read with Metadata
 
 `Read<Rel><Type>Relations` returns `[]<Rel><Type>Relation` — a typed metadata struct per tuple carrying the subject ID alongside the caveat name, decoded caveat context, and expiration timestamp:
