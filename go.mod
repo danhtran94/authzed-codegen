@@ -1,4 +1,4 @@
-module github.com/danhtran94/authzed-codegen
+module github.com/danhtran94/authzed-codegen/v2
 
 go 1.26.11
 

@@ -3,7 +3,7 @@
 package menusvc
 
 import (
-	"github.com/danhtran94/authzed-codegen/pkg/authz"
+	"github.com/danhtran94/authzed-codegen/v2/pkg/authz"
 
 	"context"
 	"time"
@@ -115,11 +115,12 @@ func (order Order) DeleteCreatorRelations(ctx context.Context, objects OrderCrea
 // DeleteCreatorRelations (which revokes the specific subjects you pass),
 // use this when creator as a whole no longer applies to this Order.
 func (order Order) PurgeCreatorRelations(ctx context.Context) error {
-	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+	_, err := authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
 		ResourceType: TypeOrder,
 		ResourceID:   authz.ID(order),
 		Relation:     authz.Relation(OrderCreator),
-	})
+	}, authz.DeleteOptions{})
+	return err
 }
 
 func (order Order) DeleteBelongsCompanyRelations(ctx context.Context, objects OrderBelongsCompanyObjects) error {
@@ -140,11 +141,12 @@ func (order Order) DeleteBelongsCompanyRelations(ctx context.Context, objects Or
 // DeleteBelongsCompanyRelations (which revokes the specific subjects you pass),
 // use this when belongs_company as a whole no longer applies to this Order.
 func (order Order) PurgeBelongsCompanyRelations(ctx context.Context) error {
-	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+	_, err := authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
 		ResourceType: TypeOrder,
 		ResourceID:   authz.ID(order),
 		Relation:     authz.Relation(OrderBelongsCompany),
-	})
+	}, authz.DeleteOptions{})
+	return err
 }
 
 // PurgeRelations deletes every relationship on this Order — all relations,
@@ -154,10 +156,11 @@ func (order Order) PurgeBelongsCompanyRelations(ctx context.Context) error {
 // resource — for that, see PurgeRelationsAsSubject (emitted when Order is a
 // subject anywhere in the schema).
 func (order Order) PurgeRelations(ctx context.Context) error {
-	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+	_, err := authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
 		ResourceType: TypeOrder,
 		ResourceID:   authz.ID(order),
-	})
+	}, authz.DeleteOptions{})
+	return err
 }
 
 type OrderCreatorUserRelation struct {

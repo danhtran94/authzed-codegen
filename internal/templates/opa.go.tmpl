@@ -1,4 +1,4 @@
-{{- /* gotype: github.com/danhtran94/authzed-codegen/internal/generator.OPAPackageView */ -}}
+{{- /* gotype: github.com/danhtran94/authzed-codegen/v2/internal/generator.OPAPackageView */ -}}
 {{- /* Shared fragments. Each define block below takes a dict with keys Pkg (string), Def (*DefinitionView), Perm (*PermissionView). Both SpiceDBBuiltins (per-instance) and RegisterSpiceDBBuiltinsGlobal (process-global) reuse these so the builtin decls + closure bodies have a single source of truth. The subject argument is a keyed object {"<namespace>": id | [id, ...]} — keys are the permission's allowed SpiceDB subject types (from permTypes), declared as types.StaticProperty entries so OPA type-checks them at policy-compile time. */ -}}
 {{- define "checkDecl" -}}
 &rego.Function{
@@ -125,7 +125,7 @@ import (
 	"github.com/open-policy-agent/opa/v1/types"
 	"google.golang.org/protobuf/types/known/structpb"
 
-	"github.com/danhtran94/authzed-codegen/pkg/authz"
+	"github.com/danhtran94/authzed-codegen/v2/pkg/authz"
 )
 
 // SpiceDBBuiltins returns the OPA registration options for every

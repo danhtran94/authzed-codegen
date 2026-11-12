@@ -8,7 +8,7 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/danhtran94/authzed-codegen/pkg/authz"
+	"github.com/danhtran94/authzed-codegen/v2/pkg/authz"
 
 	v1 "github.com/authzed/authzed-go/proto/authzed/api/v1"
 	"github.com/authzed/authzed-go/v1"
@@ -321,11 +321,11 @@ func (e *Engine) DeleteRelations(ctx context.Context, from authz.Resource, relat
 	return nil
 }
 
-func (e *Engine) DeleteRelationsMatching(ctx context.Context, f authz.RelationFilter) error {
+func (e *Engine) DeleteRelationsMatching(ctx context.Context, f authz.RelationFilter, opts authz.DeleteOptions) (authz.DeletionProgress, error) {
 	if f.IsEmpty() {
-		return authz.ErrEmptyRelationFilter
+		return authz.DeletionProgress{}, authz.ErrEmptyRelationFilter
 	}
-	e.debugLog("Deleting relations matching: resourceType=%v, resourceID=%v, relation=%v, subjectType=%v, subjectID=%v", f.ResourceType, f.ResourceID, f.Relation, f.SubjectType, f.SubjectID)
+	e.debugLog("Deleting relations matching: resourceType=%v, resourceID=%v, relation=%v, subjectType=%v, subjectID=%v, limit=%v", f.ResourceType, f.ResourceID, f.Relation, f.SubjectType, f.SubjectID, opts.Limit)
 
 	rf := &v1.RelationshipFilter{
 		ResourceType:       string(f.ResourceType),
@@ -344,15 +344,24 @@ func (e *Engine) DeleteRelationsMatching(ctx context.Context, f authz.RelationFi
 
 	res, err := e.client.DeleteRelationships(ctx, &v1.DeleteRelationshipsRequest{
 		RelationshipFilter: rf,
-		// OptionalLimit omitted (0) -> one transactional, unlimited delete.
+		// opts.Limit == 0 -> OptionalLimit 0 (one transactional, unlimited
+		// delete — identical to this method's pre-ADR-006 behavior) and
+		// OptionalAllowPartialDeletions false. opts.Limit > 0 bounds the
+		// call. OptionalCursor is never set — cursor-resume is
+		// CockroachDB-only upstream and not implemented here (ADR-006).
+		OptionalLimit:                 opts.Limit,
+		OptionalAllowPartialDeletions: opts.Limit > 0,
 	})
 	if err != nil {
-		return err
+		return authz.DeletionProgress{}, err
 	}
 
 	e.setToken(res.DeletedAt.Token)
 
-	return nil
+	return authz.DeletionProgress{
+		Deleted:  res.RelationshipsDeletedCount,
+		Complete: res.DeletionProgress != v1.DeleteRelationshipsResponse_DELETION_PROGRESS_PARTIAL,
+	}, nil
 }
 
 func (e *Engine) CheckPermissionWithCaveat(ctx context.Context, dest authz.Resource, has authz.Permission, subject authz.Type, audIDs []authz.ID, caveatParams map[string]any) error {

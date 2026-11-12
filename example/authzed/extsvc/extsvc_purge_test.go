@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	extsvc "github.com/danhtran94/authzed-codegen/example/authzed/extsvc"
-	"github.com/danhtran94/authzed-codegen/pkg/authz"
+	extsvc "github.com/danhtran94/authzed-codegen/v2/example/authzed/extsvc"
+	"github.com/danhtran94/authzed-codegen/v2/pkg/authz"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -101,7 +101,7 @@ func TestUser_PurgeRelationsAsSubject(t *testing.T) {
 // is rejected with ErrEmptyRelationFilter (it would match everything). (AUZ-023)
 func TestEngine_DeleteRelationsMatching_EmptyFilter(t *testing.T) {
 	ctx := context.Background()
-	err := sb.Engine.DeleteRelationsMatching(ctx, authz.RelationFilter{})
+	_, err := sb.Engine.DeleteRelationsMatching(ctx, authz.RelationFilter{}, authz.DeleteOptions{})
 	assert.ErrorIs(t, err, authz.ErrEmptyRelationFilter)
 }
 
@@ -256,10 +256,11 @@ func TestEngine_DeleteRelationsMatching_BySubjectOnly(t *testing.T) {
 	require.NoError(t, folder.CreateViewerRelations(ctx, extsvc.FolderViewerObjects{User: []extsvc.User{u}}))
 	require.NoError(t, doc.CreateOwnerRelations(ctx, extsvc.DocumentOwnerObjects{User: []extsvc.User{u}}))
 
-	require.NoError(t, sb.Engine.DeleteRelationsMatching(ctx, authz.RelationFilter{
+	_, err := sb.Engine.DeleteRelationsMatching(ctx, authz.RelationFilter{
 		SubjectType: extsvc.TypeUser,
 		SubjectID:   authz.ID(u),
-	}))
+	}, authz.DeleteOptions{})
+	require.NoError(t, err)
 
 	vu, err := folder.ReadViewerUserRelations(ctx)
 	require.NoError(t, err)
@@ -279,9 +280,10 @@ func TestEngine_DeleteRelationsMatching_FilterShapes(t *testing.T) {
 		f := extsvc.Folder("pg-fs-rr")
 		require.NoError(t, f.CreateViewerRelations(ctx, extsvc.FolderViewerObjects{User: []extsvc.User{"a", "b"}}))
 		require.NoError(t, f.CreateAnyParentRelations(ctx, extsvc.FolderAnyParentObjects{Folder: []extsvc.Folder{"pg-fs-rr-p"}}))
-		require.NoError(t, sb.Engine.DeleteRelationsMatching(ctx, authz.RelationFilter{
+		_, err := sb.Engine.DeleteRelationsMatching(ctx, authz.RelationFilter{
 			ResourceType: extsvc.TypeFolder, ResourceID: authz.ID(f), Relation: authz.Relation(extsvc.FolderViewer),
-		}))
+		}, authz.DeleteOptions{})
+		require.NoError(t, err)
 		vu, err := f.ReadViewerUserRelations(ctx)
 		require.NoError(t, err)
 		assert.Empty(t, vu, "viewer cleared")
@@ -294,9 +296,10 @@ func TestEngine_DeleteRelationsMatching_FilterShapes(t *testing.T) {
 		f := extsvc.Folder("pg-fs-r")
 		require.NoError(t, f.CreateViewerRelations(ctx, extsvc.FolderViewerObjects{User: []extsvc.User{"a"}}))
 		require.NoError(t, f.CreateAnyParentRelations(ctx, extsvc.FolderAnyParentObjects{Folder: []extsvc.Folder{"pg-fs-r-p"}}))
-		require.NoError(t, sb.Engine.DeleteRelationsMatching(ctx, authz.RelationFilter{
+		_, err := sb.Engine.DeleteRelationsMatching(ctx, authz.RelationFilter{
 			ResourceType: extsvc.TypeFolder, ResourceID: authz.ID(f),
-		}))
+		}, authz.DeleteOptions{})
+		require.NoError(t, err)
 		vu, err := f.ReadViewerUserRelations(ctx)
 		require.NoError(t, err)
 		assert.Empty(t, vu)
@@ -309,9 +312,10 @@ func TestEngine_DeleteRelationsMatching_FilterShapes(t *testing.T) {
 		f := extsvc.Folder("pg-fs-rts")
 		u := extsvc.User("pg-fs-rts-u")
 		require.NoError(t, f.CreateViewerRelations(ctx, extsvc.FolderViewerObjects{User: []extsvc.User{u, "pg-fs-rts-keep"}}))
-		require.NoError(t, sb.Engine.DeleteRelationsMatching(ctx, authz.RelationFilter{
+		_, err := sb.Engine.DeleteRelationsMatching(ctx, authz.RelationFilter{
 			ResourceType: extsvc.TypeFolder, SubjectType: extsvc.TypeUser, SubjectID: authz.ID(u),
-		}))
+		}, authz.DeleteOptions{})
+		require.NoError(t, err)
 		vu, err := f.ReadViewerUserRelations(ctx)
 		require.NoError(t, err)
 		assert.NotContains(t, authz.IDsOf(vu), u, "subject removed across all folders")

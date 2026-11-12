@@ -3,7 +3,7 @@
 package bookingsvc
 
 import (
-	"github.com/danhtran94/authzed-codegen/pkg/authz"
+	"github.com/danhtran94/authzed-codegen/v2/pkg/authz"
 
 	"context"
 	"errors"
@@ -116,11 +116,12 @@ func (brand Brand) DeleteAdminRelations(ctx context.Context, objects BrandAdminO
 // DeleteAdminRelations (which revokes the specific subjects you pass),
 // use this when admin as a whole no longer applies to this Brand.
 func (brand Brand) PurgeAdminRelations(ctx context.Context) error {
-	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+	_, err := authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
 		ResourceType: TypeBrand,
 		ResourceID:   authz.ID(brand),
 		Relation:     authz.Relation(BrandAdmin),
-	})
+	}, authz.DeleteOptions{})
+	return err
 }
 
 func (brand Brand) DeleteManagerRelations(ctx context.Context, objects BrandManagerObjects) error {
@@ -141,11 +142,12 @@ func (brand Brand) DeleteManagerRelations(ctx context.Context, objects BrandMana
 // DeleteManagerRelations (which revokes the specific subjects you pass),
 // use this when manager as a whole no longer applies to this Brand.
 func (brand Brand) PurgeManagerRelations(ctx context.Context) error {
-	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+	_, err := authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
 		ResourceType: TypeBrand,
 		ResourceID:   authz.ID(brand),
 		Relation:     authz.Relation(BrandManager),
-	})
+	}, authz.DeleteOptions{})
+	return err
 }
 
 func (brand Brand) DeleteEmployeeRelations(ctx context.Context, objects BrandEmployeeObjects) error {
@@ -166,11 +168,12 @@ func (brand Brand) DeleteEmployeeRelations(ctx context.Context, objects BrandEmp
 // DeleteEmployeeRelations (which revokes the specific subjects you pass),
 // use this when employee as a whole no longer applies to this Brand.
 func (brand Brand) PurgeEmployeeRelations(ctx context.Context) error {
-	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+	_, err := authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
 		ResourceType: TypeBrand,
 		ResourceID:   authz.ID(brand),
 		Relation:     authz.Relation(BrandEmployee),
-	})
+	}, authz.DeleteOptions{})
+	return err
 }
 
 // PurgeRelations deletes every relationship on this Brand — all relations,
@@ -180,10 +183,11 @@ func (brand Brand) PurgeEmployeeRelations(ctx context.Context) error {
 // resource — for that, see PurgeRelationsAsSubject (emitted when Brand is a
 // subject anywhere in the schema).
 func (brand Brand) PurgeRelations(ctx context.Context) error {
-	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+	_, err := authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
 		ResourceType: TypeBrand,
 		ResourceID:   authz.ID(brand),
-	})
+	}, authz.DeleteOptions{})
+	return err
 }
 
 // PurgeRelationsAsSubject deletes every relationship where this Brand is the
@@ -195,11 +199,11 @@ func (brand Brand) PurgeRelations(ctx context.Context) error {
 func (brand Brand) PurgeRelationsAsSubject(ctx context.Context) error {
 	eng := authz.GetEngine(ctx)
 	var errs []error
-	if err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
+	if _, err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
 		ResourceType: authz.Type("bookingsvc/employee"),
 		SubjectType:  TypeBrand,
 		SubjectID:    authz.ID(brand),
-	}); err != nil {
+	}, authz.DeleteOptions{}); err != nil {
 		errs = append(errs, fmt.Errorf("purge Brand as subject of bookingsvc/employee: %w", err))
 	}
 	return errors.Join(errs...)

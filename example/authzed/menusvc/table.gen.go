@@ -3,7 +3,7 @@
 package menusvc
 
 import (
-	"github.com/danhtran94/authzed-codegen/pkg/authz"
+	"github.com/danhtran94/authzed-codegen/v2/pkg/authz"
 
 	"context"
 	"time"
@@ -78,11 +78,12 @@ func (table Table) DeleteOwnerRelations(ctx context.Context, objects TableOwnerO
 // DeleteOwnerRelations (which revokes the specific subjects you pass),
 // use this when owner as a whole no longer applies to this Table.
 func (table Table) PurgeOwnerRelations(ctx context.Context) error {
-	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+	_, err := authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
 		ResourceType: TypeTable,
 		ResourceID:   authz.ID(table),
 		Relation:     authz.Relation(TableOwner),
-	})
+	}, authz.DeleteOptions{})
+	return err
 }
 
 // PurgeRelations deletes every relationship on this Table — all relations,
@@ -92,10 +93,11 @@ func (table Table) PurgeOwnerRelations(ctx context.Context) error {
 // resource — for that, see PurgeRelationsAsSubject (emitted when Table is a
 // subject anywhere in the schema).
 func (table Table) PurgeRelations(ctx context.Context) error {
-	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+	_, err := authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
 		ResourceType: TypeTable,
 		ResourceID:   authz.ID(table),
-	})
+	}, authz.DeleteOptions{})
+	return err
 }
 
 type TableOwnerCompanyRelation struct {

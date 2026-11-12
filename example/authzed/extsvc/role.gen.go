@@ -3,7 +3,7 @@
 package extsvc
 
 import (
-	"github.com/danhtran94/authzed-codegen/pkg/authz"
+	"github.com/danhtran94/authzed-codegen/v2/pkg/authz"
 
 	"context"
 	"errors"
@@ -51,11 +51,11 @@ func (role Role) ToList() []Role {
 func (role Role) PurgeRelationsAsSubject(ctx context.Context) error {
 	eng := authz.GetEngine(ctx)
 	var errs []error
-	if err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
+	if _, err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
 		ResourceType: authz.Type("extsvc/folder"),
 		SubjectType:  TypeRole,
 		SubjectID:    authz.ID(role),
-	}); err != nil {
+	}, authz.DeleteOptions{}); err != nil {
 		errs = append(errs, fmt.Errorf("purge Role as subject of extsvc/folder: %w", err))
 	}
 	return errors.Join(errs...)

@@ -4,6 +4,30 @@ All notable changes to this project are documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-11-13
+
+**BREAKING.** This is the project's first MAJOR release. The module's import path moves to `github.com/danhtran94/authzed-codegen/v2`, per Go's semantic import versioning — every import of this module (and the generated code's own imports of `pkg/authz`) must add the `/v2` segment.
+
+`authz.Engine.DeleteRelationsMatching` widens from `(ctx, f RelationFilter) error` to `(ctx, f RelationFilter, opts DeleteOptions) (DeletionProgress, error)`. `DeleteRelationsMatching` previously always issued one unbounded, single-transaction delete (`OptionalLimit: 0`) — an object with millions of tuples could hit SpiceDB's single-transaction timeout with no way to bound the call. `opts.Limit == 0` (the zero value) reproduces the exact pre-2.0 behavior; `opts.Limit > 0` bounds the call to at most that many deletions and `DeletionProgress.Complete` reports whether more remain, so a caller can loop on the same filter and limit until done. Cursor-resume (SpiceDB's `OptionalCursor`/`AfterResultCursor`, added in SpiceDB v1.57.0) is deliberately not implemented — it's a CockroachDB-only datastore capability upstream, and this project's test infrastructure only exercises MemDB. See `docs/scope-bounded-batch-relationship-delete.md` and `docs/ADR-006-bounded-relationship-delete-widened-signature.md`.
+
+### Breaking
+
+- **Module path**: `github.com/danhtran94/authzed-codegen` → `github.com/danhtran94/authzed-codegen/v2`. Update every import, and `go install github.com/danhtran94/authzed-codegen/v2/cmd/authzed-codegen@latest`.
+- **`authz.Engine.DeleteRelationsMatching` signature**: gains a required third parameter, `opts DeleteOptions`, and its return type widens from `error` to `(DeletionProgress, error)`. Every call site needs the new argument; `DeleteOptions{}` behaves identically to the pre-2.0 call.
+- Any custom `authz.Engine` implementation must add the `opts DeleteOptions` parameter and the `DeletionProgress` return value to its `DeleteRelationsMatching` method.
+
+### Added
+
+- **`authz.DeleteOptions` struct** in `pkg/authz/authz.go` — `Limit uint32`; zero means unbounded (today's pre-2.0 behavior).
+- **`authz.DeletionProgress` struct** — `Deleted uint64`, `Complete bool`; mirrors SpiceDB's wire-level `DeletionProgress`/`RelationshipsDeletedCount`.
+- **`*spicedb.Engine.DeleteRelationsMatching`** sets `OptionalLimit` from `opts.Limit` and `OptionalAllowPartialDeletions: opts.Limit > 0` on the wire request; never sets `OptionalCursor`.
+- **e2e tests** in `pkg/authz/spicedb/bounded_delete_test.go` — a bounded loop that deletes a known tuple count across multiple calls and confirms the `Complete` signal, plus a zero-`DeleteOptions` regression test confirming unbounded behavior is unchanged.
+
+### Notes
+
+- The generated `Purge<Rel>Relations` / `PurgeRelations` / `PurgeRelationsAsSubject` methods are unaffected in behavior — `internal/templates/object.go.tmpl` now passes `authz.DeleteOptions{}` at their three `DeleteRelationsMatching` call sites, keeping them unbounded exactly as before.
+- `DeleteRelations` and the generated `Delete<Rel>Relations` (targeted per-ID delete) are unchanged.
+
 ## [1.15.0] - 2026-05-10
 
 Adds filter-based relationship cleanup. SpiceDB stores relationships, not objects — deleting an entity in your own store leaves its tuples behind, and orphaned tuples make `LookupResources` return ghost results while object-ID reuse silently inherits dead grants. This release adds the verbs to clean up: a new `authz.Engine.DeleteRelationsMatching` primitive and three generated `Purge*` methods on the typed object handles. Deliberately verbs, not a workflow — no `Delete<Type>()` that cascades to or re-parents children; the codegen emits the primitives and the caller decides the cleanup order. See `docs/scope-relationship-cleanup-verbs.md`, `docs/ADR-005-engine-filter-delete.md`, `docs/spec-014-relationship-cleanup-codegen.md`.

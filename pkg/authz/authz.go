@@ -207,6 +207,34 @@ func (f RelationFilter) IsEmpty() bool {
 	return f.ResourceType == "" && f.ResourceID == "" && f.Relation == "" && f.SubjectType == "" && f.SubjectID == ""
 }
 
+// DeleteOptions configures a DeleteRelationsMatching call. The zero value
+// reproduces the pre-v2 behavior exactly: one unbounded, single-transaction
+// delete of every relationship matching the filter.
+//
+// Per ADR-006, cursor-resume (SpiceDB's OptionalCursor/AfterResultCursor) is
+// deliberately not exposed here — it is a CockroachDB-only capability as of
+// SpiceDB v1.57.x, and this repo's e2e harness runs MemDB only. Use Limit to
+// bound a call on objects that risk the single-transaction timeout; leave it
+// zero for everything else, which remains the default.
+type DeleteOptions struct {
+	// Limit bounds this call to at most Limit deletions. Zero (the default)
+	// means unbounded: one transactional delete of everything matching the
+	// filter, identical to the method's behavior before this field existed.
+	Limit uint32
+}
+
+// DeletionProgress reports the outcome of a DeleteRelationsMatching call.
+// Its field names mirror SpiceDB's wire response (DeletionProgress /
+// RelationshipsDeletedCount) so a reader tracing from this type to the wire
+// protocol finds matching terminology.
+type DeletionProgress struct {
+	// Deleted is the number of relationships deleted by this call.
+	Deleted uint64
+	// Complete is false when more relationships remain — call again with
+	// the same filter and opts to continue. Always true when opts.Limit == 0.
+	Complete bool
+}
+
 type Engine interface {
 	CreateRelations(ctx context.Context, to Resource, relation Relation, subject Type, ids []ID) error
 	CreateRelationsWithCaveat(ctx context.Context, to Resource, relation Relation, subject Type, ids []ID, caveatName string, caveatParams map[string]any) error
@@ -221,12 +249,16 @@ type Engine interface {
 	LookupSubjectsWithCaveat(ctx context.Context, on Resource, permission Permission, subject Type, caveatParams map[string]any) (LookupResult, error)
 	ReadRelations(ctx context.Context, from Resource, relation Relation, subject Type) ([]RelationTuple, error)
 	DeleteRelations(ctx context.Context, from Resource, relation Relation, subject Type, ids []ID) error
-	// DeleteRelationsMatching deletes every relationship matching f, in a
-	// single transaction. Returns ErrEmptyRelationFilter if f.IsEmpty().
-	// For very large result sets (millions of tuples) the underlying single
-	// transaction may time out — bounded/non-transactional deletion is not
-	// exposed here. See RelationFilter for the blast-radius caveat.
-	DeleteRelationsMatching(ctx context.Context, f RelationFilter) error
+	// DeleteRelationsMatching deletes relationships matching f. Returns
+	// ErrEmptyRelationFilter if f.IsEmpty(). opts.Limit == 0 (the default)
+	// is one unbounded transactional delete of everything matching f — the
+	// right choice for normal-fan-out objects. opts.Limit > 0 bounds the
+	// call and DeletionProgress.Complete reports whether more remain; an
+	// object with millions of tuples should loop on opts.Limit rather than
+	// risk the single-transaction timeout of the unbounded form. See
+	// RelationFilter for the blast-radius caveat and ADR-006 for why this
+	// signature is what it is.
+	DeleteRelationsMatching(ctx context.Context, f RelationFilter, opts DeleteOptions) (DeletionProgress, error)
 	HasPublicRelation(ctx context.Context, on Resource, relation Relation, subject Type) (bool, error)
 	HasPublicSubject(ctx context.Context, on Resource, permission Permission, subject Type) (bool, error)
 	DiffSchema(ctx context.Context, comparisonSchema string) ([]*v1.ReflectionSchemaDiff, error)

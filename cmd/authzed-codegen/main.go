@@ -8,8 +8,8 @@ import (
 	"github.com/authzed/spicedb/pkg/schemadsl/compiler"
 	"github.com/authzed/spicedb/pkg/schemadsl/input"
 
-	"github.com/danhtran94/authzed-codegen/internal/generator"
-	"github.com/danhtran94/authzed-codegen/internal/templates"
+	"github.com/danhtran94/authzed-codegen/v2/internal/generator"
+	"github.com/danhtran94/authzed-codegen/v2/internal/templates"
 )
 
 var (

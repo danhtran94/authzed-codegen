@@ -3,7 +3,7 @@
 [![CI](https://github.com/danhtran94/authzed-codegen/actions/workflows/ci.yml/badge.svg)](https://github.com/danhtran94/authzed-codegen/actions/workflows/ci.yml)
 [![Security](https://github.com/danhtran94/authzed-codegen/actions/workflows/security.yml/badge.svg)](https://github.com/danhtran94/authzed-codegen/actions/workflows/security.yml)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/danhtran94/authzed-codegen/badge)](https://scorecard.dev/viewer/?uri=github.com/danhtran94/authzed-codegen)
-[![Go Reference](https://pkg.go.dev/badge/github.com/danhtran94/authzed-codegen.svg)](https://pkg.go.dev/github.com/danhtran94/authzed-codegen)
+[![Go Reference](https://pkg.go.dev/badge/github.com/danhtran94/authzed-codegen/v2.svg)](https://pkg.go.dev/github.com/danhtran94/authzed-codegen/v2)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Type-safe Go bindings for [AuthZED / SpiceDB](https://authzed.com/) schemas.
@@ -46,7 +46,7 @@ client lives in `pkg/authz/spicedb/`.
 ## Install
 
 ```sh
-go install github.com/danhtran94/authzed-codegen/cmd/authzed-codegen@latest
+go install github.com/danhtran94/authzed-codegen/v2/cmd/authzed-codegen@latest
 ```
 
 ## Usage
@@ -351,7 +351,7 @@ Token-based modes (`AtLeastAsFresh`, `AtExactSnapshot` with caller-supplied toke
 The codegen captures the source `.zed` bytes verbatim and emits `<output-dir>/schema.gen.go` with `SchemaText`, `SchemaDigest`, and a `VerifySchema(ctx)` helper. At startup, callers compare the binary's baseline against the deployed schema in SpiceDB and decide whether to proceed:
 
 ```go
-import authzed "github.com/danhtran94/authzed-codegen/example/authzed"
+import authzed "github.com/danhtran94/authzed-codegen/v2/example/authzed"
 
 drift, err := authzed.VerifySchema(ctx)
 if err != nil {
@@ -510,17 +510,49 @@ own delete runs inside a DB transaction, enqueue the purge as
 `OPERATION_DELETE`-style compensating work and retry until it succeeds.
 
 For hand-written callers, the same primitive is on the runtime interface:
-`authz.Engine.DeleteRelationsMatching(ctx, authz.RelationFilter{...})` — one
-transactional `DeleteRelationships` call against SpiceDB. An all-empty
+`authz.Engine.DeleteRelationsMatching(ctx, authz.RelationFilter{...}, authz.DeleteOptions{})`
+— one transactional `DeleteRelationships` call against SpiceDB. An all-empty
 `RelationFilter` (which would match every tuple in the store) is rejected with
 `authz.ErrEmptyRelationFilter`; supply at least one field.
+
+**Bounded delete.** `DeleteOptions{}` (the zero value) deletes everything
+matching the filter in one transaction — the right choice for normal-fan-out
+objects, and what every generated `Purge*` method uses. For an object that
+might have millions of tuples and risks SpiceDB's single-transaction timeout,
+pass `DeleteOptions{Limit: n}` to bound a single call; `DeletionProgress.Complete`
+reports whether more remain, and the caller loops on the same filter and limit
+until it's `true`:
+
+```go
+opts := authz.DeleteOptions{Limit: 5000}
+for {
+    progress, err := engine.DeleteRelationsMatching(ctx, filter, opts)
+    if err != nil {
+        return err
+    }
+    if progress.Complete {
+        break
+    }
+}
+```
+
+> [!WARNING]
+> This does **not** implement SpiceDB's cursor-resume (`OptionalCursor` /
+> `AfterResultCursor`, added in SpiceDB v1.57.0) — as of SpiceDB v1.57.x,
+> cursor-resume is a **CockroachDB-only** datastore capability; Postgres,
+> MySQL, Spanner, and MemDB all reject it. The bounded loop above re-scans
+> already-deleted rows on each iteration on every datastore except
+> CockroachDB. That re-scan cost is the trade-off for a primitive this
+> project's MemDB-only test suite can actually verify end to end.
 
 This is deliberately a set of verbs, not a workflow — there is no
 `Delete<Type>()` that cascades to children or re-parents them. The codegen
 emits the primitives; deciding the cleanup order for a given schema is the
 caller's call. See `docs/scope-relationship-cleanup-verbs.md`,
 `docs/ADR-005-engine-filter-delete.md`, and
-`docs/spec-014-relationship-cleanup-codegen.md`.
+`docs/spec-014-relationship-cleanup-codegen.md` for the original verbs;
+`docs/scope-bounded-batch-relationship-delete.md` and
+`docs/ADR-006-bounded-relationship-delete-widened-signature.md` for bounded delete.
 
 ## Verification
 

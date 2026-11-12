@@ -3,7 +3,7 @@
 package bookingsvc
 
 import (
-	"github.com/danhtran94/authzed-codegen/pkg/authz"
+	"github.com/danhtran94/authzed-codegen/v2/pkg/authz"
 
 	"context"
 	"time"
@@ -138,11 +138,12 @@ func (booking Booking) DeleteOwnerRelations(ctx context.Context, objects Booking
 // DeleteOwnerRelations (which revokes the specific subjects you pass),
 // use this when owner as a whole no longer applies to this Booking.
 func (booking Booking) PurgeOwnerRelations(ctx context.Context) error {
-	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+	_, err := authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
 		ResourceType: TypeBooking,
 		ResourceID:   authz.ID(booking),
 		Relation:     authz.Relation(BookingOwner),
-	})
+	}, authz.DeleteOptions{})
+	return err
 }
 
 func (booking Booking) DeleteCreatorRelations(ctx context.Context, objects BookingCreatorObjects) error {
@@ -172,11 +173,12 @@ func (booking Booking) DeleteCreatorRelations(ctx context.Context, objects Booki
 // DeleteCreatorRelations (which revokes the specific subjects you pass),
 // use this when creator as a whole no longer applies to this Booking.
 func (booking Booking) PurgeCreatorRelations(ctx context.Context) error {
-	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+	_, err := authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
 		ResourceType: TypeBooking,
 		ResourceID:   authz.ID(booking),
 		Relation:     authz.Relation(BookingCreator),
-	})
+	}, authz.DeleteOptions{})
+	return err
 }
 
 func (booking Booking) DeleteRegionalOwnerRelations(ctx context.Context, objects BookingRegionalOwnerObjects) error {
@@ -197,11 +199,12 @@ func (booking Booking) DeleteRegionalOwnerRelations(ctx context.Context, objects
 // DeleteRegionalOwnerRelations (which revokes the specific subjects you pass),
 // use this when regional_owner as a whole no longer applies to this Booking.
 func (booking Booking) PurgeRegionalOwnerRelations(ctx context.Context) error {
-	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+	_, err := authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
 		ResourceType: TypeBooking,
 		ResourceID:   authz.ID(booking),
 		Relation:     authz.Relation(BookingRegionalOwner),
-	})
+	}, authz.DeleteOptions{})
+	return err
 }
 
 // PurgeRelations deletes every relationship on this Booking — all relations,
@@ -211,10 +214,11 @@ func (booking Booking) PurgeRegionalOwnerRelations(ctx context.Context) error {
 // resource — for that, see PurgeRelationsAsSubject (emitted when Booking is a
 // subject anywhere in the schema).
 func (booking Booking) PurgeRelations(ctx context.Context) error {
-	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+	_, err := authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
 		ResourceType: TypeBooking,
 		ResourceID:   authz.ID(booking),
-	})
+	}, authz.DeleteOptions{})
+	return err
 }
 
 type BookingOwnerEmployeeRelation struct {

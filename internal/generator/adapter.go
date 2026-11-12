@@ -7,7 +7,7 @@ import (
 
 	core "github.com/authzed/spicedb/pkg/proto/core/v1"
 
-	"github.com/danhtran94/authzed-codegen/internal/utilstr"
+	"github.com/danhtran94/authzed-codegen/v2/internal/utilstr"
 )
 
 const (

@@ -3,7 +3,7 @@
 package bookingsvc
 
 import (
-	"github.com/danhtran94/authzed-codegen/pkg/authz"
+	"github.com/danhtran94/authzed-codegen/v2/pkg/authz"
 
 	"context"
 	"errors"
@@ -51,11 +51,11 @@ func (customer Customer) ToList() []Customer {
 func (customer Customer) PurgeRelationsAsSubject(ctx context.Context) error {
 	eng := authz.GetEngine(ctx)
 	var errs []error
-	if err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
+	if _, err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
 		ResourceType: authz.Type("bookingsvc/booking"),
 		SubjectType:  TypeCustomer,
 		SubjectID:    authz.ID(customer),
-	}); err != nil {
+	}, authz.DeleteOptions{}); err != nil {
 		errs = append(errs, fmt.Errorf("purge Customer as subject of bookingsvc/booking: %w", err))
 	}
 	return errors.Join(errs...)

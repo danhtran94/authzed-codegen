@@ -17,7 +17,7 @@ import (
 	v1 "github.com/authzed/authzed-go/proto/authzed/api/v1"
 	authzed "github.com/authzed/authzed-go/v1"
 	"github.com/authzed/grpcutil"
-	"github.com/danhtran94/authzed-codegen/pkg/authz/spicedb"
+	"github.com/danhtran94/authzed-codegen/v2/pkg/authz/spicedb"
 	tc "github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 	"google.golang.org/grpc"

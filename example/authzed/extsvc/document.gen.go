@@ -3,7 +3,7 @@
 package extsvc
 
 import (
-	"github.com/danhtran94/authzed-codegen/pkg/authz"
+	"github.com/danhtran94/authzed-codegen/v2/pkg/authz"
 
 	"context"
 	"time"
@@ -106,11 +106,12 @@ func (document Document) DeleteParentRelations(ctx context.Context, objects Docu
 // DeleteParentRelations (which revokes the specific subjects you pass),
 // use this when parent as a whole no longer applies to this Document.
 func (document Document) PurgeParentRelations(ctx context.Context) error {
-	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+	_, err := authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
 		ResourceType: TypeDocument,
 		ResourceID:   authz.ID(document),
 		Relation:     authz.Relation(DocumentParent),
-	})
+	}, authz.DeleteOptions{})
+	return err
 }
 
 func (document Document) DeleteOwnerRelations(ctx context.Context, objects DocumentOwnerObjects) error {
@@ -140,11 +141,12 @@ func (document Document) DeleteOwnerRelations(ctx context.Context, objects Docum
 // DeleteOwnerRelations (which revokes the specific subjects you pass),
 // use this when owner as a whole no longer applies to this Document.
 func (document Document) PurgeOwnerRelations(ctx context.Context) error {
-	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+	_, err := authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
 		ResourceType: TypeDocument,
 		ResourceID:   authz.ID(document),
 		Relation:     authz.Relation(DocumentOwner),
-	})
+	}, authz.DeleteOptions{})
+	return err
 }
 
 // PurgeRelations deletes every relationship on this Document — all relations,
@@ -154,10 +156,11 @@ func (document Document) PurgeOwnerRelations(ctx context.Context) error {
 // resource — for that, see PurgeRelationsAsSubject (emitted when Document is a
 // subject anywhere in the schema).
 func (document Document) PurgeRelations(ctx context.Context) error {
-	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+	_, err := authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
 		ResourceType: TypeDocument,
 		ResourceID:   authz.ID(document),
-	})
+	}, authz.DeleteOptions{})
+	return err
 }
 
 type DocumentParentFolderRelation struct {

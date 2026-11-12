@@ -45,11 +45,11 @@ import (
 
 	"github.com/open-policy-agent/opa/v1/runtime"
 
-	bookingsvc "github.com/danhtran94/authzed-codegen/example/authzed/bookingsvc"
-	extsvc "github.com/danhtran94/authzed-codegen/example/authzed/extsvc"
-	menusvc "github.com/danhtran94/authzed-codegen/example/authzed/menusvc"
-	"github.com/danhtran94/authzed-codegen/pkg/authz"
-	"github.com/danhtran94/authzed-codegen/pkg/authz/spicedbtest"
+	bookingsvc "github.com/danhtran94/authzed-codegen/v2/example/authzed/bookingsvc"
+	extsvc "github.com/danhtran94/authzed-codegen/v2/example/authzed/extsvc"
+	menusvc "github.com/danhtran94/authzed-codegen/v2/example/authzed/menusvc"
+	"github.com/danhtran94/authzed-codegen/v2/pkg/authz"
+	"github.com/danhtran94/authzed-codegen/v2/pkg/authz/spicedbtest"
 )
 
 const (

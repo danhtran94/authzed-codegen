@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	extsvc "github.com/danhtran94/authzed-codegen/example/authzed/extsvc"
-	"github.com/danhtran94/authzed-codegen/pkg/authz"
-	"github.com/danhtran94/authzed-codegen/pkg/authz/spicedbtest"
+	extsvc "github.com/danhtran94/authzed-codegen/v2/example/authzed/extsvc"
+	"github.com/danhtran94/authzed-codegen/v2/pkg/authz"
+	"github.com/danhtran94/authzed-codegen/v2/pkg/authz/spicedbtest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
