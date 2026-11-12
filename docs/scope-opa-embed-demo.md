@@ -95,4 +95,6 @@ Concrete artifacts:
 
 ## History
 
-<!-- managed by `harness history-update` — do not hand-edit -->
+| Ticket    | Title                               | Created    | Status   |
+|-----------|-------------------------------------|------------|----------|
+| (initial) | example/opa-embed all-embedded demo | 2026-05-10 | Accepted |

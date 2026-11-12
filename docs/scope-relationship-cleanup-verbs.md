@@ -96,4 +96,6 @@ Concrete artifacts:
 
 ## History
 
-<!-- managed by `harness history-update` — do not hand-edit -->
+| Ticket    | Title                                         | Created    | Status   |
+|-----------|-----------------------------------------------|------------|----------|
+| (initial) | Relationship cleanup verbs (object lifecycle) | 2026-05-10 | Accepted |

@@ -112,4 +112,6 @@ The first Tier 2 codegen extension is Pattern 4 (OPA Go builtins) — the genera
 
 ## History
 
-<!-- managed by `harness history-update` — do not hand-edit -->
+| Ticket    | Title                                                                                   | Created | Status   |
+|-----------|-----------------------------------------------------------------------------------------|---------|----------|
+| (initial) | First Tier 2 Codegen Extension: OPA Go Builtins over CEL Bindings and Rego HTTP Helpers |         | Accepted |

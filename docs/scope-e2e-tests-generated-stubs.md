@@ -74,6 +74,6 @@ Without e2e tests, these patterns are unvalidated against a real SpiceDB backend
 
 ## History
 
-| Date       | Change                           |
-|------------|----------------------------------|
-| 2026-05-05 | Initial scope note authored.     |
+| Ticket    | Title                         | Created    | Status |
+|-----------|-------------------------------|------------|--------|
+| (initial) | E2E tests for generated stubs | 2026-05-05 | Draft  |

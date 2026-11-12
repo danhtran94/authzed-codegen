@@ -204,4 +204,6 @@ E2E tests verify SpiceDB's `.all()` strict-intersection semantic against live Sp
 
 ## History
 
-(History is owned by `harness history-update` — do not hand-edit.)
+| Ticket    | Title                                                                                            | Created    | Status   |
+|-----------|--------------------------------------------------------------------------------------------------|------------|----------|
+| (initial) | Functioned Tuple-to-Userset — implements (lifts ADR-001 rejection of `FunctionedTupleToUserset`) | 2026-05-09 | Accepted |

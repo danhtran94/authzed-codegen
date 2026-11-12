@@ -61,3 +61,9 @@ The codegen layer (generator.go) does not distinguish operators either — `reso
 - **A5 [EXTERNAL FACT]:** SpiceDB represents `a & b` as a top-level intersection node whose child is a nested `UsersetRewrite` (typically a union). Evidence: SpiceDB encoder logic in `authzed/spicedb/pkg/enc` transforms AST into proto; intersection nodes become `UsersetRewrite{Intersection: ...}`.
 
 ---
+
+## History
+
+| Ticket    | Title                                         | Created    | Status |
+|-----------|-----------------------------------------------|------------|--------|
+| (initial) | Codegen for intersection / exclusion rewrites | 2026-05-05 | Draft  |

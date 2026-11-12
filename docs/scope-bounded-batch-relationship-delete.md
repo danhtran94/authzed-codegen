@@ -76,6 +76,6 @@ Per `ADR-006`, the chosen shape widens `DeleteRelationsMatching`'s existing sign
 
 ## History
 
-| Ticket    | Title                             | Created    | Status |
-|-----------|-----------------------------------|------------|--------|
-| (initial) | Bounded batch relationship delete | 2026-11-13 | Draft  |
+| Ticket    | Title                             | Created    | Status   |
+|-----------|-----------------------------------|------------|----------|
+| (initial) | Bounded batch relationship delete | 2026-11-13 | Accepted |

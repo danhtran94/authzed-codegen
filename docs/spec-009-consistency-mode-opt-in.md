@@ -236,4 +236,6 @@ E2E tests verify: default-ctx behavior unchanged across all 4 e2e packages (regr
 
 ## History
 
-(History is owned by `harness history-update` — do not hand-edit.)
+| Ticket    | Title                                                                                     | Created    | Status   |
+|-----------|-------------------------------------------------------------------------------------------|------------|----------|
+| (initial) | Consistency Mode Opt-In — implements (closes hardcoded-consistency artifact from AUZ-011) | 2026-05-09 | Accepted |

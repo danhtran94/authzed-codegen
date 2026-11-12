@@ -131,4 +131,6 @@ The generator emits a `<Resource><Relation>Wildcards` sub-struct on the existing
 
 ## History
 
-_Binary-owned by `harness history-update`. Do not hand-edit._
+| Ticket    | Title                                                                                     | Created | Status   |
+|-----------|-------------------------------------------------------------------------------------------|---------|----------|
+| (initial) | Wildcard Codegen: Wildcards Sub-Struct on Objects Struct over Magic ID and Public Methods |         | Accepted |

@@ -488,3 +488,9 @@ Net change scope:
 | `example/authzed/extsvc/*.gen.go` | Regenerated output. |
 
 E2E tests against live SpiceDB cover: write+read direct path unchanged; write userset → assert tuple lands with `Subject.OptionalRelation = "admin"`; Check user via userset chain (common case) — admin u1 of team t1 has `view` permission on project granting `team:t1#admin` member; Check userset literally (rare case) — `Check(view, subject={team, t1, "admin"})` returns granted; userset + caveat fixture; userset + expiration fixture; mixed direct + userset relation Read returns both branches via dedicated Read methods.
+
+## History
+
+| Ticket    | Title                                                                       | Created    | Status   |
+|-----------|-----------------------------------------------------------------------------|------------|----------|
+| (initial) | Sub-relation References — implements (lifts ADR-001 rejection of `foo#bar`) | 2026-05-09 | Accepted |

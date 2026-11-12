@@ -374,3 +374,9 @@ This SPEC adds caveats to the codegen surface: the adapter extracts `CaveatName`
 | `authz.go`     | Add `CheckPermissionWithCaveat` to `Engine` interface      |
 | `object.go.tmpl` | Add `Caveat` field to `CheckXInputs`; emit caveat ctx map |
 | `main.go`      | Pass `compiled.CaveatDefinitions` to `AdaptDefinitions`    |
+
+## History
+
+| Ticket    | Title                                              | Created    | Status |
+|-----------|----------------------------------------------------|------------|--------|
+| (initial) | Caveat Codegen — implements (follow-up to ADR-001) | 2026-05-08 | Draft  |

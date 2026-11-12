@@ -243,3 +243,9 @@ No new errors are introduced. One existing error is **removed** for intersection
 - **A5 [HYPOTHESIS]:** No existing `.zed` schema in `example/` uses `&` or `-` operators. Evidence: `grep -r '&' example/*.zed` returns empty (or only comments). Verification: run grep before implementation.
 
 ---
+
+## History
+
+| Ticket    | Title                                                                                                | Created    | Status |
+|-----------|------------------------------------------------------------------------------------------------------|------------|--------|
+| (initial) | Intersection / Exclusion Codegen Semantics — implements docs/scope-intersection-exclusion-codegen.md | 2026-05-05 | Draft  |

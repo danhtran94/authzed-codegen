@@ -114,4 +114,6 @@ Single round-trip, type-safe, extensible. Breaks every existing call site. Intro
 
 ## History
 
-_Binary-owned by `harness history-update`. Do not hand-edit._
+| Ticket    | Title                                                                              | Created | Status   |
+|-----------|------------------------------------------------------------------------------------|---------|----------|
+| (initial) | Wildcard Reads: Sibling `<Type>Wildcard` Method over Paired Return and Sentinel ID |         | Accepted |
