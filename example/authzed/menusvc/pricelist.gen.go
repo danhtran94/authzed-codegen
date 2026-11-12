@@ -3,7 +3,7 @@
 package menusvc
 
 import (
-	"github.com/danhtran94/authzed-codegen/pkg/authz"
+	"github.com/danhtran94/authzed-codegen/v2/pkg/authz"
 
 	"context"
 	"time"
@@ -78,11 +78,12 @@ func (pricelist Pricelist) DeleteOwnerRelations(ctx context.Context, objects Pri
 // DeleteOwnerRelations (which revokes the specific subjects you pass),
 // use this when owner as a whole no longer applies to this Pricelist.
 func (pricelist Pricelist) PurgeOwnerRelations(ctx context.Context) error {
-	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+	_, err := authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
 		ResourceType: TypePricelist,
 		ResourceID:   authz.ID(pricelist),
 		Relation:     authz.Relation(PricelistOwner),
-	})
+	}, authz.DeleteOptions{})
+	return err
 }
 
 // PurgeRelations deletes every relationship on this Pricelist — all relations,
@@ -92,10 +93,11 @@ func (pricelist Pricelist) PurgeOwnerRelations(ctx context.Context) error {
 // resource — for that, see PurgeRelationsAsSubject (emitted when Pricelist is a
 // subject anywhere in the schema).
 func (pricelist Pricelist) PurgeRelations(ctx context.Context) error {
-	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+	_, err := authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
 		ResourceType: TypePricelist,
 		ResourceID:   authz.ID(pricelist),
-	})
+	}, authz.DeleteOptions{})
+	return err
 }
 
 type PricelistOwnerCompanyRelation struct {

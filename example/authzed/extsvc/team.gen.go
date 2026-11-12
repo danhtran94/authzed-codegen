@@ -3,7 +3,7 @@
 package extsvc
 
 import (
-	"github.com/danhtran94/authzed-codegen/pkg/authz"
+	"github.com/danhtran94/authzed-codegen/v2/pkg/authz"
 
 	"context"
 	"errors"
@@ -98,11 +98,12 @@ func (team Team) DeleteOwnerRelations(ctx context.Context, objects TeamOwnerObje
 // DeleteOwnerRelations (which revokes the specific subjects you pass),
 // use this when owner as a whole no longer applies to this Team.
 func (team Team) PurgeOwnerRelations(ctx context.Context) error {
-	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+	_, err := authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
 		ResourceType: TypeTeam,
 		ResourceID:   authz.ID(team),
 		Relation:     authz.Relation(TeamOwner),
-	})
+	}, authz.DeleteOptions{})
+	return err
 }
 
 func (team Team) DeleteManagerRelations(ctx context.Context, objects TeamManagerObjects) error {
@@ -123,11 +124,12 @@ func (team Team) DeleteManagerRelations(ctx context.Context, objects TeamManager
 // DeleteManagerRelations (which revokes the specific subjects you pass),
 // use this when manager as a whole no longer applies to this Team.
 func (team Team) PurgeManagerRelations(ctx context.Context) error {
-	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+	_, err := authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
 		ResourceType: TypeTeam,
 		ResourceID:   authz.ID(team),
 		Relation:     authz.Relation(TeamManager),
-	})
+	}, authz.DeleteOptions{})
+	return err
 }
 
 // PurgeRelations deletes every relationship on this Team — all relations,
@@ -137,10 +139,11 @@ func (team Team) PurgeManagerRelations(ctx context.Context) error {
 // resource — for that, see PurgeRelationsAsSubject (emitted when Team is a
 // subject anywhere in the schema).
 func (team Team) PurgeRelations(ctx context.Context) error {
-	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+	_, err := authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
 		ResourceType: TypeTeam,
 		ResourceID:   authz.ID(team),
-	})
+	}, authz.DeleteOptions{})
+	return err
 }
 
 // PurgeRelationsAsSubject deletes every relationship where this Team is the
@@ -152,11 +155,11 @@ func (team Team) PurgeRelations(ctx context.Context) error {
 func (team Team) PurgeRelationsAsSubject(ctx context.Context) error {
 	eng := authz.GetEngine(ctx)
 	var errs []error
-	if err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
+	if _, err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
 		ResourceType: authz.Type("extsvc/folder"),
 		SubjectType:  TypeTeam,
 		SubjectID:    authz.ID(team),
-	}); err != nil {
+	}, authz.DeleteOptions{}); err != nil {
 		errs = append(errs, fmt.Errorf("purge Team as subject of extsvc/folder: %w", err))
 	}
 	return errors.Join(errs...)

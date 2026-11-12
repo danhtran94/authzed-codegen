@@ -393,3 +393,9 @@ Net change scope:
 | `internal/generator/adapter.go` | No changes — existing `AllowedType` fields are sufficient. |
 
 E2E tests cover: read non-traited tuple (all metadata fields nil/empty); read caveated tuple (`CaveatName` and `CaveatContext` populated); read expiring tuple (`ExpiresAt` populated); read combined caveat+expiration; read wildcard tuple via `Read<Rel><Type>Wildcard` (metadata struct returned alongside the bool); `IDsOf` round-trip equivalence with the previous API surface (no behavior gap on the simple "give me the IDs" path).
+
+## History
+
+| Ticket    | Title                                                                               | Created    | Status   |
+|-----------|-------------------------------------------------------------------------------------|------------|----------|
+| (initial) | Read with Metadata — implements (closes AUZ-007 Discoveries Gap C and SPEC-004 C10) | 2026-05-09 | Accepted |

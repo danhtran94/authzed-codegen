@@ -276,4 +276,6 @@ E2E tests cover: caveat-context-supplied → granted (existing pattern, regressi
 
 ## History
 
-(History is owned by `harness history-update` — do not hand-edit.)
+| Ticket    | Title                                                                                                    | Created    | Status   |
+|-----------|----------------------------------------------------------------------------------------------------------|------------|----------|
+| (initial) | Conditional Permission Rich Signal — implements (closes silent collapse documented in CHANGELOG v1.1.0+) | 2026-05-09 | Accepted |

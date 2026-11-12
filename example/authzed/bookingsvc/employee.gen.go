@@ -3,7 +3,7 @@
 package bookingsvc
 
 import (
-	"github.com/danhtran94/authzed-codegen/pkg/authz"
+	"github.com/danhtran94/authzed-codegen/v2/pkg/authz"
 
 	"context"
 	"errors"
@@ -129,11 +129,12 @@ func (employee Employee) DeleteAccountRelations(ctx context.Context, objects Emp
 // DeleteAccountRelations (which revokes the specific subjects you pass),
 // use this when account as a whole no longer applies to this Employee.
 func (employee Employee) PurgeAccountRelations(ctx context.Context) error {
-	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+	_, err := authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
 		ResourceType: TypeEmployee,
 		ResourceID:   authz.ID(employee),
 		Relation:     authz.Relation(EmployeeAccount),
-	})
+	}, authz.DeleteOptions{})
+	return err
 }
 
 func (employee Employee) DeleteBelongsBrandRelations(ctx context.Context, objects EmployeeBelongsBrandObjects) error {
@@ -154,11 +155,12 @@ func (employee Employee) DeleteBelongsBrandRelations(ctx context.Context, object
 // DeleteBelongsBrandRelations (which revokes the specific subjects you pass),
 // use this when belongs_brand as a whole no longer applies to this Employee.
 func (employee Employee) PurgeBelongsBrandRelations(ctx context.Context) error {
-	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+	_, err := authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
 		ResourceType: TypeEmployee,
 		ResourceID:   authz.ID(employee),
 		Relation:     authz.Relation(EmployeeBelongsBrand),
-	})
+	}, authz.DeleteOptions{})
+	return err
 }
 
 func (employee Employee) DeleteViewerRelations(ctx context.Context, objects EmployeeViewerObjects) error {
@@ -188,11 +190,12 @@ func (employee Employee) DeleteViewerRelations(ctx context.Context, objects Empl
 // DeleteViewerRelations (which revokes the specific subjects you pass),
 // use this when viewer as a whole no longer applies to this Employee.
 func (employee Employee) PurgeViewerRelations(ctx context.Context) error {
-	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+	_, err := authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
 		ResourceType: TypeEmployee,
 		ResourceID:   authz.ID(employee),
 		Relation:     authz.Relation(EmployeeViewer),
-	})
+	}, authz.DeleteOptions{})
+	return err
 }
 
 // PurgeRelations deletes every relationship on this Employee — all relations,
@@ -202,10 +205,11 @@ func (employee Employee) PurgeViewerRelations(ctx context.Context) error {
 // resource — for that, see PurgeRelationsAsSubject (emitted when Employee is a
 // subject anywhere in the schema).
 func (employee Employee) PurgeRelations(ctx context.Context) error {
-	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+	_, err := authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
 		ResourceType: TypeEmployee,
 		ResourceID:   authz.ID(employee),
-	})
+	}, authz.DeleteOptions{})
+	return err
 }
 
 // PurgeRelationsAsSubject deletes every relationship where this Employee is the
@@ -217,18 +221,18 @@ func (employee Employee) PurgeRelations(ctx context.Context) error {
 func (employee Employee) PurgeRelationsAsSubject(ctx context.Context) error {
 	eng := authz.GetEngine(ctx)
 	var errs []error
-	if err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
+	if _, err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
 		ResourceType: authz.Type("bookingsvc/booking"),
 		SubjectType:  TypeEmployee,
 		SubjectID:    authz.ID(employee),
-	}); err != nil {
+	}, authz.DeleteOptions{}); err != nil {
 		errs = append(errs, fmt.Errorf("purge Employee as subject of bookingsvc/booking: %w", err))
 	}
-	if err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
+	if _, err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
 		ResourceType: authz.Type("bookingsvc/brand"),
 		SubjectType:  TypeEmployee,
 		SubjectID:    authz.ID(employee),
-	}); err != nil {
+	}, authz.DeleteOptions{}); err != nil {
 		errs = append(errs, fmt.Errorf("purge Employee as subject of bookingsvc/brand: %w", err))
 	}
 	return errors.Join(errs...)

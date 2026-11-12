@@ -448,3 +448,9 @@ This SPEC adds expiration traits to the codegen surface. **Net change is bounded
 | `example/authzed/extsvc/folder.gen.go` | Regenerated output. |
 
 E2E tests against live SpiceDB cover: write+check before expiry (granted), write+check after expiry (denied — server-side filter), combined caveat+expiration (both gates apply), TOUCH idempotency (re-write after GC of expired tuple), wildcard+expiration if schema supports it.
+
+## History
+
+| Ticket    | Title                                                                                | Created    | Status |
+|-----------|--------------------------------------------------------------------------------------|------------|--------|
+| (initial) | Expiration Codegen — implements (extends ADR-001 rejection list — `with expiration`) | 2026-05-09 | Draft  |

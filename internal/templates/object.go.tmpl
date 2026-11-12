@@ -1,9 +1,9 @@
 
-{{- /* gotype: github.com/danhtran94/authzed-codegen/internal/generator.DefinitionView */ -}}
+{{- /* gotype: github.com/danhtran94/authzed-codegen/v2/internal/generator.DefinitionView */ -}}
 package {{ packageName .ObjectType.Prefix }}
 
 import (
-  "github.com/danhtran94/authzed-codegen/pkg/authz"
+  "github.com/danhtran94/authzed-codegen/v2/pkg/authz"
 
   {{ $countRels := len .Relations }}{{ $isSubj := isSubjectType (print .ObjectType.Prefix "/" .ObjectType.Name) }}{{ if or (gt $countRels 0) $isSubj }}"context"
 {{ end }}{{ if gt $countRels 0 }}  "time"
@@ -134,11 +134,12 @@ func ({{ $var }} {{ $typeName }}) Delete{{ snakeToPascal $rel.Name}}Relations(ct
 // Delete{{ snakeToPascal $rel.Name }}Relations (which revokes the specific subjects you pass),
 // use this when {{ $rel.Name }} as a whole no longer applies to this {{ $typeName }}.
 func ({{ $var }} {{ $typeName }}) Purge{{ snakeToPascal $rel.Name }}Relations(ctx context.Context) error {
-  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+  _, err := authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
     ResourceType: Type{{ $typeName }},
     ResourceID: authz.ID({{ $var }}),
     Relation: authz.Relation({{ $typeName }}{{ snakeToPascal $rel.Name }}),
-  })
+  }, authz.DeleteOptions{})
+  return err
 }
 {{ end }}{{ if gt $countRels 0 }}
 // PurgeRelations deletes every relationship on this {{ $typeName }} — all relations,
@@ -148,10 +149,11 @@ func ({{ $var }} {{ $typeName }}) Purge{{ snakeToPascal $rel.Name }}Relations(ct
 // resource — for that, see PurgeRelationsAsSubject (emitted when {{ $typeName }} is a
 // subject anywhere in the schema).
 func ({{ $var }} {{ $typeName }}) PurgeRelations(ctx context.Context) error {
-  return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+  _, err := authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
     ResourceType: Type{{ $typeName }},
     ResourceID: authz.ID({{ $var }}),
-  })
+  }, authz.DeleteOptions{})
+  return err
 }
 {{ end }}{{ if $isSubj }}
 // PurgeRelationsAsSubject deletes every relationship where this {{ $typeName }} is the
@@ -163,11 +165,11 @@ func ({{ $var }} {{ $typeName }}) PurgeRelations(ctx context.Context) error {
 func ({{ $var }} {{ $typeName }}) PurgeRelationsAsSubject(ctx context.Context) error {
   eng := authz.GetEngine(ctx)
   var errs []error
-  {{ range $refDef := referencingDefinitions $objectType }}if err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
+  {{ range $refDef := referencingDefinitions $objectType }}if _, err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
     ResourceType: authz.Type("{{ $refDef }}"),
     SubjectType: Type{{ $typeName }},
     SubjectID: authz.ID({{ $var }}),
-  }); err != nil {
+  }, authz.DeleteOptions{}); err != nil {
     errs = append(errs, fmt.Errorf("purge {{ $typeName }} as subject of {{ $refDef }}: %w", err))
   }
   {{ end }}return errors.Join(errs...)

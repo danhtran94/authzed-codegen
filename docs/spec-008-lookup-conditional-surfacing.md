@@ -337,4 +337,6 @@ E2E tests cover: definite path (regression check, no behavior change at the valu
 
 ## History
 
-(History is owned by `harness history-update` — do not hand-edit.)
+| Ticket    | Title                                                                                             | Created    | Status   |
+|-----------|---------------------------------------------------------------------------------------------------|------------|----------|
+| (initial) | Lookup Conditional Surfacing — implements (closes silent CONDITIONAL filter from AUZ-008/AUZ-012) | 2026-05-09 | Accepted |

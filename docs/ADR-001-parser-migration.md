@@ -87,3 +87,10 @@ A future job may lift either by extending the adapter and adding the correspondi
 - **A2 [EXTERNAL FACT]:** The `pkg/schemadsl/compiler` package exports `Compile(InputSchema, ObjectPrefixOption, ...Option) (*CompiledSchema, error)`. The slice consumed by the codegen is `CompiledSchema.ObjectDefinitions []*core.NamespaceDefinition`. `CaveatDefinitions` and `OrderedDefinitions` are also returned but unused. Evidence: `authzed/spicedb` v1.52.0 source at `pkg/schemadsl/compiler/compiler.go:127` (function) and `compiler.go:36-50` (struct).
 - **A3 [EXTERNAL FACT]:** `core.NamespaceDefinition` (at import path `github.com/authzed/spicedb/pkg/proto/core/v1`) contains `Relation []*core.Relation` where each `Relation` is distinguished as a relation (`TypeInformation != nil`) vs. a permission (`UsersetRewrite != nil`). Evidence: `authzed/spicedb` source at `pkg/proto/core/v1/core.pb.go:1237` and `core.pb.go:1311`.
 - **A4 [VERIFIED]:** The migrated CLI builds clean with `go build ./...` and runs end-to-end against `example/schema.zed` producing byte-identical output to the pre-migration fixture. Binary-size measurement deferred — not load-bearing for a build-time CLI.
+
+## History
+
+| Ticket                                         | Title                                                             | Created    | Status   |
+|------------------------------------------------|-------------------------------------------------------------------|------------|----------|
+| (initial)                                      | Parser Migration: SpiceDB Compiler over Hand-Written Lexer/Parser |            | Accepted |
+| [AUZ-001](../jobs/AUZ-001-parser-migration.md) | Migrate parser to SpiceDB compiler                                | 2026-05-01 | Done     |

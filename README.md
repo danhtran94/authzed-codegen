@@ -3,7 +3,7 @@
 [![CI](https://github.com/danhtran94/authzed-codegen/actions/workflows/ci.yml/badge.svg)](https://github.com/danhtran94/authzed-codegen/actions/workflows/ci.yml)
 [![Security](https://github.com/danhtran94/authzed-codegen/actions/workflows/security.yml/badge.svg)](https://github.com/danhtran94/authzed-codegen/actions/workflows/security.yml)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/danhtran94/authzed-codegen/badge)](https://scorecard.dev/viewer/?uri=github.com/danhtran94/authzed-codegen)
-[![Go Reference](https://pkg.go.dev/badge/github.com/danhtran94/authzed-codegen.svg)](https://pkg.go.dev/github.com/danhtran94/authzed-codegen)
+[![Go Reference](https://pkg.go.dev/badge/github.com/danhtran94/authzed-codegen/v2.svg)](https://pkg.go.dev/github.com/danhtran94/authzed-codegen/v2)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Type-safe Go bindings for [AuthZED / SpiceDB](https://authzed.com/) schemas.
@@ -46,7 +46,7 @@ client lives in `pkg/authz/spicedb/`.
 ## Install
 
 ```sh
-go install github.com/danhtran94/authzed-codegen/cmd/authzed-codegen@latest
+go install github.com/danhtran94/authzed-codegen/v2/cmd/authzed-codegen@latest
 ```
 
 ## Usage
@@ -196,6 +196,20 @@ folder.CreateExpiringViewerRelations(ctx, extsvc.FolderExpiringViewerObjects{
 
 Combined with caveats — `relation gated: extsvc/user with extsvc/tenant_match and expiration` — both `Caveats` and `Expirations` sub-structs are populated independently. The codegen routes through `CreateRelationsWithExpiration` (auto-switching to `OPERATION_TOUCH` because un-garbage-collected expired tuples may collide on tuple identity). See `docs/spec-004-expiration-codegen.md`.
 
+> [!WARNING]
+> Run a SpiceDB server **≥ v1.57.1** if you use `with expiration` at all:
+>
+> - **[GHSA-w278-32qg-48q5](https://github.com/authzed/spicedb/security/advisories/GHSA-w278-32qg-48q5)** (patched v1.57.1): a relation that unions an expiring allowed type with a
+>   sub-relation reference of the *same* type — e.g. `relation viewer: extsvc/user with expiration | extsvc/team#admin` — can return `HAS_PERMISSION` for an
+>   already-expired tuple, within the datastore's GC window. This codegen supports both `with expiration` and `foo#bar` references as independent features
+>   (see [Sub-relation References](#sub-relation-references) below); a schema combining them on one relation hits exactly this case.
+> - Separately (no CVE, fixed alongside in v1.57.1): since v1.54.0's move to the Otter cache, a cached dispatch/relation-cache entry's TTL was pushed out on every
+>   *read*, not just on write — so an expiring relationship read more often than its TTL never actually expired from the cache, keeping stale grants alive
+>   indefinitely under `fully_consistent` on datastores (e.g. MySQL) where the revision only advances on writes.
+>
+> Both are server-side evaluation/caching bugs — bumping this repo's `spicedb` Go dependency doesn't fix either for you; the fix has to ship in the SpiceDB
+> server binary/image you deploy.
+
 ## Read with Metadata
 
 `Read<Rel><Type>Relations` returns `[]<Rel><Type>Relation` — a typed metadata struct per tuple carrying the subject ID alongside the caveat name, decoded caveat context, and expiration timestamp:
@@ -337,7 +351,7 @@ Token-based modes (`AtLeastAsFresh`, `AtExactSnapshot` with caller-supplied toke
 The codegen captures the source `.zed` bytes verbatim and emits `<output-dir>/schema.gen.go` with `SchemaText`, `SchemaDigest`, and a `VerifySchema(ctx)` helper. At startup, callers compare the binary's baseline against the deployed schema in SpiceDB and decide whether to proceed:
 
 ```go
-import authzed "github.com/danhtran94/authzed-codegen/example/authzed"
+import authzed "github.com/danhtran94/authzed-codegen/v2/example/authzed"
 
 drift, err := authzed.VerifySchema(ctx)
 if err != nil {
@@ -496,17 +510,49 @@ own delete runs inside a DB transaction, enqueue the purge as
 `OPERATION_DELETE`-style compensating work and retry until it succeeds.
 
 For hand-written callers, the same primitive is on the runtime interface:
-`authz.Engine.DeleteRelationsMatching(ctx, authz.RelationFilter{...})` — one
-transactional `DeleteRelationships` call against SpiceDB. An all-empty
+`authz.Engine.DeleteRelationsMatching(ctx, authz.RelationFilter{...}, authz.DeleteOptions{})`
+— one transactional `DeleteRelationships` call against SpiceDB. An all-empty
 `RelationFilter` (which would match every tuple in the store) is rejected with
 `authz.ErrEmptyRelationFilter`; supply at least one field.
+
+**Bounded delete.** `DeleteOptions{}` (the zero value) deletes everything
+matching the filter in one transaction — the right choice for normal-fan-out
+objects, and what every generated `Purge*` method uses. For an object that
+might have millions of tuples and risks SpiceDB's single-transaction timeout,
+pass `DeleteOptions{Limit: n}` to bound a single call; `DeletionProgress.Complete`
+reports whether more remain, and the caller loops on the same filter and limit
+until it's `true`:
+
+```go
+opts := authz.DeleteOptions{Limit: 5000}
+for {
+    progress, err := engine.DeleteRelationsMatching(ctx, filter, opts)
+    if err != nil {
+        return err
+    }
+    if progress.Complete {
+        break
+    }
+}
+```
+
+> [!WARNING]
+> This does **not** implement SpiceDB's cursor-resume (`OptionalCursor` /
+> `AfterResultCursor`, added in SpiceDB v1.57.0) — as of SpiceDB v1.57.x,
+> cursor-resume is a **CockroachDB-only** datastore capability; Postgres,
+> MySQL, Spanner, and MemDB all reject it. The bounded loop above re-scans
+> already-deleted rows on each iteration on every datastore except
+> CockroachDB. That re-scan cost is the trade-off for a primitive this
+> project's MemDB-only test suite can actually verify end to end.
 
 This is deliberately a set of verbs, not a workflow — there is no
 `Delete<Type>()` that cascades to children or re-parents them. The codegen
 emits the primitives; deciding the cleanup order for a given schema is the
 caller's call. See `docs/scope-relationship-cleanup-verbs.md`,
 `docs/ADR-005-engine-filter-delete.md`, and
-`docs/spec-014-relationship-cleanup-codegen.md`.
+`docs/spec-014-relationship-cleanup-codegen.md` for the original verbs;
+`docs/scope-bounded-batch-relationship-delete.md` and
+`docs/ADR-006-bounded-relationship-delete-widened-signature.md` for bounded delete.
 
 ## Verification
 

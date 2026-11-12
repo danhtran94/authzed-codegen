@@ -3,7 +3,7 @@
 package menusvc
 
 import (
-	"github.com/danhtran94/authzed-codegen/pkg/authz"
+	"github.com/danhtran94/authzed-codegen/v2/pkg/authz"
 )
 
 const TypeProduct authz.Type = "menusvc/product"

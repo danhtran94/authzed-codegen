@@ -9,7 +9,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/danhtran94/authzed-codegen/internal/utilstr"
+	"github.com/danhtran94/authzed-codegen/v2/internal/utilstr"
 )
 
 // OPAPackageView is the data passed to opa.go.tmpl. One per Go package

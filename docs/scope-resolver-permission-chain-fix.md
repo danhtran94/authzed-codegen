@@ -56,4 +56,6 @@ The defect predates the AUZ-001 parser migration — it is in the resolver / tre
 
 ## History
 
-_Binary-owned by `harness history-update`. Do not hand-edit._
+| Ticket    | Title                                      | Created    | Status   |
+|-----------|--------------------------------------------|------------|----------|
+| (initial) | Resolver permission-chain type propagation | 2026-05-03 | Accepted |

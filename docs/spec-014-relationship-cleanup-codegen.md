@@ -291,4 +291,6 @@ Two design choices were considered and resolved here:
 
 ## History
 
-<!-- managed by `harness history-update` — do not hand-edit -->
+| Ticket    | Title                                                                              | Created    | Status   |
+|-----------|------------------------------------------------------------------------------------|------------|----------|
+| (initial) | Relationship Cleanup Codegen — implements docs/scope-relationship-cleanup-verbs.md | 2026-05-10 | Accepted |

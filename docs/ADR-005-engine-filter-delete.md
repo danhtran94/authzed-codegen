@@ -97,4 +97,6 @@ The `authz.Engine` interface gains one method, `DeleteRelationsMatching(ctx cont
 
 ## History
 
-<!-- managed by `harness history-update` — do not hand-edit -->
+| Ticket    | Title                                                                  | Created | Status   |
+|-----------|------------------------------------------------------------------------|---------|----------|
+| (initial) | Engine Relationship-Filter Deletes: A Filter Struct over Named Methods |         | Accepted |

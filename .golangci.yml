@@ -9,7 +9,7 @@ linters:
           files:
             - '**/pkg/**'
           deny:
-            - pkg: github.com/danhtran94/authzed-codegen/internal
+            - pkg: github.com/danhtran94/authzed-codegen/v2/internal
               desc: pkg/ is the runtime contract consumed by generated code; it must not depend on internal/
   exclusions:
     generated: lax

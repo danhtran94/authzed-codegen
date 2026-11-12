@@ -342,4 +342,6 @@ E2E tests verify each of the 4 buckets populates correctly and the helper's `IsB
 
 ## History
 
-(History is owned by `harness history-update` — do not hand-edit.)
+| Ticket    | Title                                                                                                  | Created    | Status   |
+|-----------|--------------------------------------------------------------------------------------------------------|------------|----------|
+| (initial) | Schema Drift Detection — implements (deploy-time safety net for codegen-vs-deployed schema mismatches) | 2026-05-09 | Accepted |

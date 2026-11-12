@@ -7,9 +7,9 @@ import (
 	"os"
 	"testing"
 
-	menusvc "github.com/danhtran94/authzed-codegen/example/authzed/menusvc"
-	"github.com/danhtran94/authzed-codegen/pkg/authz"
-	"github.com/danhtran94/authzed-codegen/pkg/authz/spicedbtest"
+	menusvc "github.com/danhtran94/authzed-codegen/v2/example/authzed/menusvc"
+	"github.com/danhtran94/authzed-codegen/v2/pkg/authz"
+	"github.com/danhtran94/authzed-codegen/v2/pkg/authz/spicedbtest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

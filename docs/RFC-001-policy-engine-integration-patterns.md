@@ -140,4 +140,6 @@ R6 — Future ADRs proposing Tier 2 codegen extensions reference this RFC's R2 d
 
 ## History
 
-<!-- managed by `harness history-update` — do not hand-edit -->
+| Ticket    | Title                              | Created    | Status   |
+|-----------|------------------------------------|------------|----------|
+| (initial) | Policy engine integration patterns | 2026-05-10 | Accepted |

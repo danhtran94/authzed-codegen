@@ -7,8 +7,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/danhtran94/authzed-codegen/pkg/authz"
-	"github.com/danhtran94/authzed-codegen/pkg/authz/spicedbtest"
+	"github.com/danhtran94/authzed-codegen/v2/pkg/authz"
+	"github.com/danhtran94/authzed-codegen/v2/pkg/authz/spicedbtest"
 )
 
 const schemaPath = "../../../example/schema.zed"

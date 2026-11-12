@@ -445,4 +445,8 @@ Two design choices were considered and resolved in this SPEC:
 
 ## History
 
-<!-- managed by `harness history-update` — do not hand-edit -->
+| Ticket                                               | Title                                                                      | Created    | Status   |
+|------------------------------------------------------|----------------------------------------------------------------------------|------------|----------|
+| (initial)                                            | OPA Go Builtins Codegen — implements docs/scope-opa-go-builtins-codegen.md | 2026-05-10 | Accepted |
+| [AUZ-021](../jobs/AUZ-021-opa-global-builtins.md)    | OPA global builtin registration + runtime.NewRuntime demo                  | 2026-05-10 | Done     |
+| [AUZ-022](../jobs/AUZ-022-opa-object-subject-arg.md) | OPA builtin subject arg — keyed object instead of "type:id" string         | 2026-05-10 | Done     |

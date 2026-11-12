@@ -296,4 +296,6 @@ E2E tests verify SpiceDB's identity-match semantic against live SpiceDB:
 
 ## History
 
-(History is owned by `harness history-update` — do not hand-edit.)
+| Ticket    | Title                                                                      | Created    | Status   |
+|-----------|----------------------------------------------------------------------------|------------|----------|
+| (initial) | `_self` Schema Construct — implements (lifts ADR-001 rejection of `_self`) | 2026-05-09 | Accepted |

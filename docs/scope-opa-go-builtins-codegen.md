@@ -100,4 +100,6 @@ Concrete artifacts that change:
 
 ## History
 
-<!-- managed by `harness history-update` — do not hand-edit -->
+| Ticket    | Title                   | Created    | Status   |
+|-----------|-------------------------|------------|----------|
+| (initial) | OPA Go builtins codegen | 2026-05-10 | Accepted |

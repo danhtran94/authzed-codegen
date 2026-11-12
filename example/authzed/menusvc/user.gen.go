@@ -3,7 +3,7 @@
 package menusvc
 
 import (
-	"github.com/danhtran94/authzed-codegen/pkg/authz"
+	"github.com/danhtran94/authzed-codegen/v2/pkg/authz"
 
 	"context"
 	"errors"
@@ -80,11 +80,12 @@ func (user User) DeleteBelongsCompanyRelations(ctx context.Context, objects User
 // DeleteBelongsCompanyRelations (which revokes the specific subjects you pass),
 // use this when belongs_company as a whole no longer applies to this User.
 func (user User) PurgeBelongsCompanyRelations(ctx context.Context) error {
-	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+	_, err := authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
 		ResourceType: TypeUser,
 		ResourceID:   authz.ID(user),
 		Relation:     authz.Relation(UserBelongsCompany),
-	})
+	}, authz.DeleteOptions{})
+	return err
 }
 
 // PurgeRelations deletes every relationship on this User — all relations,
@@ -94,10 +95,11 @@ func (user User) PurgeBelongsCompanyRelations(ctx context.Context) error {
 // resource — for that, see PurgeRelationsAsSubject (emitted when User is a
 // subject anywhere in the schema).
 func (user User) PurgeRelations(ctx context.Context) error {
-	return authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
+	_, err := authz.GetEngine(ctx).DeleteRelationsMatching(ctx, authz.RelationFilter{
 		ResourceType: TypeUser,
 		ResourceID:   authz.ID(user),
-	})
+	}, authz.DeleteOptions{})
+	return err
 }
 
 // PurgeRelationsAsSubject deletes every relationship where this User is the
@@ -109,25 +111,25 @@ func (user User) PurgeRelations(ctx context.Context) error {
 func (user User) PurgeRelationsAsSubject(ctx context.Context) error {
 	eng := authz.GetEngine(ctx)
 	var errs []error
-	if err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
+	if _, err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
 		ResourceType: authz.Type("menusvc/booking"),
 		SubjectType:  TypeUser,
 		SubjectID:    authz.ID(user),
-	}); err != nil {
+	}, authz.DeleteOptions{}); err != nil {
 		errs = append(errs, fmt.Errorf("purge User as subject of menusvc/booking: %w", err))
 	}
-	if err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
+	if _, err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
 		ResourceType: authz.Type("menusvc/company"),
 		SubjectType:  TypeUser,
 		SubjectID:    authz.ID(user),
-	}); err != nil {
+	}, authz.DeleteOptions{}); err != nil {
 		errs = append(errs, fmt.Errorf("purge User as subject of menusvc/company: %w", err))
 	}
-	if err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
+	if _, err := eng.DeleteRelationsMatching(ctx, authz.RelationFilter{
 		ResourceType: authz.Type("menusvc/order"),
 		SubjectType:  TypeUser,
 		SubjectID:    authz.ID(user),
-	}); err != nil {
+	}, authz.DeleteOptions{}); err != nil {
 		errs = append(errs, fmt.Errorf("purge User as subject of menusvc/order: %w", err))
 	}
 	return errors.Join(errs...)

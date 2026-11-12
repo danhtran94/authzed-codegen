@@ -13,7 +13,7 @@ import (
 	"github.com/open-policy-agent/opa/v1/types"
 	"google.golang.org/protobuf/types/known/structpb"
 
-	"github.com/danhtran94/authzed-codegen/pkg/authz"
+	"github.com/danhtran94/authzed-codegen/v2/pkg/authz"
 )
 
 // SpiceDBBuiltins returns the OPA registration options for every

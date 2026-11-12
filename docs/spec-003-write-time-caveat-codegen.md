@@ -506,3 +506,9 @@ This SPEC closes AUZ-006's write-side gap and lifts the per-permission caveat ca
 | `example/authzed/extsvc/folder.gen.go` | Regenerated output. |
 
 23 e2e tests against live SpiceDB cover: defer/pre-bind binding patterns, wildcard + caveat, mixed caveated/non-caveated relations, multi-caveat-per-permission, write-time precedence, delete-on-caveated-tuple, all supported parameter types, structpb coercion edge cases.
+
+## History
+
+| Ticket    | Title                                                                                       | Created    | Status |
+|-----------|---------------------------------------------------------------------------------------------|------------|--------|
+| (initial) | Write-time Caveat Codegen — implements (follow-up to SPEC-002 / AUZ-006 Discoveries 2 + 10) | 2026-05-08 | Draft  |
