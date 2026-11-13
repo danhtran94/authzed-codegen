@@ -1,10 +1,10 @@
 module github.com/danhtran94/authzed-codegen/v2
 
-go 1.26.11
+go 1.27.4
 
 require (
 	github.com/authzed/authzed-go v1.11.0
-	github.com/authzed/grpcutil v0.0.0-20260105210157-e237581949c2
+	github.com/authzed/grpcutil v0.0.0-20261112214214-9968d92209a5
 	github.com/authzed/spicedb v1.57.1
 	github.com/open-policy-agent/opa v1.22.4
 	github.com/stretchr/testify v1.12.1
@@ -140,7 +140,7 @@ require (
 	golang.org/x/text v0.44.0 // indirect
 	golang.org/x/time v0.16.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260928230214-8a89bd6388cc // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260928230214-8a89bd6388cc // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20261110000943-09e21b237f2c // indirect
 	gopkg.in/ini.v1 v1.67.3 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	oras.land/oras-go/v2 v2.7.0 // indirect
