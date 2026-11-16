@@ -1,0 +1,64 @@
+{
+  "meta": {
+    "name": "authzed-codegen Mascot Style",
+    "version": "1.0.0",
+    "description": "Concept, style, generation briefs, and asset notes for the authzed-codegen illustrations: Go gophers in a locksmith's workshop, cutting keys from a schema blueprint.",
+    "attribution": "Go Gopher design by Renee French, licensed under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). Illustrations AI-generated with Gemini. Credit both wherever the art is published.",
+    "series": "Same style as github.com/danhtran94/entdomain (docs/assets/mascot-style.json), so the projects read as one family."
+  },
+  "concept": {
+    "idea": "The schema is a blueprint of who can open what; the codegen cuts a precise key for every lock.",
+    "readsAs": {
+      "blueprintOfDoorsAndLocks": "The .zed schema: definitions connected by relations and arrows.",
+      "keymakerAtTheGrinder": "Code generation from the schema.",
+      "towerOfChainedDoors": "Relations between objects; permissions that flow through other objects (order -> company).",
+      "rightKeyOpensItsDoor": "A typed Check<Permission> call that fits the schema."
+    },
+    "knownGap": "The 'wrong key cannot go in' beat (compile-time safety) is weak: a second key sits in the blue door but does not read as blocked. Accepted after one edit round."
+  },
+  "style": {
+    "summary": "Cozy storybook illustration: hand-drawn ink outlines with slight wobble, soft watercolor washes, gentle pastel colors on cream paper.",
+    "gopherColor": "Muted teal, median (145,194,185). Image models drift to bright cyan; recolor rather than accept a mismatch."
+  },
+  "gopherIdentity": {
+    "mustKeep": [
+      "Chubby rounded body; head and body are one mass",
+      "Big round bulging eyes at the top of the head",
+      "Small round ears on the top corners, always visible",
+      "Beige snout with two buck teeth",
+      "Tiny stubby arms and small feet"
+    ],
+    "mustAvoid": ["whiskers", "hats covering the top of the head", "AuthZed or SpiceDB logos and brand colors"]
+  },
+  "briefs": {
+    "note": "Free-form briefs: state the story and the non-negotiables, let the model design the scene. Gemini does not understand Midjourney flags; '--ar 16:9' was painted into the image as text. Write ratios in words.",
+    "scene": "An illustration for authzed-codegen, an open-source Go tool. The story: access control rules usually live in fragile strings, and a typo only shows up in production when someone gets locked out or let in by mistake. authzed-codegen reads your permission schema, a blueprint of who can open what, and generates a precise key for every lock. A key that doesn't belong to a lock simply cannot go in. Show this as two Go gophers in a cozy locksmith's workshop. One is cutting keys at a workbench, carefully following a big blueprint pinned on the wall that shows doors connected by lines. The other stands at a row of small doors: one key turns and a door swings open with a warm glow, while another key, clearly the wrong shape, just won't fit its keyhole, and the gopher looks at it puzzled but amused. A rack of neatly labeled keys hangs nearby. How you stage the scene and the small details is up to you. Make it warm, clever, and a little funny, the kind of picture a developer gets in one glance and smiles at. Style: cozy storybook illustration, hand-drawn ink outlines, soft watercolor washes, gentle pastel colors on cream paper. The gophers should be clearly the classic Go gopher: big round eyes, buck teeth, chubby body. No text, no logos.",
+    "editRightGopher": "Edit this image. Keep everything else exactly the same. 1. Change only the gopher on the right: instead of looking confused with a big key ring, it happily turns one key in the red door in front of it, and that door swings open with warm light. Next to it, a second key with a clearly different shape is stuck at the keyhole of the neighbouring blue door and cannot go in. The gopher glances at that wrong key with an amused, knowing smile. Remove the question mark and exclamation mark. 2. Remove the floating key on the chain in the middle of the door tower. 3. Remove the text in the bottom-left corner; continue the floor there.",
+    "editReason": "The first render showed a confused gopher with a big key ring, which reads as the pain the tool removes, not its payoff.",
+    "extendRight": "Extend this image to the right to a 21:9 wide aspect ratio. Keep the entire original illustration exactly as it is: same gophers, same objects, same positions, same style. Only add new space on the right side. In the new area: finish the wooden staircase and the key board that are cut off at the right edge, then continue into a plain, calm cream plaster wall. Leave a wide, mostly empty area on the right for a title to be added later. No text, no new characters, no new objects in the empty area. Match the original style precisely: hand-drawn ink outlines, soft watercolor wash, pastel colors, cream paper texture.",
+    "avatar": "Using the gopher on the right side of this image (the one turning a key in the glowing door) as the exact reference, create a square 1:1 avatar of that same character. Keep everything that makes it this character: same cyan blue color, big round bulging eyes at the top of the head, small round ears, beige snout, buck teeth, happy expression, same hand-drawn ink and soft watercolor style. The gopher proudly holds up one old-fashioned key with both paws, centered, head and upper body filling most of the frame. Plain soft cream background, no room, no doors, no other objects. It must read clearly as a tiny icon, so keep the shapes bold and simple, with clean outlines and good contrast against the background. No text."
+  },
+  "assets": {
+    "watermark": "Gemini stamps a sparkle in the bottom-right corner, and every edit keeps the old one and adds another. Feed later edits a cropped, watermark-free base instead of Gemini's raw output.",
+    "files": [
+      {
+        "path": "docs/assets/banner.jpg",
+        "size": "2000x896",
+        "use": "README header",
+        "source": "extendRight output (3168x1344), cropped to x 0..3000 to drop the watermark, resized, JPEG q85."
+      },
+      {
+        "path": "docs/assets/social-preview.jpg",
+        "size": "1280x640",
+        "use": "GitHub Settings > Social preview (limit 1 MB)",
+        "source": "Poster layout: title 'authzed-codegen' and subtitle on cream #FFF1DC above the banner scene (1049x470 card). The empty wall from extendRight was too narrow (~200px at 1280) for the title. SF Pro Rounded, #231F20 / #5A524C; JPEG q88."
+      },
+      {
+        "path": "docs/assets/avatar.png",
+        "size": "512x512",
+        "use": "Avatar and icon; safe for circular crops and legible at 64px",
+        "source": "Avatar brief output (2048x2048). Cyan pixels recolored to the banner teal (HSV: hue -16 deg, saturation x0.46, value x0.90); paper warmed from (253,237,214) to (245,226,200). The two watermarks sat on flat background right of the body and were filled with the paper colour, because cropping would push the ears outside a circular crop. Resized to 512."
+      }
+    ]
+  }
+}

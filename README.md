@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/assets/banner.jpg" alt="Two Go gophers in a locksmith's workshop: one cuts keys following a blueprint of connected doors and locks, the other turns a key and its door swings open">
+</p>
+
 # authzed-codegen
 
 [![CI](https://github.com/danhtran94/authzed-codegen/actions/workflows/ci.yml/badge.svg)](https://github.com/danhtran94/authzed-codegen/actions/workflows/ci.yml)
@@ -585,6 +589,10 @@ Starting with **v1.10.0**, this project commits to [Semantic Versioning](https:/
 The **v1.0–v1.9 line** was active development. Several minor releases included breaking changes to the `Engine` interface and generated method signatures (notably v1.4 changed `ReadRelations` return type, v1.7 changed `Lookup*` return types). That pattern ends at v1.10 — going forward, breaking changes require a major bump to v2.0.
 
 A `<output-dir>/schema.gen.go` `SchemaText` constant pins the schema baseline of each binary release; pair with `VerifySchema(ctx)` at startup to catch deploy-time drift between the binary and the deployed SpiceDB schema. See `docs/spec-010-schema-drift-detection.md`.
+
+## Credits
+
+The Go gopher was designed by [Renée French](https://reneefrench.blogspot.com/) and is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The authzed-codegen illustrations are AI-generated with Gemini; see [`docs/assets/mascot-style.json`](docs/assets/mascot-style.json) for the brief.
 
 ## License
 
