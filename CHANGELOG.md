@@ -4,13 +4,15 @@ All notable changes to this project are documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.1.0] - Unreleased
+## [2.1.0] - 2026-11-18
+
+**First tagged v2 release.** It includes everything listed under [2.0.0] below, including the `/v2` module-path change: upgrading from `v1.15.0` means updating every import to `github.com/danhtran94/authzed-codegen/v2`.
 
 Two fixes ship in this release. AUZ-026 is a **security fix** for the OPA builtins. AUZ-025 restores nested-rewrite branches that codegen silently dropped, and carries one correctness-fix signature change (see Breaking). Regenerate all `.gen.go` / `opa.gen.go` files after upgrading.
 
 ### Security
 
-- **OPA builtins granted access for an empty subject ID list (fail-open), `v1.14.0`–`v2.0.0`.** `<pkg>.check_<res>_<perm>({"<type>": []}, id, ctx)` returned `true` even on a resource with no relationships. `subjectEntries` kept the key with zero ids, so the empty-subject guard did not fire. `Engine.CheckPermission*` then looped over zero ids and returned `nil`, which the builtin maps to granted. A Rego policy that builds the subject from request input (e.g. `{"extsvc/user": input.user_ids}`) granted access whenever that list was empty. Both `SpiceDBBuiltins` and `RegisterSpiceDBBuiltinsGlobal` were affected. Typed `Check<Perm>` methods were not affected: they already return `authz.ErrNoInput` on empty input. **Upgrade and regenerate every `opa.gen.go`** — the fix lives in generated code. See `jobs/AUZ-026-opa-empty-subject-fail-open.md`.
+- **OPA builtins granted access for an empty subject ID list (fail-open), `v1.14.0`–`v1.15.0` and untagged `v2` commits on `main`.** `<pkg>.check_<res>_<perm>({"<type>": []}, id, ctx)` returned `true` even on a resource with no relationships. `subjectEntries` kept the key with zero ids, so the empty-subject guard did not fire. `Engine.CheckPermission*` then looped over zero ids and returned `nil`, which the builtin maps to granted. A Rego policy that builds the subject from request input (e.g. `{"extsvc/user": input.user_ids}`) granted access whenever that list was empty. Both `SpiceDBBuiltins` and `RegisterSpiceDBBuiltinsGlobal` were affected. Typed `Check<Perm>` methods were not affected: they already return `authz.ErrNoInput` on empty input. **Upgrade and regenerate every `opa.gen.go`** — the fix lives in generated code. See `jobs/AUZ-026-opa-empty-subject-fail-open.md`.
 
 ### Breaking (correctness fix)
 
@@ -43,6 +45,8 @@ Released as a Minor under the correctness-fix exception now documented in README
 - Input types are still computed as the union of every branch, regardless of operator (unchanged behavior). Types reachable only through the right side of `-`, or through a single arm of `&`, still appear as fields that SpiceDB always denies. Narrowing them would remove fields from generated structs, which is a breaking change, and is deferred.
 
 ## [2.0.0] - 2026-11-13
+
+> **Never tagged.** These changes were merged to `main` but not released. They ship first in `v2.1.0`, which also fixes the OPA fail-open above. `v2.0.0` is deliberately not published, so that no tagged release carries that vulnerability.
 
 **BREAKING.** This is the project's first MAJOR release. The module's import path moves to `github.com/danhtran94/authzed-codegen/v2`, per Go's semantic import versioning — every import of this module (and the generated code's own imports of `pkg/authz`) must add the `/v2` segment.
 
