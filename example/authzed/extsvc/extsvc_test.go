@@ -2715,3 +2715,63 @@ func TestFolder_SubnetCheck_OutOfCidr_Denied(t *testing.T) {
 	assert.ErrorIs(t, err, authz.ErrPermissionDenied,
 		"client_ip outside 10.0.0.0/24 → in_cidr false → denied")
 }
+
+// AUZ-025 — nested rewrite `(viewer + tenanted_viewer + collab) - nested_banned`.
+// The userset branch (collab) sits after the first union child; before
+// AUZ-025 the generated inputs had no TeamAdmin field to ask this.
+func TestFolder_CheckNestedAccess_UsersetBranch(t *testing.T) {
+	ctx := context.Background()
+
+	team := extsvc.Team("t-nested")
+	folder := extsvc.Folder("f-nested-us")
+	require.NoError(t, folder.CreateCollabRelations(ctx, extsvc.FolderCollabObjects{
+		TeamAdmin: []extsvc.Team{team},
+	}))
+
+	ok, err := folder.CheckNestedAccess(ctx, extsvc.CheckFolderNestedAccessInputs{
+		TeamAdmin: []extsvc.Team{team},
+	})
+	require.NoError(t, err)
+	assert.True(t, ok, "collab branch of the nested union grants the team#admin userset")
+}
+
+// AUZ-025 — caveated branch (tenanted_viewer) of the nested union. Before
+// AUZ-025 the generated inputs had no Caveats field, so this user always
+// came back conditional/denied through the typed stub.
+func TestFolder_CheckNestedAccess_CaveatedBranch(t *testing.T) {
+	ctx := context.Background()
+
+	folder := extsvc.Folder("f-nested-cav")
+	require.NoError(t, folder.CreateTenantedViewerRelations(ctx, extsvc.FolderTenantedViewerObjects{
+		User: []extsvc.User{"u-nested-cav"},
+	}))
+
+	ok, err := folder.CheckNestedAccess(ctx, extsvc.CheckFolderNestedAccessInputs{
+		User: []extsvc.User{"u-nested-cav"},
+		Caveats: extsvc.CheckFolderNestedAccessCaveats{
+			TenantMatch: &extsvc.TenantMatchArgs{Tenant: new("acme")},
+		},
+	})
+	require.NoError(t, err)
+	assert.True(t, ok)
+}
+
+// AUZ-025 — the exclusion still applies: a viewer who is also
+// nested_banned is denied.
+func TestFolder_CheckNestedAccess_Banned(t *testing.T) {
+	ctx := context.Background()
+
+	folder := extsvc.Folder("f-nested-ban")
+	user := extsvc.User("u-nested-ban")
+	require.NoError(t, folder.CreateViewerRelations(ctx, extsvc.FolderViewerObjects{
+		User: []extsvc.User{user},
+	}))
+	require.NoError(t, folder.CreateNestedBannedRelations(ctx, extsvc.FolderNestedBannedObjects{
+		User: []extsvc.User{user},
+	}))
+
+	_, err := folder.CheckNestedAccess(ctx, extsvc.CheckFolderNestedAccessInputs{
+		User: []extsvc.User{user},
+	})
+	assert.ErrorIs(t, err, authz.ErrPermissionDenied)
+}

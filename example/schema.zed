@@ -430,6 +430,14 @@ definition extsvc/folder {
 	// (same type, same ID, no sub-relation).
 	relation parent_for_self: extsvc/folder
 	permission ancestor_or_self = self + parent_for_self->ancestor_or_self
+
+	// AUZ-025 — nested rewrite. Mixing `+` with `-` makes SpiceDB emit
+	// the union as a nested UsersetRewrite child of the exclusion. Every
+	// branch of that union must reach Check inputs: viewer's three
+	// direct types, tenanted_viewer's tenant_match caveat, and collab's
+	// team#admin userset. Pre-AUZ-025 only the first branch survived.
+	relation nested_banned: extsvc/user
+	permission nested_access = (viewer + tenanted_viewer + collab) - nested_banned
 }
 
 definition extsvc/document {

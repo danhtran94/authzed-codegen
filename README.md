@@ -585,6 +585,7 @@ Starting with **v1.10.0**, this project commits to [Semantic Versioning](https:/
 - **Major** (`v2.0.0`) — breaking changes to the `Engine` interface, runtime types in `pkg/authz/`, generated method signatures, or the codegen output structure.
 - **Minor** (`v1.11.0`+) — additive features: new generated methods, new runtime helpers, new schema constructs, new Engine methods.
 - **Patch** (`v1.10.1`) — bug fixes, doc corrections, codegen output stability fixes that don't change the typed surface.
+- **Correctness-fix exception (since v2.1.0)** — when a codegen bug made a generated signature *wrong* (unable to express what SpiceDB actually evaluates), and the fix necessarily changes that generated signature for the affected schemas only, the fix ships in a **Minor** release. The CHANGELOG then carries a `### Breaking (correctness fix)` section that names the exact schema shape affected and the call-site migration. The `Engine` interface and the runtime types in `pkg/authz/` are not covered by this exception: breaking changes there still require a major bump.
 
 The **v1.0–v1.9 line** was active development. Several minor releases included breaking changes to the `Engine` interface and generated method signatures (notably v1.4 changed `ReadRelations` return type, v1.7 changed `Lookup*` return types). That pattern ends at v1.10 — going forward, breaking changes require a major bump to v2.0.
 
