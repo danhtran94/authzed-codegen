@@ -35,6 +35,7 @@ integration in `docs/RFC-001-policy-engine-integration-patterns.md`.
     internal/utilstr/         → string-mangling helpers (PascalCase, package names)
     pkg/authz/                → runtime types (Type, Relation, Permission, Engine)
     pkg/authz/spicedb/        → SpiceDB engine implementation
+    studio/                   → EXPERIMENTAL headless engine for out-of-tree tooling (ADR-007)
     example/                  → schema.zed + checked-in generated output (bookingsvc, menusvc, extsvc); opa.gen.go committed
     example/opa-embed/        → runnable all-embedded demo (SpiceDB + OPA runtime + generated builtins, one binary)
     docs/                     → ADRs, RFCs, scope notes, SPECs
@@ -45,6 +46,7 @@ integration in `docs/RFC-001-policy-engine-integration-patterns.md`.
 - `pkg/authz/` defines the runtime contract (interfaces, ID types). Generated code imports it. It must not import `internal/`.
 - `internal/generator/` owns the proto-to-template adapter. Proto types from `github.com/authzed/spicedb/pkg/proto/core/v1` only appear in `adapter.go` — the rest of the generator consumes `*DefinitionView`.
 - `internal/templates/` is import-free except `embed`. The template's `gotype` comment names `generator.DefinitionView`.
+- `studio/` may import `internal/generator` but never re-exports internal types; headless engine logic only, no new `go.mod` requires. `pkg/authz/` and generated code must not import `studio/`. See `docs/ADR-007-studio-experimental-package.md`.
 - `cmd/authzed-codegen/` is pure wiring: read file → `compiler.Compile` → `generator.AdaptDefinitions` → `Generator.GenerateObjectSource`.
 
 ## Build / verify
