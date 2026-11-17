@@ -4,14 +4,27 @@ All notable changes to this project are documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.0.1] - 2026-11-18
+## [2.1.0] - Unreleased
 
 Nested permission rewrites dropped every branch after the first. A permission that mixes operators, such as `(viewer + editor) - banned`, is compiled by SpiceDB into a nested `UsersetRewrite`. `lowerSetOperationChild` kept only `exprs[0]` of that nested node, so the generated `Check<Perm>Inputs`, `Lookup*` methods and `--emit-opa` builtins lost every subject type, userset field and caveat-context field reachable only through the later branches. SpiceDB still granted those branches, but the typed stub had no way to ask; a user granted only through a dropped caveated branch always came back denied. Fail-closed — no permission was ever over-granted. See `jobs/AUZ-025-nested-rewrite-flatten-fix.md`.
 
 ### Fixed
 
 - **`internal/generator/adapter.go`**: `lowerSetOperationChild` now returns `[]PermissionExpr`, and its nested-rewrite case returns every branch; `lowerUsersetRewrite` appends them all.
-- **Generated code (additive only)**: for schemas with nested rewrites, `Check<Perm>Inputs` / `Lookup*` / OPA builtins gain the previously missing type, userset and `Caveats` fields. Existing call sites keep compiling. Generated code for schemas without nested rewrites is byte-identical.
+- **Generated code**: for schemas with nested rewrites, `Check<Perm>Inputs` (also taken by `Lookup<Perm><Resource>Resources`) and the OPA builtins gain the previously missing type, userset and `Caveats` fields. These struct changes are additive. One signature change is not: see Breaking below. Generated code for schemas without nested rewrites is byte-identical.
+
+### Breaking (correctness fix)
+
+Released as a Minor under the correctness-fix exception now documented in README § Versioning.
+
+- **Affected schemas:** a permission that mixes operators (`(a + b) - c`, `(a + b) & c`) where a caveat is reachable **only** through a nested branch after the first. Example: `access = (viewer + gated) - banned` with the caveat only on `gated`.
+- **What changes:** `Lookup<Perm><Type>Subjects(ctx)` becomes `Lookup<Perm><Type>Subjects(ctx, caveats Check<Resource><Perm>Caveats)`. The old signature had no way to supply that caveat's context.
+- **Migration:** `doc.LookupAccessUserSubjects(ctx)` → `doc.LookupAccessUserSubjects(ctx, CheckDocAccessCaveats{})`. The zero value reproduces the previous call: no caveat context is sent.
+- **Unaffected:** `Check<Perm>`, `Lookup<Perm><Resource>Resources`, wildcard lookups, OPA builtin declarations, and every schema without nested rewrites.
+
+### Changed
+
+- **Versioning policy** (README § Versioning): adds the correctness-fix exception described above.
 
 ### Added
 

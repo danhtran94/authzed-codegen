@@ -251,4 +251,4 @@ No new errors are introduced. One existing error is **removed** for intersection
 | Ticket                                                   | Title                                                                                                | Created    | Status |
 |----------------------------------------------------------|------------------------------------------------------------------------------------------------------|------------|--------|
 | (initial)                                                | Intersection / Exclusion Codegen Semantics — implements docs/scope-intersection-exclusion-codegen.md | 2026-05-05 | Draft  |
-| [AUZ-025](../jobs/AUZ-025-nested-rewrite-flatten-fix.md) | Flatten every branch of nested permission rewrites (v2.0.1)                                          | 2026-11-18 | Done   |
+| [AUZ-025](../jobs/AUZ-025-nested-rewrite-flatten-fix.md) | Flatten every branch of nested permission rewrites (v2.1.0)                                          | 2026-11-18 | Done   |

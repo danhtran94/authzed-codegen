@@ -1,5 +1,5 @@
 <!-- approved -->
-# AUZ-025: Flatten every branch of nested permission rewrites (v2.0.1)
+# AUZ-025: Flatten every branch of nested permission rewrites (v2.1.0)
 
 | Field      | Value                                          |
 |------------|------------------------------------------------|
@@ -13,7 +13,7 @@
 
 `lowerSetOperationChild` (`internal/generator/adapter.go`) returns **every** `PermissionExpr` produced by a nested `UsersetRewrite` child instead of only `exprs[0]`. After the fix, a permission such as `(viewer + tenanted_viewer + collab) - nested_banned` produces generated `Check<Perm>Inputs` / `Lookup*` / OPA builtin signatures that carry every subject type, userset field and caveat-context field reachable through any branch of the nested union. This matches what the flat form `viewer + tenanted_viewer + collab` already produces.
 
-The fixture `example/schema.zed` gains such a nested permission on `extsvc/folder`. New e2e tests in `example/authzed/extsvc/extsvc_test.go` prove that SpiceDB grants through the previously dropped branches, and that the generated stub can now express those checks. The release is `v2.0.1`.
+The fixture `example/schema.zed` gains such a nested permission on `extsvc/folder`. New e2e tests in `example/authzed/extsvc/extsvc_test.go` prove that SpiceDB grants through the previously dropped branches, and that the generated stub can now express those checks. The release is `v2.1.0` (originally planned as `v2.0.1`; see Discoveries).
 
 ## Problem
 
@@ -117,7 +117,7 @@ The fix lives in the lowering step, so every downstream consumer (resolver, walk
 
 | # | Task | File | Status |
 |---|------|------|--------|
-| 6.1 | New `[2.0.1]` entry under `### Fixed`: nested permission rewrites dropped every branch after the first; generated input structs now include the missing types, usersets and caveat fields (additive) | `CHANGELOG.md` | [x] |
+| 6.1 | New `[2.1.0]` entry (originally `[2.0.1]`) under `### Fixed`: nested permission rewrites dropped every branch after the first; generated input structs now include the missing types, usersets and caveat fields (additive) | `CHANGELOG.md` | [x] |
 | 6.2 | Append an erratum note to the `lowerSetOperationChild` section stating that the "return the first" assumption was false and pointing to AUZ-025. Do not rewrite the historical spec body. | `docs/spec-001-intersection-exclusion-codegen.md` | [x] |
 
 ## Design Decisions
@@ -126,9 +126,9 @@ The fix lives in the lowering step, so every downstream consumer (resolver, walk
 
 `lowerUsersetRewrite` already treats intersection and exclusion as a union of all children (`adapter.go:584-594`). A top-level `viewer - banned` therefore already contributes `banned`'s types to the inputs. This job applies the same rule one level down and does not change it. Over-inclusion is fail-closed: SpiceDB still evaluates the operator and denies. Making input types operator-exact (intersection = type intersection, exclusion = left side only) would remove fields from generated structs, which is a breaking change and belongs to the operator-tree work, not to this PATCH.
 
-### PATCH, not MINOR
+### ~~PATCH, not MINOR~~ → MINOR under a correctness-fix exception (revised after review)
 
-Generated code for schemas without nested rewrites is byte-identical. For schemas with nested rewrites, generated structs only gain fields, so existing call sites keep compiling. The public `pkg/authz` API is untouched.
+Generated code for schemas without nested rewrites is byte-identical. For schemas with nested rewrites, generated structs only gain fields. However, `Lookup<Perm><Type>Subjects` gains a required `caveats` parameter when a caveat is reachable only through a later nested branch. That is a generated-signature break, released as MINOR under the README's correctness-fix exception (see Discoveries). The public `pkg/authz` API is untouched.
 
 ## What Stays Unchanged
 
@@ -169,3 +169,11 @@ Per the Notes, the fixture permission was added and regenerated with the **unfix
 ### [Reviewer] Verification summary
 
 `go build ./...`, `go vet ./...`, `gofmt -l .` (empty), `go mod tidy` (no diff), regeneration round-trip (zero diff on a second regeneration), CI-pinned `golangci-lint` (0 issues) and `govulncheck` (none), and `go test ./... -count=1` all pass. The full run includes the four new `*NestedAccess*` e2e tests, confirmed executed (not skipped) against the SpiceDB testcontainer.
+
+### [Reviewer] CodeRabbit on #13: one generated signature is not additive
+
+The "only gains fields" claim held for every struct, but not for `Lookup<Perm><Type>Subjects`. `object.go.tmpl:323` appends a `caveats` parameter when `hasPermCaveats` is true. A schema whose caveat sits only in a nested branch after the first flips that predicate from false to true, so the regenerated method gains a required argument. Verified on 2026-11-18 by generating `access = (viewer + gated) - banned` with `origin/main` and with this branch. Only `LookupAccessUserSubjects(ctx)` → `(ctx, caveats CheckDocAccessCaveats)` differs; `CheckAccess`, `LookupAccessDocResources`, the wildcard lookup and the OPA builtin declarations are identical.
+
+That breaks README § Versioning ("generated method signatures require a major bump"). The owner chose a documented correctness-fix exception over a `/v3` module move. README § Versioning gains the exception, CHANGELOG gains a `### Breaking (correctness fix)` section with the exact trigger and migration, and the release becomes `v2.1.0`, shipped together with AUZ-026. The original "PATCH, not MINOR" decision above is superseded.
+
+The other two CodeRabbit findings on #13 are pre-existing and out of scope here. The OPA empty-subject fail-open became AUZ-026 (#14). The userset-blind `Lookup<Perm><Resource>Resources` template is tracked as AUZ-027.
