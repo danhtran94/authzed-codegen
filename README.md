@@ -72,7 +72,7 @@ a complete schema and its generated output.
 | Intersection (`&`), exclusion (`-`)    | ✓                                                                                               |
 | Caveats (`with <caveat>`)              | ✓ — typed `<Pascal>Args` per caveat; nested `Caveats` sub-struct on `<Rel>Objects` and `Check<Perm>Inputs`; multi-caveat-per-permission supported |
 | Expiration (`with expiration`)         | ✓ — per-tuple TTL via `Expirations` sub-struct on `<Rel>Objects`; auto-switches to `OPERATION_TOUCH`; combines with caveats |
-| Sub-relation references (`foo#bar`)    | ✓ — typed userset write field (`<TypeName><PascalSubRel>`) on `<Rel>Objects`; userset Check input field; `SubRelation` on metadata struct |
+| Sub-relation references (`foo#bar`)    | ✓ — typed userset write field (`<TypeName><PascalSubRel>`) on `<Rel>Objects`; userset Check / Lookup-resources input field; `SubRelation` on metadata struct |
 | Functioned arrows (`.any()` / `.all()`) | ✓ — server-side function semantic; `.all()` enforces strict-intersection across parent rows (dual-control / multi-approver patterns) |
 | `_self` (`use self`)                    | ✓ — identity-match base case for recursive permissions (`permission ancestor_or_self = self + parent->ancestor_or_self`) — tree-walk patterns |
 | `_this`, `_nil`                         | ✗ rejected at adapt time. `_this` is fully deprecated upstream per the SpiceDB proto; modern schemas don't emit it. `_nil` is a compiler-internal optimization marker users don't write directly. |
@@ -285,6 +285,8 @@ ok, _ := folder.CheckCollabView(ctx, extsvc.CheckFolderCollabViewInputs{
 ```
 
 Permissions reaching userset allowed types expose userset input fields on `Check<Perm>Inputs`. The userset-as-subject Check (rare case) matches the literal userset reference — useful for "does this group itself have permission?" admin/audit tooling. Direct-subject Check (the common case) walks the chain transparently when the schema includes both branches.
+
+Since v2.2.0 the same userset input fields also drive `Lookup<Perm><Resource>Resources` through `Engine.LookupResourcesUserset`, with the same literal-userset semantics. `LookupCollabViewFolderResources(ctx, CheckFolderCollabViewInputs{TeamAdmin: []extsvc.Team{team}})` returns the folders that grant `team#admin`. Direct input types keep precedence: when both a direct type and a userset field are set, the lookup uses the direct type (AUZ-027).
 
 Read-side rows surface a `SubRelation` field on the metadata struct — empty for direct subjects, non-empty for userset references. Mixed schemas (`relation viewer: user | team#admin`) produce distinct Read methods per subject type (`ReadViewerUserRelations` and `ReadViewerTeamRelations`); each returns disjoint rows.
 

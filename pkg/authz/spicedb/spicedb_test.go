@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/danhtran94/authzed-codegen/v2/pkg/authz"
 	"github.com/danhtran94/authzed-codegen/v2/pkg/authz/spicedbtest"
@@ -51,4 +52,24 @@ func TestEngine_Check_EmptyIDs_ReturnsErrNoInput(t *testing.T) {
 		assert.ErrorIs(t, eng.CheckPermissionWithCaveat(ctx, folder, "tenanted_browse", "extsvc/user", ids, map[string]any{"tenant": "acme"}), authz.ErrNoInput)
 		assert.ErrorIs(t, eng.CheckPermissionUserset(ctx, folder, "collab_view", "extsvc/team", ids, "admin", nil), authz.ErrNoInput)
 	}
+}
+
+// AUZ-027 — userset-as-subject lookup matches the literal userset
+// reference, like CheckPermissionUserset (SPEC-006 A2).
+func TestEngine_LookupResourcesUserset_LiteralMatch(t *testing.T) {
+	ctx := context.Background()
+	eng := authz.GetEngine(ctx)
+	folder := authz.Resource{Type: "extsvc/folder", ID: "lk-us-f1"}
+
+	if err := eng.CreateRelationsToUserset(ctx, folder, "collab", "extsvc/team", []authz.ID{"lk-us-t1"}, "admin", "", nil, time.Time{}); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := eng.LookupResourcesUserset(ctx, "extsvc/folder", "collab_view", "extsvc/team", []authz.ID{"lk-us-t1"}, "admin", nil)
+	assert.NoError(t, err)
+	assert.Equal(t, []authz.ID{"lk-us-f1"}, got.Definite)
+
+	got, err = eng.LookupResourcesUserset(ctx, "extsvc/folder", "collab_view", "extsvc/team", []authz.ID{"lk-us-other"}, "admin", nil)
+	assert.NoError(t, err)
+	assert.Empty(t, got.Definite)
 }

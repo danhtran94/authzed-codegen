@@ -248,6 +248,11 @@ type Engine interface {
 	CheckPermissionUserset(ctx context.Context, dest Resource, has Permission, subject Type, audIDs []ID, subRelation string, caveatParams map[string]any) error
 	LookupResources(ctx context.Context, from Type, match Permission, subject Type, byIDs []ID) (LookupResult, error)
 	LookupResourcesWithCaveat(ctx context.Context, from Type, match Permission, subject Type, byIDs []ID, caveatParams map[string]any) (LookupResult, error)
+	// LookupResourcesUserset looks up resources for the userset subject
+	// `subject:id#subRelation`. Like CheckPermissionUserset it matches the
+	// literal userset reference (no membership expansion); nil caveatParams
+	// sends no request-time context (AUZ-027).
+	LookupResourcesUserset(ctx context.Context, from Type, match Permission, subject Type, byIDs []ID, subRelation string, caveatParams map[string]any) (LookupResult, error)
 	LookupSubjects(ctx context.Context, on Resource, permission Permission, subject Type) (LookupResult, error)
 	LookupSubjectsWithCaveat(ctx context.Context, on Resource, permission Permission, subject Type, caveatParams map[string]any) (LookupResult, error)
 	ReadRelations(ctx context.Context, from Resource, relation Relation, subject Type) ([]RelationTuple, error)

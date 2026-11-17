@@ -5024,6 +5024,30 @@ func (folder Folder) CheckCollabView(ctx context.Context, input CheckFolderColla
 
 func LookupCollabViewFolderResources(ctx context.Context, input CheckFolderCollabViewInputs) (FolderLookupResult, error) {
 
+	if len(input.TeamAdmin) > 0 {
+		// Userset input (AUZ-027) — after direct types, which keep precedence.
+		result, err := authz.GetEngine(ctx).LookupResourcesUserset(ctx,
+			TypeFolder, authz.Permission(FolderCollabView),
+			TypeTeam, authz.IDs(input.TeamAdmin), "admin",
+			nil,
+		)
+		if err != nil {
+			return FolderLookupResult{}, err
+		}
+
+		out := FolderLookupResult{
+			Definite:    authz.FromIDs[Folder](result.Definite),
+			Conditional: make([]FolderConditionalLookupEntry, 0, len(result.Conditional)),
+		}
+		for _, c := range result.Conditional {
+			out.Conditional = append(out.Conditional, FolderConditionalLookupEntry{
+				ID:          Folder(c.ID),
+				MissingKeys: c.MissingKeys,
+			})
+		}
+		return out, nil
+	}
+
 	return FolderLookupResult{}, nil
 }
 
@@ -5067,6 +5091,29 @@ func LookupMixedBrowseFolderResources(ctx context.Context, input CheckFolderMixe
 		result, err := authz.GetEngine(ctx).LookupResources(ctx,
 			TypeFolder, authz.Permission(FolderMixedBrowse),
 			TypeUser, authz.IDs(input.User),
+		)
+		if err != nil {
+			return FolderLookupResult{}, err
+		}
+
+		out := FolderLookupResult{
+			Definite:    authz.FromIDs[Folder](result.Definite),
+			Conditional: make([]FolderConditionalLookupEntry, 0, len(result.Conditional)),
+		}
+		for _, c := range result.Conditional {
+			out.Conditional = append(out.Conditional, FolderConditionalLookupEntry{
+				ID:          Folder(c.ID),
+				MissingKeys: c.MissingKeys,
+			})
+		}
+		return out, nil
+	}
+	if len(input.TeamAdmin) > 0 {
+		// Userset input (AUZ-027) — after direct types, which keep precedence.
+		result, err := authz.GetEngine(ctx).LookupResourcesUserset(ctx,
+			TypeFolder, authz.Permission(FolderMixedBrowse),
+			TypeTeam, authz.IDs(input.TeamAdmin), "admin",
+			nil,
 		)
 		if err != nil {
 			return FolderLookupResult{}, err
@@ -5136,6 +5183,30 @@ func LookupGatedCollabViewFolderResources(ctx context.Context, input CheckFolder
 		}
 	}
 
+	if len(input.TeamAdmin) > 0 {
+		// Userset input (AUZ-027) — after direct types, which keep precedence.
+		result, err := authz.GetEngine(ctx).LookupResourcesUserset(ctx,
+			TypeFolder, authz.Permission(FolderGatedCollabView),
+			TypeTeam, authz.IDs(input.TeamAdmin), "admin",
+			caveatCtx,
+		)
+		if err != nil {
+			return FolderLookupResult{}, err
+		}
+
+		out := FolderLookupResult{
+			Definite:    authz.FromIDs[Folder](result.Definite),
+			Conditional: make([]FolderConditionalLookupEntry, 0, len(result.Conditional)),
+		}
+		for _, c := range result.Conditional {
+			out.Conditional = append(out.Conditional, FolderConditionalLookupEntry{
+				ID:          Folder(c.ID),
+				MissingKeys: c.MissingKeys,
+			})
+		}
+		return out, nil
+	}
+
 	return FolderLookupResult{}, nil
 }
 
@@ -5164,6 +5235,30 @@ func (folder Folder) CheckTempCollabView(ctx context.Context, input CheckFolderT
 }
 
 func LookupTempCollabViewFolderResources(ctx context.Context, input CheckFolderTempCollabViewInputs) (FolderLookupResult, error) {
+
+	if len(input.TeamAdmin) > 0 {
+		// Userset input (AUZ-027) — after direct types, which keep precedence.
+		result, err := authz.GetEngine(ctx).LookupResourcesUserset(ctx,
+			TypeFolder, authz.Permission(FolderTempCollabView),
+			TypeTeam, authz.IDs(input.TeamAdmin), "admin",
+			nil,
+		)
+		if err != nil {
+			return FolderLookupResult{}, err
+		}
+
+		out := FolderLookupResult{
+			Definite:    authz.FromIDs[Folder](result.Definite),
+			Conditional: make([]FolderConditionalLookupEntry, 0, len(result.Conditional)),
+		}
+		for _, c := range result.Conditional {
+			out.Conditional = append(out.Conditional, FolderConditionalLookupEntry{
+				ID:          Folder(c.ID),
+				MissingKeys: c.MissingKeys,
+			})
+		}
+		return out, nil
+	}
 
 	return FolderLookupResult{}, nil
 }
@@ -5822,6 +5917,29 @@ func LookupNestedAccessFolderResources(ctx context.Context, input CheckFolderNes
 		result, err := authz.GetEngine(ctx).LookupResourcesWithCaveat(ctx,
 			TypeFolder, authz.Permission(FolderNestedAccess),
 			TypeRole, authz.IDs(input.Role),
+			caveatCtx,
+		)
+		if err != nil {
+			return FolderLookupResult{}, err
+		}
+
+		out := FolderLookupResult{
+			Definite:    authz.FromIDs[Folder](result.Definite),
+			Conditional: make([]FolderConditionalLookupEntry, 0, len(result.Conditional)),
+		}
+		for _, c := range result.Conditional {
+			out.Conditional = append(out.Conditional, FolderConditionalLookupEntry{
+				ID:          Folder(c.ID),
+				MissingKeys: c.MissingKeys,
+			})
+		}
+		return out, nil
+	}
+	if len(input.TeamAdmin) > 0 {
+		// Userset input (AUZ-027) — after direct types, which keep precedence.
+		result, err := authz.GetEngine(ctx).LookupResourcesUserset(ctx,
+			TypeFolder, authz.Permission(FolderNestedAccess),
+			TypeTeam, authz.IDs(input.TeamAdmin), "admin",
 			caveatCtx,
 		)
 		if err != nil {

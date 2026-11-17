@@ -4,6 +4,20 @@ All notable changes to this project are documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - Unreleased
+
+### Added
+
+- **`authz.Engine.LookupResourcesUserset(ctx, from, match, subject, byIDs, subRelation, caveatParams)`**, the lookup counterpart of `CheckPermissionUserset`. It sets `SubjectReference.OptionalRelation` and matches the literal userset reference; nil `caveatParams` sends no request-time context. **Custom `Engine` implementations must add this method.** New `Engine` methods are Minor per README § Versioning, the same as `DeleteRelationsMatching` in v1.15.0. See `jobs/AUZ-027-userset-lookup-resources.md`.
+
+### Fixed
+
+- **Generated `Lookup<Perm><Resource>Resources` ignored userset input fields** (since SPEC-006 / AUZ-011). A `TeamAdmin`-only input returned an empty result without calling the engine, while `Check<Perm>` answered the same input; for example, `LookupCollabViewFolderResources` had an empty body. Userset fields now route through `LookupResourcesUserset`, after the direct input types. Callers that set a direct type see no change. Regenerate `.gen.go` files.
+
+### Changed
+
+- **`*spicedb.Engine.LookupResourcesWithCaveat`** now shares one unexported `lookupResources` helper with `LookupResourcesUserset`. Its behavior is unchanged.
+
 ## [2.1.0] - 2026-11-18
 
 **First tagged v2 release.** It includes everything listed under [2.0.0] below, including the `/v2` module-path change: upgrading from `v1.15.0` means updating every import to `github.com/danhtran94/authzed-codegen/v2`.
