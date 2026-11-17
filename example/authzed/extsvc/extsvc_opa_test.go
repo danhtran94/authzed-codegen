@@ -225,3 +225,60 @@ allow if extsvc.check_folder_browse({"extsvc/user": "opa-u-glob-1"}, "opa-glob-1
 	require.NotEmpty(t, rs)
 	assert.Equal(t, true, rs[0].Expressions[0].Value, "globally-registered builtin resolves without per-instance options")
 }
+
+// evalOPA evaluates query against a one-rule policy using the per-instance
+// builtins and returns the first result (nil when undefined).
+func evalOPA(t *testing.T, ctx context.Context, query, rule string) any {
+	t.Helper()
+	opts := []func(*rego.Rego){
+		rego.Query(query),
+		rego.Module("test.rego", "package test\nimport future.keywords.if\n\n"+rule+"\n"),
+	}
+	opts = append(opts, extsvc.SpiceDBBuiltins(sb.Engine, ctx)...)
+	rs, err := rego.New(opts...).Eval(ctx)
+	require.NoError(t, err)
+	if len(rs) == 0 {
+		return nil
+	}
+	return rs[0].Expressions[0].Value
+}
+
+// AUZ-026 — an empty subject ID list must not grant. Before AUZ-026 the
+// entry with zero IDs slipped past the empty-entries guard, the engine
+// looped over nothing and returned nil, and the builtin returned true on
+// a folder with no tuples at all.
+func TestOPA_CheckFolderBrowse_EmptySubjectIDs_Denies(t *testing.T) {
+	ctx := context.Background()
+
+	got := evalOPA(t, ctx, "data.test.allow",
+		`allow := extsvc.check_folder_browse({"extsvc/user": []}, "opa-empty-ids-no-tuples", {})`)
+	assert.Equal(t, false, got, "empty subject ID list must deny")
+}
+
+// AUZ-026 — an empty key is treated as absent, matching the typed
+// CheckBrowse (which skips empty slices). The user key alone decides.
+func TestOPA_CheckFolderBrowse_EmptyKeyIgnored(t *testing.T) {
+	ctx := context.Background()
+
+	require.NoError(t, extsvc.Folder("opa-empty-key-chk").CreateViewerRelations(ctx, extsvc.FolderViewerObjects{
+		User: []extsvc.User{"opa-u-empty-key-chk"},
+	}))
+
+	got := evalOPA(t, ctx, "data.test.allow",
+		`allow := extsvc.check_folder_browse({"extsvc/group": [], "extsvc/user": ["opa-u-empty-key-chk"]}, "opa-empty-key-chk", {})`)
+	assert.Equal(t, true, got)
+}
+
+// AUZ-026 — lookup uses the first present key in sorted order. Before
+// AUZ-026 the empty "extsvc/group" key sorted first and won, returning [].
+func TestOPA_LookupFolderBrowse_EmptyKeyIgnored(t *testing.T) {
+	ctx := context.Background()
+
+	require.NoError(t, extsvc.Folder("opa-empty-key-lk").CreateViewerRelations(ctx, extsvc.FolderViewerObjects{
+		User: []extsvc.User{"opa-u-empty-key-lk"},
+	}))
+
+	got := evalOPA(t, ctx, "data.test.resources",
+		`resources := extsvc.lookup_folder_browse_resources({"extsvc/group": [], "extsvc/user": ["opa-u-empty-key-lk"]}, {})`)
+	assert.Equal(t, []any{"opa-empty-key-lk"}, got)
+}

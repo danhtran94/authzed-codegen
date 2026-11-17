@@ -365,6 +365,9 @@ func (e *Engine) DeleteRelationsMatching(ctx context.Context, f authz.RelationFi
 }
 
 func (e *Engine) CheckPermissionWithCaveat(ctx context.Context, dest authz.Resource, has authz.Permission, subject authz.Type, audIDs []authz.ID, caveatParams map[string]any) error {
+	if len(audIDs) == 0 {
+		return authz.ErrNoInput // never grant on an empty subject list (AUZ-026)
+	}
 	e.debugLog("Checking permission with caveat: dest=%v, has=%v, subject=%v, audIDs=%v, params=%v", dest, has, subject, audIDs, caveatParams)
 	consistency := e.getConsistencySnapshot(ctx)
 
@@ -477,6 +480,9 @@ func toAnySlice[T any](in []T) []any {
 }
 
 func (e *Engine) CheckPermission(ctx context.Context, dest authz.Resource, has authz.Permission, subject authz.Type, audIDs []authz.ID) error {
+	if len(audIDs) == 0 {
+		return authz.ErrNoInput // never grant on an empty subject list (AUZ-026)
+	}
 	e.debugLog("Checking permission: dest=%v, has=%v, subject=%v, audIDs=%v", dest, has, subject, audIDs)
 	consistency := e.getConsistencySnapshot(ctx)
 
@@ -635,6 +641,9 @@ func (e *Engine) LookupSubjectsWithCaveat(ctx context.Context, on authz.Resource
 // userset's membership (per SPEC-006 A2). The common case (does user u1 have view?)
 // continues to use CheckPermission / CheckPermissionWithCaveat.
 func (e *Engine) CheckPermissionUserset(ctx context.Context, dest authz.Resource, has authz.Permission, subject authz.Type, audIDs []authz.ID, subRelation string, caveatParams map[string]any) error {
+	if len(audIDs) == 0 {
+		return authz.ErrNoInput // never grant on an empty subject list (AUZ-026)
+	}
 	e.debugLog("Checking userset permission: dest=%v, has=%v, subject=%v#%v, audIDs=%v, params=%v", dest, has, subject, subRelation, audIDs, caveatParams)
 
 	var caveatCtx *structpb.Struct
