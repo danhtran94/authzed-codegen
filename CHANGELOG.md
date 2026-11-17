@@ -4,6 +4,20 @@ All notable changes to this project are documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - Unreleased
+
+### Security
+
+- **OPA builtins granted access for an empty subject ID list (fail-open), `v1.14.0`–`v2.0.0`.** `<pkg>.check_<res>_<perm>({"<type>": []}, id, ctx)` returned `true` even on a resource with no relationships. `subjectEntries` kept the key with zero ids, so the empty-subject guard did not fire. `Engine.CheckPermission*` then looped over zero ids and returned `nil`, which the builtin maps to granted. A Rego policy that builds the subject from request input (e.g. `{"extsvc/user": input.user_ids}`) granted access whenever that list was empty. Both `SpiceDBBuiltins` and `RegisterSpiceDBBuiltinsGlobal` were affected. Typed `Check<Perm>` methods were not affected: they already return `authz.ErrNoInput` on empty input. **Upgrade and regenerate every `opa.gen.go`** — the fix lives in generated code. See `jobs/AUZ-026-opa-empty-subject-fail-open.md`.
+
+### Fixed
+
+- **Generated `opa.gen.go`** (`internal/templates/opa.go.tmpl`): `subjectEntries` drops keys with an empty id list. An empty key now counts as absent, matching the typed `Check<Perm>` method and spec-013, and a subject with no ids returns `false` (check) / `[]` (lookup). This also fixes lookup builtins returning `[]` when an empty key sorted before a non-empty one, e.g. `{"extsvc/group": [], "extsvc/user": ["u"]}`.
+
+### Changed
+
+- **`*spicedb.Engine.CheckPermission`, `CheckPermissionWithCaveat`, `CheckPermissionUserset`** return `authz.ErrNoInput` for an empty `audIDs` instead of `nil` (vacuous grant). The contract is documented on the `authz.Engine` interface, and custom `Engine` implementations should follow it. A direct caller that relied on `nil` for an empty list now gets an error, which is fail-closed.
+
 ## [2.0.0] - 2026-11-13
 
 **BREAKING.** This is the project's first MAJOR release. The module's import path moves to `github.com/danhtran94/authzed-codegen/v2`, per Go's semantic import versioning — every import of this module (and the generated code's own imports of `pkg/authz`) must add the `/v2` segment.

@@ -407,7 +407,7 @@ Builtin signatures, one pair per `definition` × `permission`:
 <pkg>.lookup_<resource>_<perm>_resources(subject, caveat_context) -> []string
 ```
 
-`subject` is an object keyed by SpiceDB subject type, value a string id or a list of string ids — `{"extsvc/user": "alice"}` or `{"extsvc/user": ["a","b"], "extsvc/group": ["g"]}`. Check is AND across present keys (every present subject type must be granted), matching the typed `Check<Perm>` method; Lookup uses the first present key. `caveat_context` is always required; pass `{}` when no caveat applies. `authz.ErrPermissionDenied` / `authz.ErrConditionalPermission` map to `false`; any other engine error fails the Rego eval. Lookup builtins return definite results only.
+`subject` is an object keyed by SpiceDB subject type, value a string id or a list of string ids — `{"extsvc/user": "alice"}` or `{"extsvc/user": ["a","b"], "extsvc/group": ["g"]}`. Check is AND across present keys (every present subject type must be granted), matching the typed `Check<Perm>` method; Lookup uses the first present key. A key with an empty id list counts as absent, and a subject with no ids at all returns `false` / `[]` (since v2.1.0, AUZ-026). `caveat_context` is always required; pass `{}` when no caveat applies. `authz.ErrPermissionDenied` / `authz.ErrConditionalPermission` map to `false`; any other engine error fails the Rego eval. Lookup builtins return definite results only.
 
 A policy mixing RBAC and ReBAC:
 

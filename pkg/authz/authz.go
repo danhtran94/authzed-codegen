@@ -240,6 +240,9 @@ type Engine interface {
 	CreateRelationsWithCaveat(ctx context.Context, to Resource, relation Relation, subject Type, ids []ID, caveatName string, caveatParams map[string]any) error
 	CreateRelationsWithExpiration(ctx context.Context, to Resource, relation Relation, subject Type, ids []ID, caveatName string, caveatParams map[string]any, expiresAt time.Time) error
 	CreateRelationsToUserset(ctx context.Context, to Resource, relation Relation, subject Type, ids []ID, subRelation string, caveatName string, caveatParams map[string]any, expiresAt time.Time) error
+	// CheckPermission, CheckPermissionWithCaveat and CheckPermissionUserset
+	// return nil only when every ID in audIDs is granted. An empty audIDs is
+	// a caller error and returns ErrNoInput — never a vacuous grant (AUZ-026).
 	CheckPermission(ctx context.Context, dest Resource, has Permission, subject Type, audIDs []ID) error
 	CheckPermissionWithCaveat(ctx context.Context, dest Resource, has Permission, subject Type, audIDs []ID, caveatParams map[string]any) error
 	CheckPermissionUserset(ctx context.Context, dest Resource, has Permission, subject Type, audIDs []ID, subRelation string, caveatParams map[string]any) error
