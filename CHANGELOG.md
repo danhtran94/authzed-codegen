@@ -6,12 +6,11 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [2.1.0] - Unreleased
 
-Nested permission rewrites dropped every branch after the first. A permission that mixes operators, such as `(viewer + editor) - banned`, is compiled by SpiceDB into a nested `UsersetRewrite`. `lowerSetOperationChild` kept only `exprs[0]` of that nested node, so the generated `Check<Perm>Inputs`, `Lookup*` methods and `--emit-opa` builtins lost every subject type, userset field and caveat-context field reachable only through the later branches. SpiceDB still granted those branches, but the typed stub had no way to ask; a user granted only through a dropped caveated branch always came back denied. Fail-closed — no permission was ever over-granted. See `jobs/AUZ-025-nested-rewrite-flatten-fix.md`.
+Two fixes ship in this release. AUZ-026 is a **security fix** for the OPA builtins. AUZ-025 restores nested-rewrite branches that codegen silently dropped, and carries one correctness-fix signature change (see Breaking). Regenerate all `.gen.go` / `opa.gen.go` files after upgrading.
 
-### Fixed
+### Security
 
-- **`internal/generator/adapter.go`**: `lowerSetOperationChild` now returns `[]PermissionExpr`, and its nested-rewrite case returns every branch; `lowerUsersetRewrite` appends them all.
-- **Generated code**: for schemas with nested rewrites, `Check<Perm>Inputs` (also taken by `Lookup<Perm><Resource>Resources`) and the OPA builtins gain the previously missing type, userset and `Caveats` fields. These struct changes are additive. One signature change is not: see Breaking below. Generated code for schemas without nested rewrites is byte-identical.
+- **OPA builtins granted access for an empty subject ID list (fail-open), `v1.14.0`–`v2.0.0`.** `<pkg>.check_<res>_<perm>({"<type>": []}, id, ctx)` returned `true` even on a resource with no relationships. `subjectEntries` kept the key with zero ids, so the empty-subject guard did not fire. `Engine.CheckPermission*` then looped over zero ids and returned `nil`, which the builtin maps to granted. A Rego policy that builds the subject from request input (e.g. `{"extsvc/user": input.user_ids}`) granted access whenever that list was empty. Both `SpiceDBBuiltins` and `RegisterSpiceDBBuiltinsGlobal` were affected. Typed `Check<Perm>` methods were not affected: they already return `authz.ErrNoInput` on empty input. **Upgrade and regenerate every `opa.gen.go`** — the fix lives in generated code. See `jobs/AUZ-026-opa-empty-subject-fail-open.md`.
 
 ### Breaking (correctness fix)
 
@@ -22,8 +21,16 @@ Released as a Minor under the correctness-fix exception now documented in README
 - **Migration:** `doc.LookupAccessUserSubjects(ctx)` → `doc.LookupAccessUserSubjects(ctx, CheckDocAccessCaveats{})`. The zero value reproduces the previous call: no caveat context is sent.
 - **Unaffected:** `Check<Perm>`, `Lookup<Perm><Resource>Resources`, wildcard lookups, OPA builtin declarations, and every schema without nested rewrites.
 
+### Fixed
+
+- **Generated `opa.gen.go`** (`internal/templates/opa.go.tmpl`): `subjectEntries` drops keys with an empty id list. An empty key now counts as absent, matching the typed `Check<Perm>` method and spec-013, and a subject with no ids returns `false` (check) / `[]` (lookup). This also fixes lookup builtins returning `[]` when an empty key sorted before a non-empty one, e.g. `{"extsvc/group": [], "extsvc/user": ["u"]}`.
+- **Nested permission rewrites (AUZ-025)** dropped every branch after the first. A permission that mixes operators, such as `(viewer + editor) - banned`, is compiled by SpiceDB into a nested `UsersetRewrite`. `lowerSetOperationChild` kept only `exprs[0]` of that nested node, so the generated `Check<Perm>Inputs`, `Lookup*` methods and `--emit-opa` builtins lost every subject type, userset field and caveat-context field reachable only through the later branches. SpiceDB still granted those branches, but the typed stub had no way to ask; a user granted only through a dropped caveated branch always came back denied. Fail-closed — no permission was ever over-granted. See `jobs/AUZ-025-nested-rewrite-flatten-fix.md`.
+- **`internal/generator/adapter.go`**: `lowerSetOperationChild` now returns `[]PermissionExpr`, and its nested-rewrite case returns every branch; `lowerUsersetRewrite` appends them all.
+- **Generated code**: for schemas with nested rewrites, `Check<Perm>Inputs` (also taken by `Lookup<Perm><Resource>Resources`) and the OPA builtins gain the previously missing type, userset and `Caveats` fields. These struct changes are additive. One signature change is not: see Breaking below. Generated code for schemas without nested rewrites is byte-identical.
+
 ### Changed
 
+- **`*spicedb.Engine.CheckPermission`, `CheckPermissionWithCaveat`, `CheckPermissionUserset`** return `authz.ErrNoInput` for an empty `audIDs` instead of `nil` (vacuous grant). The contract is documented on the `authz.Engine` interface, and custom `Engine` implementations should follow it. A direct caller that relied on `nil` for an empty list now gets an error, which is fail-closed.
 - **Versioning policy** (README § Versioning): adds the correctness-fix exception described above.
 
 ### Added

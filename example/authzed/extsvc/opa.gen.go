@@ -8293,8 +8293,12 @@ type subjectEntry struct {
 
 // subjectEntries parses the subject object {"<namespace>": id | [id, ...]}
 // into entries sorted by namespace (deterministic — OPA's ast.Object
-// iteration order is not). Returns an error if the term is not an object,
-// has a non-string key, or a value that isn't a string or list of strings.
+// iteration order is not). Keys with an empty id list are dropped, so an
+// empty key counts as absent — matching the typed Check<X> method, which
+// skips empty slices — and a subject with no ids at all yields no entries,
+// which the callers' len(entries) == 0 guard turns into false / [] (AUZ-026).
+// Returns an error if the term is not an object, has a non-string key, or a
+// value that isn't a string or list of strings.
 func subjectEntries(t *ast.Term) ([]subjectEntry, error) {
 	obj, ok := t.Value.(ast.Object)
 	if !ok {
@@ -8314,6 +8318,9 @@ func subjectEntries(t *ast.Term) ([]subjectEntry, error) {
 		ids, err := idsFromTerm(v)
 		if err != nil {
 			iterErr = err
+			return
+		}
+		if len(ids) == 0 {
 			return
 		}
 		entries = append(entries, subjectEntry{Namespace: string(ks), IDs: ids})
