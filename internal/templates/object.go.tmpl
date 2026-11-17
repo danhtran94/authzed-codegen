@@ -316,6 +316,29 @@ func Lookup{{ snakeToPascal $perm.Name }}{{ $typeName }}Resources(ctx context.Co
     }
     return out, nil
   }
+  {{ end }}{{ range $u := permissionInputUsersets $objectType $perm.Name }}if len(input.{{ typeName $u.Namespace }}{{ pascalCaveat $u.SubRelation }}) > 0 {
+    // Userset input (AUZ-027) — after direct types, which keep precedence.
+    result, err := authz.GetEngine(ctx).LookupResourcesUserset(ctx,
+      Type{{ $typeName }}, authz.Permission({{ $typeName }}{{ snakeToPascal $perm.Name }}),
+      Type{{ typeName $u.Namespace }}, authz.IDs(input.{{ typeName $u.Namespace }}{{ pascalCaveat $u.SubRelation }}), "{{ $u.SubRelation }}",
+      {{ if hasPermCaveats $objectType $perm.Name }}caveatCtx{{ else }}nil{{ end }},
+    )
+    if err != nil {
+      return {{ $typeName }}LookupResult{}, err
+    }
+
+    out := {{ $typeName }}LookupResult{
+      Definite:    authz.FromIDs[{{ $typeName }}](result.Definite),
+      Conditional: make([]{{ $typeName }}ConditionalLookupEntry, 0, len(result.Conditional)),
+    }
+    for _, c := range result.Conditional {
+      out.Conditional = append(out.Conditional, {{ $typeName }}ConditionalLookupEntry{
+        ID:          {{ $typeName }}(c.ID),
+        MissingKeys: c.MissingKeys,
+      })
+    }
+    return out, nil
+  }
   {{ end }}
   return {{ $typeName }}LookupResult{}, nil
 }

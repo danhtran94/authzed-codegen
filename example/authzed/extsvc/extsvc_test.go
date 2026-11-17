@@ -2775,3 +2775,81 @@ func TestFolder_CheckNestedAccess_Banned(t *testing.T) {
 	})
 	assert.ErrorIs(t, err, authz.ErrPermissionDenied)
 }
+
+// AUZ-027 — userset-only input to Lookup*Resources. Before AUZ-027 the
+// generated body ignored TeamAdmin and returned an empty result without
+// calling the engine, while CheckCollabView answered the same input.
+func TestFolder_LookupCollabView_UsersetInput(t *testing.T) {
+	ctx := context.Background()
+
+	team := extsvc.Team("t-lk-collab")
+	folder := extsvc.Folder("f-lk-collab")
+	require.NoError(t, folder.CreateCollabRelations(ctx, extsvc.FolderCollabObjects{
+		TeamAdmin: []extsvc.Team{team},
+	}))
+
+	res, err := extsvc.LookupCollabViewFolderResources(ctx, extsvc.CheckFolderCollabViewInputs{
+		TeamAdmin: []extsvc.Team{team},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, []extsvc.Folder{folder}, res.Definite)
+	assert.Empty(t, res.Conditional)
+}
+
+// AUZ-027 — caveated userset. The tuple defers tenant binding to request
+// time: a matching tenant makes the folder definite; no caveat context
+// leaves it conditional on the missing key.
+func TestFolder_LookupGatedCollabView_UsersetWithCaveat(t *testing.T) {
+	ctx := context.Background()
+
+	team := extsvc.Team("t-lk-gated")
+	folder := extsvc.Folder("f-lk-gated")
+	require.NoError(t, folder.CreateGatedCollabRelations(ctx, extsvc.FolderGatedCollabObjects{
+		TeamAdmin: []extsvc.Team{team},
+	}))
+
+	res, err := extsvc.LookupGatedCollabViewFolderResources(ctx, extsvc.CheckFolderGatedCollabViewInputs{
+		TeamAdmin: []extsvc.Team{team},
+		Caveats: extsvc.CheckFolderGatedCollabViewCaveats{
+			TenantMatch: &extsvc.TenantMatchArgs{Tenant: new("acme")},
+		},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, []extsvc.Folder{folder}, res.Definite)
+
+	res, err = extsvc.LookupGatedCollabViewFolderResources(ctx, extsvc.CheckFolderGatedCollabViewInputs{
+		TeamAdmin: []extsvc.Team{team},
+	})
+	require.NoError(t, err)
+	assert.Empty(t, res.Definite)
+	require.Len(t, res.Conditional, 1)
+	assert.Equal(t, folder, res.Conditional[0].ID)
+	assert.Equal(t, []string{"tenant"}, res.Conditional[0].MissingKeys)
+}
+
+// AUZ-027 — direct input types keep precedence: with both User and
+// TeamAdmin set, the result is exactly the User-only lookup.
+func TestFolder_LookupMixedBrowse_DirectTypeWinsOverUserset(t *testing.T) {
+	ctx := context.Background()
+
+	user := extsvc.User("u-lk-mixed")
+	team := extsvc.Team("t-lk-mixed")
+	require.NoError(t, extsvc.Folder("f-lk-mixed-user").CreateMixedViewRelations(ctx, extsvc.FolderMixedViewObjects{
+		User: []extsvc.User{user},
+	}))
+	require.NoError(t, extsvc.Folder("f-lk-mixed-team").CreateMixedViewRelations(ctx, extsvc.FolderMixedViewObjects{
+		TeamAdmin: []extsvc.Team{team},
+	}))
+
+	both, err := extsvc.LookupMixedBrowseFolderResources(ctx, extsvc.CheckFolderMixedBrowseInputs{
+		User:      []extsvc.User{user},
+		TeamAdmin: []extsvc.Team{team},
+	})
+	require.NoError(t, err)
+	userOnly, err := extsvc.LookupMixedBrowseFolderResources(ctx, extsvc.CheckFolderMixedBrowseInputs{
+		User: []extsvc.User{user},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, userOnly, both)
+	assert.Equal(t, []extsvc.Folder{"f-lk-mixed-user"}, both.Definite)
+}

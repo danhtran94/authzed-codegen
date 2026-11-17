@@ -515,7 +515,22 @@ func (e *Engine) LookupResources(ctx context.Context, from authz.Type, match aut
 }
 
 func (e *Engine) LookupResourcesWithCaveat(ctx context.Context, from authz.Type, match authz.Permission, subject authz.Type, byIDs []authz.ID, caveatParams map[string]any) (authz.LookupResult, error) {
-	e.debugLog("Looking up resources: from=%v, match=%v, subject=%v, byIDs=%v, caveatParams=%v", from, match, subject, byIDs, caveatParams)
+	return e.lookupResources(ctx, from, match, subject, byIDs, "", caveatParams)
+}
+
+// LookupResourcesUserset is LookupResourcesWithCaveat with the subject as
+// a userset reference (`subject:id#subRelation`), set via
+// SubjectReference.OptionalRelation — the lookup counterpart of
+// CheckPermissionUserset (AUZ-027).
+func (e *Engine) LookupResourcesUserset(ctx context.Context, from authz.Type, match authz.Permission, subject authz.Type, byIDs []authz.ID, subRelation string, caveatParams map[string]any) (authz.LookupResult, error) {
+	return e.lookupResources(ctx, from, match, subject, byIDs, subRelation, caveatParams)
+}
+
+// lookupResources runs one LookupResources stream per subject id and maps
+// the results into Definite / Conditional. subRelation == "" looks up
+// the plain object subject.
+func (e *Engine) lookupResources(ctx context.Context, from authz.Type, match authz.Permission, subject authz.Type, byIDs []authz.ID, subRelation string, caveatParams map[string]any) (authz.LookupResult, error) {
+	e.debugLog("Looking up resources: from=%v, match=%v, subject=%v#%v, byIDs=%v, caveatParams=%v", from, match, subject, subRelation, byIDs, caveatParams)
 	consistency := e.getConsistencySnapshot(ctx)
 
 	caveatCtx, err := serializeCaveatMap(caveatParams)
@@ -537,6 +552,7 @@ func (e *Engine) LookupResourcesWithCaveat(ctx context.Context, from authz.Type,
 					ObjectType: string(subject),
 					ObjectId:   string(id),
 				},
+				OptionalRelation: subRelation,
 			},
 			Context: caveatCtx,
 		})
