@@ -2,7 +2,7 @@
 
 | Field   | Value      |
 |---------|------------|
-| Status  | Draft      |
+| Status  | Accepted   |
 | Created | 2026-11-18 |
 | Author  | Danh Tran  |
 
@@ -82,6 +82,6 @@ Removing such fields would break callers' code, a generated-signature change out
 
 ## History
 
-| Ticket    | Title                                                                                     | Created    | Status |
-|-----------|-------------------------------------------------------------------------------------------|------------|--------|
-| (initial) | Permission operator tree, arrow function and declared caveat types in the generator views | 2026-11-18 | Draft  |
+| Ticket    | Title                                                                                     | Created    | Status   |
+|-----------|-------------------------------------------------------------------------------------------|------------|----------|
+| (initial) | Permission operator tree, arrow function and declared caveat types in the generator views | 2026-11-18 | Accepted |

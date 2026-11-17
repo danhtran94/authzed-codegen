@@ -2,7 +2,7 @@
 
 | Field      | Value                                                    |
 |------------|----------------------------------------------------------|
-| Status     | Proposed                                                 |
+| Status     | Accepted                                                 |
 | Date       | 2026-11-18                                               |
 | Deciders   | Danh Tran                                                |
 | Scope      | New `studio/` package; `internal/generator` access rules |
@@ -107,4 +107,4 @@ Headless engine code for out-of-tree tooling lives in the experimental package `
 
 | Ticket    | Title                                                                                | Created | Status   |
 |-----------|--------------------------------------------------------------------------------------|---------|----------|
-| (initial) | Studio Engine Surface: Experimental In-Module Package over a Public Schema IR Module |         | Proposed |
+| (initial) | Studio Engine Surface: Experimental In-Module Package over a Public Schema IR Module |         | Accepted |
