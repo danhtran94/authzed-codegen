@@ -103,6 +103,8 @@ case c.GetUsersetRewrite() != nil:
 
 **Why this works:** Intersection and exclusion rewrites in SpiceDB's proto are represented as `UsersetRewrite` children inside a `SetOperation_Child`. The current code errors on this path. The fix recurses through, calling `lowerUsersetRewrite` on the nested rewrite, which the updated version now handles for all three operators.
 
+> **Erratum (AUZ-025, 2026-11-18):** The "return the first" assumption above is false. SpiceDB emits a nested `UsersetRewrite` only when operators mix (e.g. `(a + b) - c`), and that node always has ≥2 children. Keeping `exprs[0]` dropped every later branch's types, usersets and caveats from the generated Check/Lookup inputs and OPA builtins. Since AUZ-025, `lowerSetOperationChild` returns `[]PermissionExpr` and the nested case returns every branch. See `jobs/AUZ-025-nested-rewrite-flatten-fix.md`.
+
 ### Generator: no changes required
 
 `resolvePermissionExpressionTypes` in `generator.go` already handles all `PermissionExpr` kinds uniformly:
@@ -246,6 +248,7 @@ No new errors are introduced. One existing error is **removed** for intersection
 
 ## History
 
-| Ticket    | Title                                                                                                | Created    | Status |
-|-----------|------------------------------------------------------------------------------------------------------|------------|--------|
-| (initial) | Intersection / Exclusion Codegen Semantics — implements docs/scope-intersection-exclusion-codegen.md | 2026-05-05 | Draft  |
+| Ticket                                                   | Title                                                                                                | Created    | Status |
+|----------------------------------------------------------|------------------------------------------------------------------------------------------------------|------------|--------|
+| (initial)                                                | Intersection / Exclusion Codegen Semantics — implements docs/scope-intersection-exclusion-codegen.md | 2026-05-05 | Draft  |
+| [AUZ-025](../jobs/AUZ-025-nested-rewrite-flatten-fix.md) | Flatten every branch of nested permission rewrites (v2.0.1)                                          | 2026-11-18 | Done   |

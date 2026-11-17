@@ -4,6 +4,24 @@ All notable changes to this project are documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.1] - 2026-11-18
+
+Nested permission rewrites dropped every branch after the first. A permission that mixes operators, such as `(viewer + editor) - banned`, is compiled by SpiceDB into a nested `UsersetRewrite`. `lowerSetOperationChild` kept only `exprs[0]` of that nested node, so the generated `Check<Perm>Inputs`, `Lookup*` methods and `--emit-opa` builtins lost every subject type, userset field and caveat-context field reachable only through the later branches. SpiceDB still granted those branches, but the typed stub had no way to ask; a user granted only through a dropped caveated branch always came back denied. Fail-closed — no permission was ever over-granted. See `jobs/AUZ-025-nested-rewrite-flatten-fix.md`.
+
+### Fixed
+
+- **`internal/generator/adapter.go`**: `lowerSetOperationChild` now returns `[]PermissionExpr`, and its nested-rewrite case returns every branch; `lowerUsersetRewrite` appends them all.
+- **Generated code (additive only)**: for schemas with nested rewrites, `Check<Perm>Inputs` / `Lookup*` / OPA builtins gain the previously missing type, userset and `Caveats` fields. Existing call sites keep compiling. Generated code for schemas without nested rewrites is byte-identical.
+
+### Added
+
+- **Fixture**: `extsvc/folder` gains `nested_banned` and `nested_access = (viewer + tenanted_viewer + collab) - nested_banned`, covering a direct-type, caveated and userset branch behind a nested union.
+- **Tests**: unit tests for nested lowering in `internal/generator/adapter_test.go`; e2e tests in `example/authzed/extsvc/` for the userset branch, the caveated branch (typed stub and OPA builtin), and the exclusion still denying a banned viewer.
+
+### Notes
+
+- Input types are still computed as the union of every branch, regardless of operator (unchanged behavior). Types reachable only through the right side of `-`, or through a single arm of `&`, still appear as fields that SpiceDB always denies. Narrowing them would remove fields from generated structs, which is a breaking change, and is deferred.
+
 ## [2.0.0] - 2026-11-13
 
 **BREAKING.** This is the project's first MAJOR release. The module's import path moves to `github.com/danhtran94/authzed-codegen/v2`, per Go's semantic import versioning — every import of this module (and the generated code's own imports of `pkg/authz`) must add the `/v2` segment.

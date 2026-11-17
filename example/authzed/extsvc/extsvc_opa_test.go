@@ -225,3 +225,32 @@ allow if extsvc.check_folder_browse({"extsvc/user": "opa-u-glob-1"}, "opa-glob-1
 	require.NotEmpty(t, rs)
 	assert.Equal(t, true, rs[0].Expressions[0].Value, "globally-registered builtin resolves without per-instance options")
 }
+
+// AUZ-025 — the caveated branch of the nested union through the OPA
+// builtin. Before AUZ-025 the builtin dropped tenant_match from the
+// caveat context it forwards, so this grant was unreachable.
+func TestOPA_CheckFolderNestedAccess_CaveatedBranch(t *testing.T) {
+	ctx := context.Background()
+
+	folder := extsvc.Folder("opa-nested-cav")
+	require.NoError(t, folder.CreateTenantedViewerRelations(ctx, extsvc.FolderTenantedViewerObjects{
+		User: []extsvc.User{"opa-u-nested-cav"},
+	}))
+
+	opts := []func(*rego.Rego){
+		rego.Query("data.test.allow"),
+		rego.Module("test.rego", `
+package test
+import future.keywords.if
+
+allow if extsvc.check_folder_nested_access({"extsvc/user": "opa-u-nested-cav"}, "opa-nested-cav", {"tenant": "acme"})
+`),
+	}
+	opts = append(opts, extsvc.SpiceDBBuiltins(sb.Engine, ctx)...)
+	r := rego.New(opts...)
+
+	rs, err := r.Eval(ctx)
+	require.NoError(t, err)
+	require.NotEmpty(t, rs)
+	assert.Equal(t, true, rs[0].Expressions[0].Value, "tenant=acme satisfies the tenanted_viewer branch")
+}

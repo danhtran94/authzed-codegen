@@ -263,8 +263,10 @@ func TestLowerSetOperationChild_FunctionedTUSeAny_MapsToPermExprArrow(t *testing
 			},
 		},
 	}
-	got, err := lowerSetOperationChild("p", child)
+	gots, err := lowerSetOperationChild("p", child)
 	require.NoError(t, err)
+	require.Len(t, gots, 1)
+	got := gots[0]
 	assert.Equal(t, PermExprArrow, got.Kind)
 	assert.Equal(t, "parent", got.LeftRel)
 	assert.Equal(t, "view", got.RightPerm)
@@ -283,8 +285,10 @@ func TestLowerSetOperationChild_FunctionedTUSeAll_MapsToPermExprArrow(t *testing
 			},
 		},
 	}
-	got, err := lowerSetOperationChild("p", child)
+	gots, err := lowerSetOperationChild("p", child)
 	require.NoError(t, err)
+	require.Len(t, gots, 1)
+	got := gots[0]
 	assert.Equal(t, PermExprArrow, got.Kind)
 	assert.Equal(t, "parent", got.LeftRel)
 	assert.Equal(t, "view", got.RightPerm)
@@ -300,10 +304,80 @@ func TestLowerSetOperationChild_XSelf_MapsToPermExprSelf(t *testing.T) {
 			XSelf: &core.SetOperation_Child_Self{},
 		},
 	}
-	got, err := lowerSetOperationChild("p", child)
+	gots, err := lowerSetOperationChild("p", child)
 	require.NoError(t, err)
+	require.Len(t, gots, 1)
+	got := gots[0]
 	assert.Equal(t, PermExprSelf, got.Kind)
 	assert.Empty(t, got.LeftRel)
 	assert.Empty(t, got.RightPerm)
 	assert.Empty(t, got.Ident)
+}
+
+// AUZ-025 — nested rewrites. SpiceDB emits a nested UsersetRewrite when
+// operators mix (`(a + b) - c`); every branch must survive lowering.
+
+func identChild(rel string) *core.SetOperation_Child {
+	return &core.SetOperation_Child{
+		ChildType: &core.SetOperation_Child_ComputedUserset{
+			ComputedUserset: &core.ComputedUserset{Relation: rel},
+		},
+	}
+}
+
+func TestLowerSetOperationChild_NestedUnion_ReturnsAllBranches(t *testing.T) {
+	// Child `(viewer + editor + parent->view)` nested inside a parent rewrite.
+	child := &core.SetOperation_Child{
+		ChildType: &core.SetOperation_Child_UsersetRewrite{
+			UsersetRewrite: &core.UsersetRewrite{
+				RewriteOperation: &core.UsersetRewrite_Union{
+					Union: &core.SetOperation{Child: []*core.SetOperation_Child{
+						identChild("viewer"),
+						identChild("editor"),
+						{ChildType: &core.SetOperation_Child_TupleToUserset{
+							TupleToUserset: &core.TupleToUserset{
+								Tupleset:        &core.TupleToUserset_Tupleset{Relation: "parent"},
+								ComputedUserset: &core.ComputedUserset{Relation: "view"},
+							},
+						}},
+					}},
+				},
+			},
+		},
+	}
+	got, err := lowerSetOperationChild("p", child)
+	require.NoError(t, err)
+	assert.Equal(t, []PermissionExpr{
+		{Kind: PermExprIdentifier, Ident: "viewer"},
+		{Kind: PermExprIdentifier, Ident: "editor"},
+		{Kind: PermExprArrow, LeftRel: "parent", RightPerm: "view"},
+	}, got)
+}
+
+func TestLowerUsersetRewrite_ExclusionOverNestedUnion_FlattensAll(t *testing.T) {
+	// `permission p = (viewer + editor) - banned`
+	rw := &core.UsersetRewrite{
+		RewriteOperation: &core.UsersetRewrite_Exclusion{
+			Exclusion: &core.SetOperation{Child: []*core.SetOperation_Child{
+				{ChildType: &core.SetOperation_Child_UsersetRewrite{
+					UsersetRewrite: &core.UsersetRewrite{
+						RewriteOperation: &core.UsersetRewrite_Union{
+							Union: &core.SetOperation{Child: []*core.SetOperation_Child{
+								identChild("viewer"),
+								identChild("editor"),
+							}},
+						},
+					},
+				}},
+				identChild("banned"),
+			}},
+		},
+	}
+	got, err := lowerUsersetRewrite("p", rw)
+	require.NoError(t, err)
+	assert.Equal(t, []PermissionExpr{
+		{Kind: PermExprIdentifier, Ident: "viewer"},
+		{Kind: PermExprIdentifier, Ident: "editor"},
+		{Kind: PermExprIdentifier, Ident: "banned"},
+	}, got)
 }
