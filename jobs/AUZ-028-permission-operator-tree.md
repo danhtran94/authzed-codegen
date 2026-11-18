@@ -79,6 +79,7 @@ See the scope note's Problem section. In short, the views drop operator structur
 | 3.2 | `CaveatType` for every caveat param in `example/schema.zed` (incl. `client_ip == "ipaddress"`, `rows == "list<list<string>>"`) | same | [x] |
 | 3.3 | Fixture: the never-granted set (`permissionInputTypes` minus grantable) is exactly `article/author_only` and `article/editor` → `{group, role}`; `folder/ancestor_or_self` includes `extsvc/folder`; `all_via` == `any_via`. Synthetic: `&` / `-` / `+` rules, and no false comment for a userset operand, an arrow over a userset-typed relation, or an arrow targeting a relation | `internal/generator/generator_test.go` (new) | [x] |
 | 3.4 | E2E: `TestArticle_{AuthorOnly,Editor}_NeverGrantedFields_Denied`, which are negative checks: group and role hold `browse` on the parent, yet checks through `Group` / `Role` return `authz.ErrPermissionDenied`. Plus `TestArticle_AuthorOnly_ExclusionOnUser` / `TestArticle_Editor_IntersectionOnUser`, which show the operators' effect on `User` | `example/authzed/extsvc/extsvc_test.go` | [x] |
+| 3.5 | `TestGrantable_AgreesWithSpiceDB`: cross-check against a SpiceDB testcontainer. Every subject SpiceDB grants (userset operand, arrow via a userset-typed relation, arrow into a relation, exclusion) has its type in `grantableInputTypes` and no comment, and the only commented set is the genuinely disjoint `allowed & groups` | `internal/generator/grantable_e2e_test.go` | [x] |
 
 ### 4. Verification
 
@@ -146,6 +147,12 @@ The `*_NeverGrantedFields_Denied` tests are **negative checks** for the document
 The first version reused the input-field resolver's leaf rules. That resolver lists *fields to emit*, so it ignores userset allowed types (`relationFromView` drops them), arrows whose target is a relation, and arrow traversal through userset-typed relations. Under union that only loses fields. Under intersection, a missing leaf type empties the operand and marks a genuinely grantable type "never granted". Example: `view = allowed & shared` with `shared: team#member` would comment `User` even though SpiceDB grants members of the team.
 
 The analysis now over-approximates (see Components). A type is excluded only when no rule can produce it, and the three reviewed shapes are pinned as unit tests (`TestGrantable_NoFalseNeverGranted`). The fixture's never-granted set is unchanged: exactly the four article fields. The comment text was also corrected for intersections with three or more operands ("misses at least one operand … that every grant must satisfy").
+
+### [Reviewer] SpiceDB confirms the review scenarios (owner asked, 2026-11-18)
+
+The scenarios were first checked with a scratch test against a SpiceDB container. SpiceDB **grants** a user through `allowed & shared` (`shared: team#member`), `allowed & parent_us->browse` (`parent_us: team#member`), and `allowed & parent->viewer` (`viewer` a relation), and denies a user who is only `allowed`. The pre-review generator (`4106b22`) emitted a false "never granted" comment on `User` for all three; `700e67c` emits none.
+
+This also settles a previously unverified question: SpiceDB arrows **do** walk userset-typed subjects. The scratch check is now permanent as task 3.5 (`TestGrantable_AgreesWithSpiceDB`), which asserts SpiceDB's verdict and the analysis's agreement with it.
 
 ### [Owner action] Not merged
 

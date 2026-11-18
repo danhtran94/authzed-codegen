@@ -70,7 +70,9 @@ The fixture round-trip remains the codegen regression bar —
 to the committed version.
 
 E2E coverage for the generated stubs lives in the four test packages
-above (added per AUZ-005). Each `TestMain` calls
+above (added per AUZ-005). `internal/generator/grantable_e2e_test.go`
+(AUZ-028) also starts a SpiceDB testcontainer: it cross-checks the
+"never granted" analysis against SpiceDB's real verdicts. Each `TestMain` calls
 `spicedbtest.Start(ctx, schema)` to launch a SpiceDB Docker container
 via `testcontainers-go`; tests that can't reach Docker are skipped
 cleanly via the `spicedbtest.ErrDockerUnavailable` sentinel.

@@ -17,8 +17,14 @@ func adaptFixtureSchema(t *testing.T) ([]*DefinitionView, map[string][]ParamSpec
 	t.Helper()
 	src, err := os.ReadFile(fixtureSchemaPath)
 	require.NoError(t, err)
+	return adaptSchema(t, fixtureSchemaPath, string(src))
+}
+
+// adaptSchema compiles a schema string the way cmd/authzed-codegen does.
+func adaptSchema(t *testing.T, name, src string) ([]*DefinitionView, map[string][]ParamSpec) {
+	t.Helper()
 	compiled, err := compiler.Compile(
-		compiler.InputSchema{Source: input.Source(fixtureSchemaPath), SchemaString: string(src)},
+		compiler.InputSchema{Source: input.Source(name), SchemaString: src},
 		compiler.RequirePrefixedObjectType(),
 	)
 	require.NoError(t, err)
