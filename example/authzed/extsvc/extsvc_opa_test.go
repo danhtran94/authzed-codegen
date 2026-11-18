@@ -2,6 +2,7 @@ package extsvc_test
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"github.com/open-policy-agent/opa/v1/rego"
@@ -193,10 +194,8 @@ x if extsvc.check_folder_browse({"extsvc/user": ["ms-u"]}, "opa-ms-1", {})
 // global path is what runtime.NewRuntime would pick up.
 //
 // Note: RegisterSpiceDBBuiltinsGlobal mutates process-global state
-// (ast.RegisterBuiltin appends to ast.Builtins). If this package later
-// adds more global-registration tests, register once in TestMain or guard
-// with sync.Once to avoid duplicate ast.Builtins entries. A single call
-// here is fine.
+// (ast.RegisterBuiltin appends to ast.Builtins), so every global test goes
+// through registerGlobalBuiltins, which registers exactly once per process.
 func TestOPA_GlobalRegistration(t *testing.T) {
 	ctx := context.Background()
 
@@ -207,7 +206,7 @@ func TestOPA_GlobalRegistration(t *testing.T) {
 	}))
 
 	// Register globally — this is what runtime.NewRuntime needs.
-	extsvc.RegisterSpiceDBBuiltinsGlobal(sb.Engine, ctx)
+	registerGlobalBuiltins()
 
 	// Build a fresh rego instance with NO per-instance SpiceDBBuiltins
 	// options. If global registration worked, the builtin resolves.
@@ -310,4 +309,98 @@ func TestOPA_LookupFolderBrowse_EmptyKeyIgnored(t *testing.T) {
 	got := evalOPA(t, ctx, "data.test.resources",
 		`resources := extsvc.lookup_folder_browse_resources({"extsvc/group": [], "extsvc/user": ["opa-u-empty-key-lk"]}, {})`)
 	assert.Equal(t, []any{"opa-empty-key-lk"}, got)
+}
+
+var globalBuiltinsOnce sync.Once
+
+// registerGlobalBuiltins registers the SpiceDB builtins in OPA's
+// process-global registry exactly once. RegisterSpiceDBBuiltinsGlobal
+// appends to ast.Builtins, so a second call would duplicate entries.
+func registerGlobalBuiltins() {
+	globalBuiltinsOnce.Do(func() {
+		extsvc.RegisterSpiceDBBuiltinsGlobal(sb.Engine, context.Background())
+	})
+}
+
+// evalGlobalOPA is evalOPA without per-instance options: the builtin must
+// resolve from the global registry.
+func evalGlobalOPA(t *testing.T, ctx context.Context, query, rule string) any {
+	t.Helper()
+	registerGlobalBuiltins()
+	rs, err := rego.New(
+		rego.Query(query),
+		rego.Module("test.rego", "package test\nimport future.keywords.if\n\n"+rule+"\n"),
+	).Eval(ctx)
+	require.NoError(t, err)
+	if len(rs) == 0 {
+		return nil
+	}
+	return rs[0].Expressions[0].Value
+}
+
+// AUZ-026 via the GLOBAL registration. The per-instance builtins are
+// covered by TestOPA_CheckFolderBrowse_EmptySubjectIDs_Denies and
+// TestOPA_LookupFolderBrowse_EmptyKeyIgnored; both registrations render
+// the same template, and this pins the global one at runtime.
+func TestOPA_Global_EmptySubjectIDs_Denies(t *testing.T) {
+	ctx := context.Background()
+
+	got := evalGlobalOPA(t, ctx, "data.test.allow",
+		`allow := extsvc.check_folder_browse({"extsvc/user": []}, "opa-glob-empty-no-tuples", {})`)
+	assert.Equal(t, false, got, "empty subject ID list must deny through the global builtin")
+}
+
+func TestOPA_Global_LookupEmptyKeyIgnored(t *testing.T) {
+	ctx := context.Background()
+
+	require.NoError(t, extsvc.Folder("opa-glob-empty-key-lk").CreateViewerRelations(ctx, extsvc.FolderViewerObjects{
+		User: []extsvc.User{"opa-u-glob-empty-key-lk"},
+	}))
+
+	got := evalGlobalOPA(t, ctx, "data.test.resources",
+		`resources := extsvc.lookup_folder_browse_resources({"extsvc/group": [], "extsvc/user": ["opa-u-glob-empty-key-lk"]}, {})`)
+	assert.Equal(t, []any{"opa-glob-empty-key-lk"}, got)
+}
+
+// AUZ-028 — through the OPA builtins, the fields documented "is never
+// granted" on CheckArticleAuthorOnlyInputs / CheckArticleEditorInputs are
+// denied, and User behaves per the operator: an author who can also
+// browse the parent is excluded from author_only but satisfies editor.
+func TestOPA_Article_NeverGrantedSubjectsAndOperators(t *testing.T) {
+	ctx := context.Background()
+
+	folder := extsvc.Folder("opa-ng-folder")
+	article := extsvc.Article("opa-ng-article")
+	require.NoError(t, folder.CreateViewerRelations(ctx, extsvc.FolderViewerObjects{
+		User:  []extsvc.User{"opa-ng-browser"},
+		Group: []extsvc.Group{"opa-ng-g"},
+		Role:  []extsvc.Role{"opa-ng-r"},
+	}))
+	require.NoError(t, article.CreateParentRelations(ctx, extsvc.ArticleParentObjects{Folder: []extsvc.Folder{folder}}))
+	require.NoError(t, article.CreateAuthorRelations(ctx, extsvc.ArticleAuthorObjects{
+		User: []extsvc.User{"opa-ng-browser", "opa-ng-plain"},
+	}))
+
+	cases := []struct {
+		builtin, subject string
+		want             bool
+	}{
+		// Never-granted fields: group and role DO hold browse on the parent.
+		{"check_article_author_only", `{"extsvc/group": "opa-ng-g"}`, false},
+		{"check_article_author_only", `{"extsvc/role": "opa-ng-r"}`, false},
+		{"check_article_editor", `{"extsvc/group": "opa-ng-g"}`, false},
+		{"check_article_editor", `{"extsvc/role": "opa-ng-r"}`, false},
+		// User: exclusion removes the author who can browse; intersection requires it.
+		{"check_article_author_only", `{"extsvc/user": "opa-ng-plain"}`, true},
+		{"check_article_author_only", `{"extsvc/user": "opa-ng-browser"}`, false},
+		{"check_article_editor", `{"extsvc/user": "opa-ng-browser"}`, true},
+		{"check_article_editor", `{"extsvc/user": "opa-ng-plain"}`, false},
+	}
+	for _, c := range cases {
+		t.Run(c.builtin+" "+c.subject, func(t *testing.T) {
+			got := evalOPA(t, ctx, "data.test.allow",
+				"allow := extsvc."+c.builtin+"("+c.subject+`, "opa-ng-article", {})`)
+			assert.Equal(t, c.want, got)
+		})
+	}
 }
