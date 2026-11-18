@@ -43,6 +43,8 @@ Removing such fields would break callers' code, a generated-signature change out
    - exclusion = left child only;
    - leaves resolve exactly as the existing resolver does.
 
+   > **Erratum (AUZ-028 review, 2026-11-18):** reusing the resolver's leaf rules under-approximates, because the resolver ignores usersets and relation-targeting arrows. Under `&` that produces false "never granted" comments. The implementation instead uses over-approximating leaf rules (`internal/generator/grantable.go` doc comment), so the subset invariant above no longer holds by construction. SC6 is enforced by asserting the exact never-granted set on the fixture.
+
    Recursion through arrows and permission references is a least fixpoint. Verifiable: a unit test in `internal/generator/generator_test.go` asserts that for every permission in `example/schema.zed`, `grantableInputTypes ⊆ permissionInputTypes`. It also asserts `grantableInputTypes("extsvc/article", "author_only") == ["extsvc/user"]` and the same for `"editor"`.
 
 6. For each input type in `permissionInputTypes \ grantableInputTypes`, `internal/templates/object.go.tmpl` emits a doc comment on that field in `Check<Res><Perm>Inputs`. The comment begins with the literal `// <Field> is never granted <perm>:`. Verifiable: `grep -n "is never granted author_only:" example/authzed/extsvc/article.gen.go` returns exactly 2 matches (`Group`, `Role`), and the same for `editor`. `grep -c "is never granted" example/authzed/extsvc/folder.gen.go` returns 0, since no folder permission has such a field today (per A4).

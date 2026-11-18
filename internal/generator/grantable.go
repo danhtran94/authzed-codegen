@@ -2,62 +2,83 @@ package generator
 
 import "fmt"
 
-// grantableInputTypes returns, for every "<type>/<perm>" key, the direct
-// input types SpiceDB can actually grant that permission to — the
-// operator-aware counterpart of GetPermissionTree (AUZ-028).
+// grantableInputTypes returns, for every "<type>/<perm>" key, an
+// over-approximation of the direct subject types SpiceDB may grant that
+// permission to (AUZ-028). A Check<Perm>Inputs field whose type is NOT
+// in this set is documented as "never granted", so the set must never
+// under-approximate: a type missing here produces a false comment.
 //
-// GetPermissionTree unions the types of every branch regardless of
-// operator, so `author - parent->browse` exposes parent->browse's types
-// as inputs even though they can only ever reach the excluded side. This
-// analysis keeps the resolver's leaf rules exactly and changes only how
-// an operator node combines its children:
+// For that reason the leaf rules are deliberately more generous than the
+// input-field resolver (resolvePermissionExpressionTypes), which only
+// lists the fields to emit. Under union a missing leaf type is harmless;
+// under intersection it would wrongly empty the result.
 //
+// Every relation and permission of every definition gets a set:
+//
+//   - relation:     each allowed type's namespace (wildcards included);
+//     for a userset `T#R`, the set of T/R (the members a userset admits)
+//   - identifier:   the set of the named relation or permission
+//   - arrow rel->x: the set of T/x for every namespace T that rel allows,
+//     userset entries included, whether x is a relation or a permission
+//   - _self:        the object's own type
 //   - union:        union of the children
 //   - intersection: intersection of the children
 //   - exclusion:    the first (base) child only — later children subtract
 //
-// Leaf rules mirror resolvePermissionExpressionTypes / resolveTransitive:
-//
-//   - identifier naming a relation   → the relation's direct (non-userset) types
-//   - identifier naming a permission → that permission on the same type
-//   - arrow rel->perm (any / all)    → perm on each type rel allows, if defined there
-//   - _self                          → the object's own type
-//
-// Recursive permissions are resolved as a least fixpoint: every key
-// starts empty and is recomputed until nothing changes. Each rule is
-// monotone over a finite set of types, so the iteration terminates.
-func grantableInputTypes(defs []*DefinitionView, byTypes DefinitionsByTypes) map[string][]string {
-	type permRef struct {
+// Caveats and expiration only ever narrow a grant, so ignoring them keeps
+// the set an over-approximation. Recursive definitions are resolved as a
+// least fixpoint: every set starts empty and is recomputed until nothing
+// changes. Each rule is monotone over a finite set of types, so the
+// iteration terminates.
+func grantableInputTypes(defs []*DefinitionView) map[string][]string {
+	type entry struct {
 		objectType string
-		node       *PermissionNode
+		relation   *RelationView
+		permission *PermissionNode
 	}
-	perms := map[string]permRef{}
-	var keys []string
+	entries := map[string]entry{}
+	relations := map[string]*RelationView{}
+	var keys, permKeys []string
 	for _, d := range defs {
 		ot := d.ObjectType.String()
-		for _, p := range d.Permissions {
-			k := permKey(ot, p.Name)
-			perms[k] = permRef{objectType: ot, node: p.Rewrite}
+		for _, r := range d.Relations {
+			k := permKey(ot, r.Name)
+			entries[k] = entry{objectType: ot, relation: r}
+			relations[k] = r
 			keys = append(keys, k)
 		}
-	}
-
-	relationTypes := func(objectType, rel string) []string {
-		def, ok := byTypes[objectType]
-		if !ok {
-			return nil
+		for _, p := range d.Permissions {
+			k := permKey(ot, p.Name)
+			entries[k] = entry{objectType: ot, permission: p.Rewrite}
+			keys = append(keys, k)
+			permKeys = append(permKeys, k)
 		}
-		_, rels := def.Relations.Get(rel)
-		return rels.Types()
 	}
 
 	cur := map[string]map[string]bool{}
 	for _, k := range keys {
 		cur[k] = map[string]bool{}
 	}
+	union := func(dst, src map[string]bool) {
+		for t := range src {
+			dst[t] = true
+		}
+	}
 
-	var eval func(objectType string, n *PermissionNode) map[string]bool
-	eval = func(objectType string, n *PermissionNode) map[string]bool {
+	evalRelation := func(r *RelationView) map[string]bool {
+		out := map[string]bool{}
+		for _, at := range r.AllowedTypes {
+			if at.SubRelation == "" {
+				out[at.Namespace] = true
+				continue
+			}
+			union(out, cur[permKey(at.Namespace, at.SubRelation)])
+		}
+		return out
+	}
+
+	var evalNode func(objectType string, n *PermissionNode) map[string]bool
+	evalNode = func(objectType string, n *PermissionNode) map[string]bool {
 		out := map[string]bool{}
 		if n == nil {
 			return out
@@ -66,21 +87,11 @@ func grantableInputTypes(defs []*DefinitionView, byTypes DefinitionsByTypes) map
 			e := n.Leaf
 			switch e.Kind {
 			case PermExprIdentifier:
-				if def, ok := byTypes[objectType]; ok {
-					if ok, rels := def.Relations.Get(e.Ident); ok {
-						for _, t := range rels.Types() {
-							out[t] = true
-						}
-						return out
-					}
-				}
-				for t := range cur[permKey(objectType, e.Ident)] {
-					out[t] = true
-				}
+				union(out, cur[permKey(objectType, e.Ident)])
 			case PermExprArrow:
-				for _, refType := range relationTypes(objectType, e.LeftRel) {
-					for t := range cur[permKey(refType, e.RightPerm)] {
-						out[t] = true
+				if left, ok := relations[permKey(objectType, e.LeftRel)]; ok {
+					for _, at := range left.AllowedTypes {
+						union(out, cur[permKey(at.Namespace, e.RightPerm)])
 					}
 				}
 			case PermExprSelf:
@@ -92,13 +103,11 @@ func grantableInputTypes(defs []*DefinitionView, byTypes DefinitionsByTypes) map
 		switch n.Op {
 		case PermOpUnion:
 			for _, c := range n.Children {
-				for t := range eval(objectType, c) {
-					out[t] = true
-				}
+				union(out, evalNode(objectType, c))
 			}
 		case PermOpIntersection:
 			for i, c := range n.Children {
-				child := eval(objectType, c)
+				child := evalNode(objectType, c)
 				if i == 0 {
 					out = child
 					continue
@@ -111,7 +120,7 @@ func grantableInputTypes(defs []*DefinitionView, byTypes DefinitionsByTypes) map
 			}
 		case PermOpExclusion:
 			if len(n.Children) > 0 {
-				out = eval(objectType, n.Children[0])
+				out = evalNode(objectType, n.Children[0])
 			}
 		}
 		return out
@@ -120,7 +129,14 @@ func grantableInputTypes(defs []*DefinitionView, byTypes DefinitionsByTypes) map
 	for changed := true; changed; {
 		changed = false
 		for _, k := range keys {
-			next := eval(perms[k].objectType, perms[k].node)
+			e := entries[k]
+			var next map[string]bool
+			if e.relation != nil {
+				next = evalRelation(e.relation)
+			} else {
+				next = evalNode(e.objectType, e.permission)
+			}
+			// Sets only grow (monotone rules), so a size change is a change.
 			if len(next) != len(cur[k]) {
 				cur[k] = next
 				changed = true
@@ -128,8 +144,8 @@ func grantableInputTypes(defs []*DefinitionView, byTypes DefinitionsByTypes) map
 		}
 	}
 
-	result := make(map[string][]string, len(keys))
-	for _, k := range keys {
+	result := make(map[string][]string, len(permKeys))
+	for _, k := range permKeys {
 		types := make([]string, 0, len(cur[k]))
 		for t := range cur[k] {
 			types = append(types, t)

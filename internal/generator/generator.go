@@ -108,10 +108,10 @@ func (g *Generator) GenerateObjectSource(name string) error {
 
 	permUsersets := collectPermUsersets(g.Definitions)
 
-	// grantable["<type>/<perm>"] = input types SpiceDB can actually grant,
-	// operator-aware (AUZ-028). Fields in tree but not here get a
-	// "never granted" doc comment.
-	grantable := grantableInputTypes(g.Definitions, defs)
+	// grantable["<type>/<perm>"] = over-approximation of the subject types
+	// SpiceDB may grant, operator-aware (AUZ-028). Input fields outside it
+	// get a "never granted" doc comment.
+	grantable := grantableInputTypes(g.Definitions)
 
 	// subjRefs[objectTypeNamespace] = sorted list of definition namespaces
 	// that allow that object type as a subject of some relation. Drives the

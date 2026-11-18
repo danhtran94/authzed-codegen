@@ -41,7 +41,7 @@ See the scope note's Problem section. In short, the views drop operator structur
 - **`PermissionNode`, `PermOp*`, `flattenPermissionNode`** (`internal/generator/adapter.go`)
 - **`PermissionExpr.ArrowFunc`** (`adapter.go`): set from `FunctionedTupleToUserset.Function`
 - **`ParamSpec.CaveatType`, `caveatTypeName`** (`adapter.go`): canonical `name<child, ...>`
-- **`grantableInputTypes`** (new `internal/generator/grantable.go`): same leaf rules as `resolvePermissionExpressionTypes` / `resolveTransitive` (relation → direct non-userset types; permission identifier → recurse on own type; arrow → recurse on each referenced type that has the right permission; `_self` → own type). Union = ∪, intersection = ∩, exclusion = first child. Least fixpoint by iteration from ∅ over all `(type, perm)` keys.
+- **`grantableInputTypes`** (new `internal/generator/grantable.go`): an **over-approximation** of the subject types SpiceDB may grant, so a "never granted" comment is only emitted when it is certain. Relations count their direct types *and* the members of userset allowed types; identifiers resolve relations or permissions; arrows traverse every namespace the left relation allows (userset entries included) and target a relation *or* a permission; `_self` is the own type. Union = ∪, intersection = ∩, exclusion = first child. Least fixpoint by iteration from ∅ over every `(type, relation|permission)` key. *(Revised after review of #18: the first version reused the input-field resolver's leaf rules, which under-approximate and caused false comments under `&`; see Discoveries.)*
 - **FuncMap `neverGranted`** (`internal/generator/generator.go`) and **template comment** (`internal/templates/object.go.tmpl`, `Check<Res><Perm>Inputs` struct only)
 
 ### Why not alternatives
@@ -66,10 +66,10 @@ See the scope note's Problem section. In short, the views drop operator structur
 
 | # | Task | File | Status |
 |---|------|------|--------|
-| 2.1 | `grantableInputTypes(defs []*DefinitionView, byTypes DefinitionsByTypes) map[string][]string` | `internal/generator/grantable.go` | [x] |
+| 2.1 | `grantableInputTypes(defs []*DefinitionView) map[string][]string` (over-approximating leaf rules, see Components) | `internal/generator/grantable.go` | [x] |
 | 2.2 | FuncMap `neverGranted(objectType, perm, inputType) bool` = in `permissionInputTypes` and not in grantable | `internal/generator/generator.go` | [x] |
 | 2.3 | Emit `// <Field> is never granted <perm>: …` above such fields in `Check<Res><Perm>Inputs` | `internal/templates/object.go.tmpl` | [x] |
-| 2.4 | Regenerate; confirm `git diff example/authzed | grep -E '^[-+](func|type) '` is empty and only comment lines are added | `example/authzed/**/*.gen.go` | [x] |
+| 2.4 | Regenerate; confirm no generated `func` / `type` line changes (`git diff example/authzed` piped to `grep -E '^[-+](func\|type) '` is empty) and only comment lines are added | `example/authzed/**/*.gen.go` | [x] |
 
 ### 3. Tests
 
@@ -77,8 +77,8 @@ See the scope note's Problem section. In short, the views drop operator structur
 |---|------|------|--------|
 | 3.1 | Tree test `(a + b) - c` → `Exclusion[Union[a, b], c]`; `ArrowFunc` assertions in the two functioned-arrow tests | `internal/generator/adapter_test.go` | [x] |
 | 3.2 | `CaveatType` for every caveat param in `example/schema.zed` (incl. `client_ip == "ipaddress"`, `rows == "list<list<string>>"`) | same | [x] |
-| 3.3 | `grantableInputTypes` ⊆ `permissionInputTypes` for every permission in the fixture; `article/author_only` and `article/editor` == `[extsvc/user]`; `folder/ancestor_or_self` includes `extsvc/folder`; `all_via` == `any_via` | `internal/generator/generator_test.go` (new) | [x] |
-| 3.4 | E2E: `TestArticle_AuthorOnly_NeverGrantedFields_Denied`, `TestArticle_Editor_NeverGrantedFields_Denied`: grant `browse` on the parent folder to a group and a role; checks through `Group` / `Role` return `authz.ErrPermissionDenied` | `example/authzed/extsvc/extsvc_test.go` | [x] |
+| 3.3 | Fixture: the never-granted set (`permissionInputTypes` minus grantable) is exactly `article/author_only` and `article/editor` → `{group, role}`; `folder/ancestor_or_self` includes `extsvc/folder`; `all_via` == `any_via`. Synthetic: `&` / `-` / `+` rules, and no false comment for a userset operand, an arrow over a userset-typed relation, or an arrow targeting a relation | `internal/generator/generator_test.go` (new) | [x] |
+| 3.4 | E2E: `TestArticle_{AuthorOnly,Editor}_NeverGrantedFields_Denied`, which are negative checks: group and role hold `browse` on the parent, yet checks through `Group` / `Role` return `authz.ErrPermissionDenied`. Plus `TestArticle_AuthorOnly_ExclusionOnUser` / `TestArticle_Editor_IntersectionOnUser`, which show the operators' effect on `User` | `example/authzed/extsvc/extsvc_test.go` | [x] |
 
 ### 4. Verification
 
@@ -121,17 +121,17 @@ That struct is the one callers populate. `Lookup*Resources` takes the same struc
 
 ## Discoveries & Decisions During Implementation
 
-### [Implementer] Flatten equals the old lowering, byte for byte
+### [Implementer] Flatten leaves the fixture output byte-identical
 
-After WS1 alone, regenerating `example/authzed` produced **zero diff**. `flattenPermissionNode(Rewrite)` reproduces the pre-AUZ-028 `Expressions` exactly for every permission in the fixture, so the resolver, walkers, templates and OPA emitter are provably unaffected by the tree refactor. `lowerUsersetRewrite` / `lowerSetOperationChild` keep their signatures as flatten views, so the AUZ-025 tests run unmodified.
+After WS1 alone, regenerating `example/authzed` produced **zero diff**. That establishes that every file emitted for the fixture is unchanged. It does not by itself prove `Expressions` equality for arbitrary schemas: the structural argument is that `flattenPermissionNode` is a pre-order walk that visits leaves in the same order the old recursive loop appended them, and the AUZ-025 lowering tests still pass unmodified through the `lowerUsersetRewrite` / `lowerSetOperationChild` flatten views.
 
 ### [Implementer] Generated diff: 4 comments, plus gofmt realignment
 
 The only generated change is `extsvc/article.gen.go`: one comment on each of `Group` and `Role` in `CheckArticleEditorInputs` and `CheckArticleAuthorOnlyInputs`. This matches scope SC6, and `folder.gen.go` gets none. The diff also shows `User  []User` → `User []User`: inserting a comment line splits gofmt's field-alignment block. That change is whitespace only, with no `func` / `type` line changes.
 
-### [Implementer] E2E proves the operator, not missing data, denies the check
+### [Implementer] What the e2e tests establish
 
-Each never-granted test first asserts `folder.CheckBrowse` is **true** for the group and role, then asserts `CheckAuthorOnly` / `CheckEditor` through those fields returns `authz.ErrPermissionDenied`. The denial is therefore attributable to `-` / `&`, not to an absent relationship.
+The `*_NeverGrantedFields_Denied` tests are **negative checks** for the documented fields. Group and role hold `browse` on the parent, yet checks through `Group` / `Role` are denied. They would also pass if the permission were plain `author`, so they do not isolate the operator. The `*_ExclusionOnUser` / `*_IntersectionOnUser` tests do: an author who can browse the parent is denied `author_only` but granted `editor`, and an author who cannot is granted `author_only` but denied `editor`.
 
 ### [Implementer] Test helper for the fixture schema
 
@@ -140,6 +140,12 @@ Each never-granted test first asserts `folder.CheckBrowse` is **true** for the g
 ### [Reviewer] Verification summary
 
 `go build`, `go vet`, `gofmt -l .` (empty), `go mod tidy` (no diff), round-trip (zero diff), SC8 grep (empty), `golangci-lint` v2.15.0 (0 issues), `govulncheck` v1.9.0 linux/amd64 (none), and `go test ./... -count=1` (all pass, including the 2 new e2e tests against SpiceDB).
+
+### [Reviewer] CodeRabbit on #18: under-approximating leaves caused false comments under `&`
+
+The first version reused the input-field resolver's leaf rules. That resolver lists *fields to emit*, so it ignores userset allowed types (`relationFromView` drops them), arrows whose target is a relation, and arrow traversal through userset-typed relations. Under union that only loses fields. Under intersection, a missing leaf type empties the operand and marks a genuinely grantable type "never granted". Example: `view = allowed & shared` with `shared: team#member` would comment `User` even though SpiceDB grants members of the team.
+
+The analysis now over-approximates (see Components). A type is excluded only when no rule can produce it, and the three reviewed shapes are pinned as unit tests (`TestGrantable_NoFalseNeverGranted`). The fixture's never-granted set is unchanged: exactly the four article fields. The comment text was also corrected for intersections with three or more operands ("misses at least one operand … that every grant must satisfy").
 
 ### [Owner action] Not merged
 

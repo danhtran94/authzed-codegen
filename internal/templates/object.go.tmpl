@@ -234,9 +234,9 @@ func ({{ $var }} {{ $typeName }}) Read{{ snakeToPascal $rel.Name}}{{ typeName $r
 {{ $inputName := (print "Check" $typeName (snakeToPascal $perm.Name) "Inputs") }}{{ $caveatsTypeName := (print "Check" $typeName (snakeToPascal $perm.Name) "Caveats") }}
 type {{ $inputName }} struct {
 {{ range $inputType := permissionInputTypes $objectType $perm.Name }}{{ if neverGranted $objectType $perm.Name $inputType }}  // {{ typeName $inputType }} is never granted {{ $perm.Name }}: {{ $inputType }} reaches it only
-  // through an excluded (-) branch or a single arm of an intersection (&),
-  // so SpiceDB denies every check through this field. Kept for API
-  // stability.
+  // through an excluded (-) branch, or misses at least one operand of an
+  // intersection (&) that every grant must satisfy, so SpiceDB denies
+  // every check through this field. Kept for API stability.
 {{ end }}  {{ typeName $inputType }} []{{ typeName $inputType }}
 {{ end }}{{ range $u := permissionInputUsersets $objectType $perm.Name }}  {{ typeName $u.Namespace }}{{ pascalCaveat $u.SubRelation }} []{{ typeName $u.Namespace }}
 {{ end }}{{ if hasPermCaveats $objectType $perm.Name }}  Caveats {{ $caveatsTypeName }}

@@ -8,7 +8,7 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
-- **Generated doc comments on never-granted input fields.** A `Check<Res><Perm>Inputs` field (also taken by `Lookup<Perm><Res>Resources`) whose type reaches the permission only through an excluded `-` branch, or through a single arm of an `&`, now carries `// <Field> is never granted <perm>: …`. SpiceDB denies every check through such a field. The fields are kept for API stability; only comments are added, and generated `func` / `type` declarations are unchanged. Example: `CheckArticleAuthorOnlyInputs.Group` / `.Role` for `author_only = author - parent->browse`. See `jobs/AUZ-028-permission-operator-tree.md` and `docs/scope-permission-operator-tree.md`.
+- **Generated doc comments on never-granted input fields.** A `Check<Res><Perm>Inputs` field (also taken by `Lookup<Perm><Res>Resources`) whose type can only reach the permission through an excluded `-` branch, or misses an operand of an `&` that every grant must satisfy, now carries `// <Field> is never granted <perm>: …`. SpiceDB denies every check through such a field. The fields are kept for API stability; only comments are added, and generated `func` / `type` declarations are unchanged. Example: `CheckArticleAuthorOnlyInputs.Group` / `.Role` for `author_only = author - parent->browse`. See `jobs/AUZ-028-permission-operator-tree.md` and `docs/scope-permission-operator-tree.md`.
 - **Generator views** (`internal/generator`, consumed by the experimental `studio` package per ADR-007):
   - `PermissionView.Rewrite` (operator tree). `Expressions` is now derived from it.
   - `PermissionExpr.ArrowFunc` (`""` / `"any"` / `"all"`).

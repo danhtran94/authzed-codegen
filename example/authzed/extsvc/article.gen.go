@@ -219,14 +219,14 @@ const ArticleEditor PermissionArticle = "editor"
 type CheckArticleEditorInputs struct {
 	User []User
 	// Group is never granted editor: extsvc/group reaches it only
-	// through an excluded (-) branch or a single arm of an intersection (&),
-	// so SpiceDB denies every check through this field. Kept for API
-	// stability.
+	// through an excluded (-) branch, or misses at least one operand of an
+	// intersection (&) that every grant must satisfy, so SpiceDB denies
+	// every check through this field. Kept for API stability.
 	Group []Group
 	// Role is never granted editor: extsvc/role reaches it only
-	// through an excluded (-) branch or a single arm of an intersection (&),
-	// so SpiceDB denies every check through this field. Kept for API
-	// stability.
+	// through an excluded (-) branch, or misses at least one operand of an
+	// intersection (&) that every grant must satisfy, so SpiceDB denies
+	// every check through this field. Kept for API stability.
 	Role []Role
 }
 
@@ -340,14 +340,14 @@ const ArticleAuthorOnly PermissionArticle = "author_only"
 type CheckArticleAuthorOnlyInputs struct {
 	User []User
 	// Group is never granted author_only: extsvc/group reaches it only
-	// through an excluded (-) branch or a single arm of an intersection (&),
-	// so SpiceDB denies every check through this field. Kept for API
-	// stability.
+	// through an excluded (-) branch, or misses at least one operand of an
+	// intersection (&) that every grant must satisfy, so SpiceDB denies
+	// every check through this field. Kept for API stability.
 	Group []Group
 	// Role is never granted author_only: extsvc/role reaches it only
-	// through an excluded (-) branch or a single arm of an intersection (&),
-	// so SpiceDB denies every check through this field. Kept for API
-	// stability.
+	// through an excluded (-) branch, or misses at least one operand of an
+	// intersection (&) that every grant must satisfy, so SpiceDB denies
+	// every check through this field. Kept for API stability.
 	Role []Role
 }
 

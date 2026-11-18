@@ -2896,3 +2896,44 @@ func TestArticle_Editor_NeverGrantedFields_Denied(t *testing.T) {
 	_, err = article.CheckEditor(ctx, extsvc.CheckArticleEditorInputs{Role: []extsvc.Role{"r-ng-editor"}})
 	assert.ErrorIs(t, err, authz.ErrPermissionDenied)
 }
+
+// AUZ-028 (review of #18) — the operators themselves, on the User field
+// that stays grantable: exclusion removes an author who can also browse
+// the parent; intersection requires both.
+func TestArticle_AuthorOnly_ExclusionOnUser(t *testing.T) {
+	ctx := context.Background()
+
+	folder := extsvc.Folder("f-op-author-only")
+	article := extsvc.Article("a-op-author-only")
+	require.NoError(t, article.CreateParentRelations(ctx, extsvc.ArticleParentObjects{Folder: []extsvc.Folder{folder}}))
+	require.NoError(t, article.CreateAuthorRelations(ctx, extsvc.ArticleAuthorObjects{
+		User: []extsvc.User{"u-op-ao-plain", "u-op-ao-browser"},
+	}))
+	require.NoError(t, folder.CreateViewerRelations(ctx, extsvc.FolderViewerObjects{User: []extsvc.User{"u-op-ao-browser"}}))
+
+	ok, err := article.CheckAuthorOnly(ctx, extsvc.CheckArticleAuthorOnlyInputs{User: []extsvc.User{"u-op-ao-plain"}})
+	require.NoError(t, err)
+	assert.True(t, ok, "author without parent browse is granted")
+
+	_, err = article.CheckAuthorOnly(ctx, extsvc.CheckArticleAuthorOnlyInputs{User: []extsvc.User{"u-op-ao-browser"}})
+	assert.ErrorIs(t, err, authz.ErrPermissionDenied, "author who can browse the parent is excluded")
+}
+
+func TestArticle_Editor_IntersectionOnUser(t *testing.T) {
+	ctx := context.Background()
+
+	folder := extsvc.Folder("f-op-editor")
+	article := extsvc.Article("a-op-editor")
+	require.NoError(t, article.CreateParentRelations(ctx, extsvc.ArticleParentObjects{Folder: []extsvc.Folder{folder}}))
+	require.NoError(t, article.CreateAuthorRelations(ctx, extsvc.ArticleAuthorObjects{
+		User: []extsvc.User{"u-op-ed-both", "u-op-ed-author"},
+	}))
+	require.NoError(t, folder.CreateViewerRelations(ctx, extsvc.FolderViewerObjects{User: []extsvc.User{"u-op-ed-both"}}))
+
+	ok, err := article.CheckEditor(ctx, extsvc.CheckArticleEditorInputs{User: []extsvc.User{"u-op-ed-both"}})
+	require.NoError(t, err)
+	assert.True(t, ok, "author who can browse the parent satisfies both operands")
+
+	_, err = article.CheckEditor(ctx, extsvc.CheckArticleEditorInputs{User: []extsvc.User{"u-op-ed-author"}})
+	assert.ErrorIs(t, err, authz.ErrPermissionDenied, "author alone misses the parent->browse operand")
+}
