@@ -108,6 +108,11 @@ func (g *Generator) GenerateObjectSource(name string) error {
 
 	permUsersets := collectPermUsersets(g.Definitions)
 
+	// grantable["<type>/<perm>"] = input types SpiceDB can actually grant,
+	// operator-aware (AUZ-028). Fields in tree but not here get a
+	// "never granted" doc comment.
+	grantable := grantableInputTypes(g.Definitions, defs)
+
 	// subjRefs[objectTypeNamespace] = sorted list of definition namespaces
 	// that allow that object type as a subject of some relation. Drives the
 	// generated PurgeRelationsAsSubject methods (SPEC-014).
@@ -136,6 +141,18 @@ func (g *Generator) GenerateObjectSource(name string) error {
 				return types
 			}
 			return []string{}
+		},
+		// neverGranted reports whether inputType is a Check<Perm>Inputs
+		// field (permissionInputTypes) that SpiceDB can never grant perm to
+		// — reachable only through an excluded branch or a single arm of
+		// an intersection (AUZ-028).
+		"neverGranted": func(objectType string, perm string, inputType string) bool {
+			for _, t := range grantable[fmt.Sprintf("%s/%s", objectType, perm)] {
+				if t == inputType {
+					return false
+				}
+			}
+			return true
 		},
 		"permissionInputUsersets": func(objectType string, perm string) []AllowedType {
 			treename := fmt.Sprintf("%s/%s", objectType, perm)

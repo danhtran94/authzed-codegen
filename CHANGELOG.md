@@ -4,6 +4,20 @@ All notable changes to this project are documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] - Unreleased
+
+### Added
+
+- **Generated doc comments on never-granted input fields.** A `Check<Res><Perm>Inputs` field (also taken by `Lookup<Perm><Res>Resources`) whose type reaches the permission only through an excluded `-` branch, or through a single arm of an `&`, now carries `// <Field> is never granted <perm>: …`. SpiceDB denies every check through such a field. The fields are kept for API stability; only comments are added, and generated `func` / `type` declarations are unchanged. Example: `CheckArticleAuthorOnlyInputs.Group` / `.Role` for `author_only = author - parent->browse`. See `jobs/AUZ-028-permission-operator-tree.md` and `docs/scope-permission-operator-tree.md`.
+- **Generator views** (`internal/generator`, consumed by the experimental `studio` package per ADR-007):
+  - `PermissionView.Rewrite` (operator tree). `Expressions` is now derived from it.
+  - `PermissionExpr.ArrowFunc` (`""` / `"any"` / `"all"`).
+  - `ParamSpec.CaveatType` (the declared SpiceDB type, e.g. `"ipaddress"`, `"list<list<string>>"`).
+
+### Fixed
+
+- The `ParamSpec` doc comment claimed `duration` / `timestamp` caveat params fall back to `any`; they have been typed (`*time.Duration` / `*time.Time`) since AUZ-018.
+
 ## [2.2.0] - 2026-11-18
 
 ### Added

@@ -217,9 +217,17 @@ func (article Article) ReadParentFolderRelations(ctx context.Context) ([]Article
 const ArticleEditor PermissionArticle = "editor"
 
 type CheckArticleEditorInputs struct {
-	User  []User
+	User []User
+	// Group is never granted editor: extsvc/group reaches it only
+	// through an excluded (-) branch or a single arm of an intersection (&),
+	// so SpiceDB denies every check through this field. Kept for API
+	// stability.
 	Group []Group
-	Role  []Role
+	// Role is never granted editor: extsvc/role reaches it only
+	// through an excluded (-) branch or a single arm of an intersection (&),
+	// so SpiceDB denies every check through this field. Kept for API
+	// stability.
+	Role []Role
 }
 
 func (article Article) CheckEditor(ctx context.Context, input CheckArticleEditorInputs) (bool, error) {
@@ -330,9 +338,17 @@ func LookupEditorArticleResources(ctx context.Context, input CheckArticleEditorI
 const ArticleAuthorOnly PermissionArticle = "author_only"
 
 type CheckArticleAuthorOnlyInputs struct {
-	User  []User
+	User []User
+	// Group is never granted author_only: extsvc/group reaches it only
+	// through an excluded (-) branch or a single arm of an intersection (&),
+	// so SpiceDB denies every check through this field. Kept for API
+	// stability.
 	Group []Group
-	Role  []Role
+	// Role is never granted author_only: extsvc/role reaches it only
+	// through an excluded (-) branch or a single arm of an intersection (&),
+	// so SpiceDB denies every check through this field. Kept for API
+	// stability.
+	Role []Role
 }
 
 func (article Article) CheckAuthorOnly(ctx context.Context, input CheckArticleAuthorOnlyInputs) (bool, error) {

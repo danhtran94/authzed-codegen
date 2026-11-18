@@ -2853,3 +2853,46 @@ func TestFolder_LookupMixedBrowse_DirectTypeWinsOverUserset(t *testing.T) {
 	assert.Equal(t, userOnly, both)
 	assert.Equal(t, []extsvc.Folder{"f-lk-mixed-user"}, both.Definite)
 }
+
+// AUZ-028 — fields documented "is never granted" really are denied.
+// The group and role DO hold browse on the parent folder (asserted), so
+// the only thing stopping the grant is the operator: excluded side of
+// `author - parent->browse`, single arm of `author & parent->browse`.
+func grantFolderBrowseToGroupAndRole(t *testing.T, ctx context.Context, folder extsvc.Folder, g extsvc.Group, r extsvc.Role) {
+	t.Helper()
+	require.NoError(t, folder.CreateViewerRelations(ctx, extsvc.FolderViewerObjects{
+		Group: []extsvc.Group{g},
+		Role:  []extsvc.Role{r},
+	}))
+	ok, err := folder.CheckBrowse(ctx, extsvc.CheckFolderBrowseInputs{Group: []extsvc.Group{g}, Role: []extsvc.Role{r}})
+	require.NoError(t, err)
+	require.True(t, ok, "precondition: group and role hold browse on the parent folder")
+}
+
+func TestArticle_AuthorOnly_NeverGrantedFields_Denied(t *testing.T) {
+	ctx := context.Background()
+
+	folder := extsvc.Folder("f-ng-author-only")
+	article := extsvc.Article("a-ng-author-only")
+	grantFolderBrowseToGroupAndRole(t, ctx, folder, "g-ng-author-only", "r-ng-author-only")
+	require.NoError(t, article.CreateParentRelations(ctx, extsvc.ArticleParentObjects{Folder: []extsvc.Folder{folder}}))
+
+	_, err := article.CheckAuthorOnly(ctx, extsvc.CheckArticleAuthorOnlyInputs{Group: []extsvc.Group{"g-ng-author-only"}})
+	assert.ErrorIs(t, err, authz.ErrPermissionDenied)
+	_, err = article.CheckAuthorOnly(ctx, extsvc.CheckArticleAuthorOnlyInputs{Role: []extsvc.Role{"r-ng-author-only"}})
+	assert.ErrorIs(t, err, authz.ErrPermissionDenied)
+}
+
+func TestArticle_Editor_NeverGrantedFields_Denied(t *testing.T) {
+	ctx := context.Background()
+
+	folder := extsvc.Folder("f-ng-editor")
+	article := extsvc.Article("a-ng-editor")
+	grantFolderBrowseToGroupAndRole(t, ctx, folder, "g-ng-editor", "r-ng-editor")
+	require.NoError(t, article.CreateParentRelations(ctx, extsvc.ArticleParentObjects{Folder: []extsvc.Folder{folder}}))
+
+	_, err := article.CheckEditor(ctx, extsvc.CheckArticleEditorInputs{Group: []extsvc.Group{"g-ng-editor"}})
+	assert.ErrorIs(t, err, authz.ErrPermissionDenied)
+	_, err = article.CheckEditor(ctx, extsvc.CheckArticleEditorInputs{Role: []extsvc.Role{"r-ng-editor"}})
+	assert.ErrorIs(t, err, authz.ErrPermissionDenied)
+}

@@ -88,19 +88,29 @@ type AllowedType struct {
 	CaveatFieldName string
 }
 
-// ParamSpec is a single caveat parameter as the generator sees it: the
-// declared name and the inferred Go type. The Go type is best-effort —
-// SpiceDB caveat types that don't have a clean Go analogue (any,
-// duration, timestamp, map, ipaddress, unknown) fall back to `any` and
-// the caller is responsible for passing a structpb-compatible value.
+// ParamSpec is a single caveat parameter as the generator sees it.
+// GoType is the Go type literal emitted on generated Args structs (see
+// caveatTypeToGo): scalars become pointers, duration / timestamp become
+// *time.Duration / *time.Time, ipaddress becomes *string, and map or
+// non-scalar list elements fall back to `any` (the caller passes a
+// structpb-compatible value). CaveatType is the declared SpiceDB type in
+// canonical form ("ipaddress", "list<timestamp>", "map<int>") for
+// consumers that need the schema's type rather than the Go rendering.
 type ParamSpec struct {
-	Name   string
-	GoType string
+	Name       string
+	GoType     string
+	CaveatType string
 }
 
 type PermissionView struct {
-	Name        string
+	Name string
+	// Expressions is Rewrite flattened to its leaves in schema order —
+	// the shape the resolver, walkers and templates consume.
 	Expressions []PermissionExpr
+	// Rewrite is the permission's operator tree as declared (union /
+	// intersection / exclusion, nested as written). It is the single
+	// lowering result; Expressions is derived from it.
+	Rewrite *PermissionNode
 }
 
 type PermissionExpr struct {
@@ -108,6 +118,43 @@ type PermissionExpr struct {
 	Ident     string
 	LeftRel   string
 	RightPerm string
+	// ArrowFunc is "" for `rel->perm`, "any" for `rel.any(perm)` and
+	// "all" for `rel.all(perm)`. Only set when Kind == PermExprArrow.
+	ArrowFunc string
+}
+
+// PermOp is the set operator of a PermissionNode.
+type PermOp string
+
+const (
+	PermOpUnion        PermOp = "union"
+	PermOpIntersection PermOp = "intersection"
+	PermOpExclusion    PermOp = "exclusion"
+)
+
+// PermissionNode is one node of a permission's operator tree. Exactly one
+// of Leaf, or Op + Children, is set. For PermOpExclusion, Children[0] is
+// the base and every later child is subtracted from it.
+type PermissionNode struct {
+	Op       PermOp
+	Children []*PermissionNode
+	Leaf     *PermissionExpr
+}
+
+// flattenPermissionNode returns the leaves of n in pre-order (schema
+// order). This is how PermissionView.Expressions is derived from Rewrite.
+func flattenPermissionNode(n *PermissionNode) []PermissionExpr {
+	if n == nil {
+		return nil
+	}
+	if n.Leaf != nil {
+		return []PermissionExpr{*n.Leaf}
+	}
+	var out []PermissionExpr
+	for _, c := range n.Children {
+		out = append(out, flattenPermissionNode(c)...)
+	}
+	return out
 }
 
 func AdaptDefinitions(caveatDefs []*core.CaveatDefinition, defs []*core.NamespaceDefinition) ([]*DefinitionView, map[string][]ParamSpec, error) {
@@ -161,7 +208,7 @@ func buildCaveatMap(caveatDefs []*core.CaveatDefinition) map[string][]ParamSpec 
 	for _, cd := range caveatDefs {
 		params := make([]ParamSpec, 0, len(cd.GetParameterTypes()))
 		for pname, ptype := range cd.GetParameterTypes() {
-			params = append(params, ParamSpec{Name: pname, GoType: caveatTypeToGo(ptype)})
+			params = append(params, ParamSpec{Name: pname, GoType: caveatTypeToGo(ptype), CaveatType: caveatTypeName(ptype)})
 		}
 		sort.Slice(params, func(i, j int) bool { return params[i].Name < params[j].Name })
 		out[cd.GetName()] = params
@@ -393,6 +440,24 @@ func walkPermCaveats(
 // string, int, uint, double, bytes, duration, timestamp, list<T>,
 // map<T>, ipaddress. Types without a clean Go analogue surface as
 // `any` — caller passes a structpb-compatible value at the call site.
+// caveatTypeName renders a SpiceDB caveat type in its schema spelling:
+// the type name, plus child types in angle brackets for generics
+// ("list<list<string>>", "map<int>").
+func caveatTypeName(t *core.CaveatTypeReference) string {
+	if t == nil {
+		return "any"
+	}
+	children := t.GetChildTypes()
+	if len(children) == 0 {
+		return t.GetTypeName()
+	}
+	names := make([]string, len(children))
+	for i, c := range children {
+		names[i] = caveatTypeName(c)
+	}
+	return t.GetTypeName() + "<" + strings.Join(names, ", ") + ">"
+}
+
 func caveatTypeToGo(t *core.CaveatTypeReference) string {
 	if t == nil {
 		return "any"
@@ -573,39 +638,66 @@ func pascalCaveatName(name string) string {
 }
 
 func adaptPermission(r *core.Relation) (*PermissionView, error) {
-	exprs, err := lowerUsersetRewrite(r.GetName(), r.GetUsersetRewrite())
+	tree, err := lowerRewriteNode(r.GetName(), r.GetUsersetRewrite())
 	if err != nil {
 		return nil, err
 	}
-	return &PermissionView{Name: r.GetName(), Expressions: exprs}, nil
+	return &PermissionView{Name: r.GetName(), Expressions: flattenPermissionNode(tree), Rewrite: tree}, nil
 }
 
+// lowerUsersetRewrite returns the rewrite's leaves in schema order. It is
+// a view over lowerRewriteNode — the tree is the single lowering.
 func lowerUsersetRewrite(permName string, rw *core.UsersetRewrite) ([]PermissionExpr, error) {
-	// Intersection and exclusion are structurally identical to union for codegen:
-	// all children contribute types to a flat set. Treat them identically.
-	union := rw.GetUnion()
-	if union == nil {
-		union = rw.GetIntersection()
+	tree, err := lowerRewriteNode(permName, rw)
+	if err != nil {
+		return nil, err
 	}
-	if union == nil {
-		union = rw.GetExclusion()
+	return flattenPermissionNode(tree), nil
+}
+
+// lowerSetOperationChild returns a child's leaves in schema order: one
+// expression for a leaf child, every branch for a nested rewrite (per
+// AUZ-025). It is a view over lowerChildNode.
+func lowerSetOperationChild(permName string, c *core.SetOperation_Child) ([]PermissionExpr, error) {
+	node, err := lowerChildNode(permName, c)
+	if err != nil {
+		return nil, err
 	}
-	if union == nil {
+	return flattenPermissionNode(node), nil
+}
+
+// lowerRewriteNode lowers a UsersetRewrite to an operator node, keeping
+// which of union / intersection / exclusion was declared (AUZ-028).
+func lowerRewriteNode(permName string, rw *core.UsersetRewrite) (*PermissionNode, error) {
+	var op PermOp
+	var set *core.SetOperation
+	switch {
+	case rw.GetUnion() != nil:
+		op, set = PermOpUnion, rw.GetUnion()
+	case rw.GetIntersection() != nil:
+		op, set = PermOpIntersection, rw.GetIntersection()
+	case rw.GetExclusion() != nil:
+		op, set = PermOpExclusion, rw.GetExclusion()
+	default:
 		return nil, fmt.Errorf("permission %q: rewrite has no union/intersection/exclusion operation", permName)
 	}
 
-	out := make([]PermissionExpr, 0, len(union.GetChild()))
-	for _, child := range union.GetChild() {
-		es, err := lowerSetOperationChild(permName, child)
+	node := &PermissionNode{Op: op, Children: make([]*PermissionNode, 0, len(set.GetChild()))}
+	for _, child := range set.GetChild() {
+		c, err := lowerChildNode(permName, child)
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, es...)
+		node.Children = append(node.Children, c)
 	}
-	return out, nil
+	return node, nil
 }
 
-func lowerSetOperationChild(permName string, c *core.SetOperation_Child) ([]PermissionExpr, error) {
+func leafNode(e PermissionExpr) *PermissionNode {
+	return &PermissionNode{Leaf: &e}
+}
+
+func lowerChildNode(permName string, c *core.SetOperation_Child) (*PermissionNode, error) {
 	// Use type assertion on ChildType rather than Get* accessors. SpiceDB's
 	// namespace builder emits the empty-marker wrappers (XSelf / XThis / XNil)
 	// with NIL inner fields (e.g. &SetOperation_Child_XSelf{} with no Self
@@ -613,17 +705,17 @@ func lowerSetOperationChild(permName string, c *core.SetOperation_Child) ([]Perm
 	// active oneof variant. Type assertion is the reliable detection path.
 	switch ct := c.GetChildType().(type) {
 	case *core.SetOperation_Child_ComputedUserset:
-		return []PermissionExpr{{
+		return leafNode(PermissionExpr{
 			Kind:  PermExprIdentifier,
 			Ident: ct.ComputedUserset.GetRelation(),
-		}}, nil
+		}), nil
 	case *core.SetOperation_Child_TupleToUserset:
 		ttu := ct.TupleToUserset
-		return []PermissionExpr{{
+		return leafNode(PermissionExpr{
 			Kind:      PermExprArrow,
 			LeftRel:   ttu.GetTupleset().GetRelation(),
 			RightPerm: ttu.GetComputedUserset().GetRelation(),
-		}}, nil
+		}), nil
 	case *core.SetOperation_Child_XThis:
 		return nil, fmt.Errorf("permission %q: legacy _this child is not supported", permName)
 	case *core.SetOperation_Child_XNil:
@@ -634,30 +726,31 @@ func lowerSetOperationChild(permName string, c *core.SetOperation_Child) ([]Perm
 		// match server-side; codegen propagates the OwnType into the
 		// permission's input types via the resolver case in
 		// resolvePermissionExpressionTypes.
-		return []PermissionExpr{{Kind: PermExprSelf}}, nil
+		return leafNode(PermissionExpr{Kind: PermExprSelf}), nil
 	case *core.SetOperation_Child_UsersetRewrite:
 		// SpiceDB emits a nested rewrite when operators mix, e.g.
 		// `(a + b) - c` — the union is a child of the exclusion, and it
-		// always has ≥2 children. Every branch contributes types, caveats
-		// and usersets, so all of them are returned (per AUZ-025; the
-		// earlier `exprs[0]` dropped every sibling after the first).
-		exprs, err := lowerUsersetRewrite(permName, ct.UsersetRewrite)
+		// always has ≥2 children. The subtree keeps every branch (per
+		// AUZ-025; the earlier `exprs[0]` dropped every sibling after the
+		// first) and its operator (per AUZ-028).
+		node, err := lowerRewriteNode(permName, ct.UsersetRewrite)
 		if err != nil {
 			return nil, err
 		}
-		if len(exprs) == 0 {
+		if len(node.Children) == 0 {
 			return nil, fmt.Errorf("permission %q: userset rewrite child produced no expressions", permName)
 		}
-		return exprs, nil
+		return node, nil
 	case *core.SetOperation_Child_FunctionedTupleToUserset:
 		// Functioned arrows (`parent.any(view)` / `parent.all(view)`) are
 		// the post-v1.40 wire format for arrows with explicit aggregation
 		// functions. The function value (FUNCTION_ANY = union, FUNCTION_ALL
 		// = strict-intersection across parent rows) is server-side semantic
-		// — SpiceDB enforces it at Check time. The codegen treats them
-		// identically to regular TupleToUserset; downstream consumers
+		// — SpiceDB enforces it at Check time. Downstream consumers
 		// (perm tree resolver, walkPermCaveats, walkPermUsersets, template
-		// arrow walker) key on PermExprArrow + LeftRel/RightPerm.
+		// arrow walker) key on PermExprArrow + LeftRel/RightPerm and treat
+		// both like a regular arrow; ArrowFunc records which function was
+		// declared for consumers that need it (AUZ-028).
 		//
 		// Historical note: pre-v1.11 the rejection message read "with
 		// self/expiration is not supported" — that phrasing was a
@@ -666,11 +759,16 @@ func lowerSetOperationChild(permName string, c *core.SetOperation_Child) ([]Perm
 		// `with <caveat>` and `with expiration` after a relation type
 		// (per pkg/schemadsl/parser/parser.go:425-463).
 		fttu := ct.FunctionedTupleToUserset
-		return []PermissionExpr{{
+		fn := "any"
+		if fttu.GetFunction() == core.FunctionedTupleToUserset_FUNCTION_ALL {
+			fn = "all"
+		}
+		return leafNode(PermissionExpr{
 			Kind:      PermExprArrow,
 			LeftRel:   fttu.GetTupleset().GetRelation(),
 			RightPerm: fttu.GetComputedUserset().GetRelation(),
-		}}, nil
+			ArrowFunc: fn,
+		}), nil
 	default:
 		return nil, fmt.Errorf("permission %q: unknown rewrite child type %T", permName, ct)
 	}

@@ -28,7 +28,8 @@ integration in `docs/RFC-001-policy-engine-integration-patterns.md`.
 
     cmd/authzed-codegen/      → main entry point; calls compiler.Compile + generator
     internal/generator/       → core codegen
-       adapter.go             → proto → DefinitionView; rejects unsupported constructs
+       adapter.go             → proto → DefinitionView (permission operator tree + flat Expressions); rejects unsupported constructs
+       grantable.go           → operator-aware "which input types can SpiceDB actually grant" analysis (AUZ-028)
        generator.go           → resolver + per-object/schema template execution
        opa.go                 → --emit-opa: per-package opa.gen.go (OPA custom builtins)
     internal/templates/       → embedded text/template (object / schema / opa)
@@ -81,13 +82,14 @@ layer is narrower. `internal/generator/adapter.go` rejects unsupported
 constructs at adapt time with schema-relative errors:
 
 - ✓ Union (`+`), arrow (`->`), wildcard relations (`type:*`) — Wildcards sub-struct on Objects + sibling Read/Lookup wildcard methods
-- ✓ Intersection (`&`), exclusion (`-`) — structurally identical to union at codegen time (see `internal/generator/adapter.go:132`)
-- ✗ Caveats (`with <caveat>`), expiration traits (`with expiration`)
-- ✗ Sub-relation references (`foo#bar`)
-- ✗ `_this`, `_nil`, `_self`, functioned tuple-to-userset
+- ✓ Intersection (`&`), exclusion (`-`), nested mixes like `(a + b) - c` — `PermissionView.Rewrite` keeps the operator tree; `Expressions` is its flattened leaves (AUZ-025, AUZ-028). Input types are the union of every branch; fields SpiceDB can never grant get a doc comment (`grantable.go`)
+- ✓ Caveats (`with <caveat>`), expiration traits (`with expiration`) — SPEC-002/003/004
+- ✓ Sub-relation references (`foo#bar`) — SPEC-006; userset Check and Lookup-resources inputs (AUZ-027)
+- ✓ `_self`, functioned tuple-to-userset (`.any()` / `.all()`, recorded in `PermissionExpr.ArrowFunc`) — SPEC-011/012
+- ✗ `_this`, `_nil`
 
-Adding support means extending `lowerSetOperationChild` /
-`flattenAllowedTypes` and a corresponding template branch. See
+Adding support means extending `lowerChildNode` / `flattenAllowedTypes`
+and a corresponding template branch. See
 `docs/ADR-001-parser-migration.md`.
 
 ## Where things live
