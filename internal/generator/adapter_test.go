@@ -253,7 +253,7 @@ func TestFlattenAllowedTypes_UsersetWithDistinctCaveats_Disambiguates(t *testing
 func TestLowerSetOperationChild_FunctionedTUSeAny_MapsToPermExprArrow(t *testing.T) {
 	// `permission p = parent.any(view)` — codegen treats it identically
 	// to a regular TupleToUserset arrow (PermExprArrow with LeftRel +
-	// RightPerm). Function value (FUNCTION_ANY) is read but not stored.
+	// RightPerm). ArrowFunc records the function (AUZ-028).
 	child := &core.SetOperation_Child{
 		ChildType: &core.SetOperation_Child_FunctionedTupleToUserset{
 			FunctionedTupleToUserset: &core.FunctionedTupleToUserset{
@@ -270,6 +270,7 @@ func TestLowerSetOperationChild_FunctionedTUSeAny_MapsToPermExprArrow(t *testing
 	assert.Equal(t, PermExprArrow, got.Kind)
 	assert.Equal(t, "parent", got.LeftRel)
 	assert.Equal(t, "view", got.RightPerm)
+	assert.Equal(t, "any", got.ArrowFunc)
 }
 
 func TestLowerSetOperationChild_FunctionedTUSeAll_MapsToPermExprArrow(t *testing.T) {
@@ -292,6 +293,7 @@ func TestLowerSetOperationChild_FunctionedTUSeAll_MapsToPermExprArrow(t *testing
 	assert.Equal(t, PermExprArrow, got.Kind)
 	assert.Equal(t, "parent", got.LeftRel)
 	assert.Equal(t, "view", got.RightPerm)
+	assert.Equal(t, "all", got.ArrowFunc)
 }
 
 // AUZ-017 — `_self` schema construct (`use self`).
@@ -379,5 +381,76 @@ func TestLowerUsersetRewrite_ExclusionOverNestedUnion_FlattensAll(t *testing.T) 
 		{Kind: PermExprIdentifier, Ident: "viewer"},
 		{Kind: PermExprIdentifier, Ident: "editor"},
 		{Kind: PermExprIdentifier, Ident: "banned"},
+	}, got)
+}
+
+// AUZ-028 — the operator tree is the lowering; Expressions is its flat view.
+
+func TestLowerRewriteNode_ExclusionOverNestedUnion_KeepsOperators(t *testing.T) {
+	// `permission p = (a + b) - c`
+	rw := &core.UsersetRewrite{
+		RewriteOperation: &core.UsersetRewrite_Exclusion{
+			Exclusion: &core.SetOperation{Child: []*core.SetOperation_Child{
+				{ChildType: &core.SetOperation_Child_UsersetRewrite{
+					UsersetRewrite: &core.UsersetRewrite{
+						RewriteOperation: &core.UsersetRewrite_Union{
+							Union: &core.SetOperation{Child: []*core.SetOperation_Child{
+								identChild("a"),
+								identChild("b"),
+							}},
+						},
+					},
+				}},
+				identChild("c"),
+			}},
+		},
+	}
+	leaf := func(rel string) *PermissionNode {
+		return &PermissionNode{Leaf: &PermissionExpr{Kind: PermExprIdentifier, Ident: rel}}
+	}
+	got, err := lowerRewriteNode("p", rw)
+	require.NoError(t, err)
+	assert.Equal(t, &PermissionNode{Op: PermOpExclusion, Children: []*PermissionNode{
+		{Op: PermOpUnion, Children: []*PermissionNode{leaf("a"), leaf("b")}},
+		leaf("c"),
+	}}, got)
+	assert.Equal(t, []PermissionExpr{
+		{Kind: PermExprIdentifier, Ident: "a"},
+		{Kind: PermExprIdentifier, Ident: "b"},
+		{Kind: PermExprIdentifier, Ident: "c"},
+	}, flattenPermissionNode(got))
+}
+
+func TestCaveatTypeName_FixtureCaveats(t *testing.T) {
+	defs, caveatMap := adaptFixtureSchema(t)
+	require.NotEmpty(t, defs)
+
+	got := map[string]string{}
+	for caveat, params := range caveatMap {
+		for _, p := range params {
+			got[caveat+"."+p.Name] = p.CaveatType
+		}
+	}
+	assert.Equal(t, map[string]string{
+		"bookingsvc/region_match.region":        "string",
+		"menusvc/within_hours.close_hour":       "int",
+		"menusvc/within_hours.current_hour":     "int",
+		"menusvc/within_hours.open_hour":        "int",
+		"menusvc/within_months.close_month":     "int",
+		"menusvc/within_months.current_month":   "int",
+		"menusvc/within_months.open_month":      "int",
+		"extsvc/tenant_match.tenant":            "string",
+		"extsvc/within_window.allowed_actions":  "list<string>",
+		"extsvc/within_window.requested_action": "string",
+		"extsvc/quota_check.within_quota":       "bool",
+		"extsvc/quota_check.max_uses":           "int",
+		"extsvc/min_score.min_required":         "double",
+		"extsvc/min_score.current":              "double",
+		"extsvc/has_token.token":                "bytes",
+		"extsvc/version_check.min_version":      "uint",
+		"extsvc/matrix_check.rows":              "list<list<string>>",
+		"extsvc/within_window_d.window":         "duration",
+		"extsvc/before_deadline.deadline":       "timestamp",
+		"extsvc/from_subnet.client_ip":          "ipaddress",
 	}, got)
 }
