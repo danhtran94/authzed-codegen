@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/open-policy-agent/opa/v1/ast"
 	"github.com/open-policy-agent/opa/v1/rego"
@@ -93,11 +94,18 @@ func SpiceDBBuiltins(engine authz.Engine, ctx context.Context) []func(*rego.Rego
 				// Check<X> method, which short-circuits to false on the first
 				// non-granted subject slice. (Single-key call: this is just one check.)
 				for _, e := range entries {
+					var ctxMap map[string]any
+					if caveatCtx != nil {
+						ctxMap = structpbToMap(caveatCtx)
+					}
 					var checkErr error
-					if caveatCtx == nil {
+					switch {
+					case e.SubRelation != "":
+						// Userset subject `<type>:<id>#<subrelation>` (AUZ-029).
+						checkErr = engine.CheckPermissionUserset(ctx, res, perm, authz.Type(e.Namespace), e.IDs, e.SubRelation, ctxMap)
+					case ctxMap == nil:
 						checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
-					} else {
-						ctxMap := structpbToMap(caveatCtx)
+					default:
 						checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 					}
 					granted, fatal := checkOneGranted(checkErr)
@@ -135,19 +143,27 @@ func SpiceDBBuiltins(engine authz.Engine, ctx context.Context) []func(*rego.Rego
 				if len(entries) == 0 {
 					return ast.ArrayTerm(), nil
 				}
-				// First present subject-type key wins — matches the typed
-				// Lookup<Perm><Resource>Resources method. Pass exactly one
-				// key for predictable results.
+				// First present subject-type key wins — direct keys sort before
+				// userset keys, matching the typed Lookup<Perm><Resource>Resources
+				// method's precedence (AUZ-027). Pass exactly one key for
+				// predictable results.
 				e := entries[0]
 				resType := authz.Type("bookingsvc/booking")
 				perm := authz.Permission("change_owner")
 				// Returns LookupResult.Definite only; Conditional entries dropped per
 				// scope-opa-go-builtins-codegen.md Out of Scope item 8.
+				var ctxMap map[string]any
+				if caveatCtx != nil {
+					ctxMap = structpbToMap(caveatCtx)
+				}
 				var result authz.LookupResult
-				if caveatCtx == nil {
+				switch {
+				case e.SubRelation != "":
+					// Userset subject `<type>:<id>#<subrelation>` (AUZ-029).
+					result, err = engine.LookupResourcesUserset(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, e.SubRelation, ctxMap)
+				case ctxMap == nil:
 					result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
-				} else {
-					ctxMap := structpbToMap(caveatCtx)
+				default:
 					result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 				}
 				if err != nil {
@@ -201,11 +217,18 @@ func SpiceDBBuiltins(engine authz.Engine, ctx context.Context) []func(*rego.Rego
 				// Check<X> method, which short-circuits to false on the first
 				// non-granted subject slice. (Single-key call: this is just one check.)
 				for _, e := range entries {
+					var ctxMap map[string]any
+					if caveatCtx != nil {
+						ctxMap = structpbToMap(caveatCtx)
+					}
 					var checkErr error
-					if caveatCtx == nil {
+					switch {
+					case e.SubRelation != "":
+						// Userset subject `<type>:<id>#<subrelation>` (AUZ-029).
+						checkErr = engine.CheckPermissionUserset(ctx, res, perm, authz.Type(e.Namespace), e.IDs, e.SubRelation, ctxMap)
+					case ctxMap == nil:
 						checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
-					} else {
-						ctxMap := structpbToMap(caveatCtx)
+					default:
 						checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 					}
 					granted, fatal := checkOneGranted(checkErr)
@@ -243,19 +266,27 @@ func SpiceDBBuiltins(engine authz.Engine, ctx context.Context) []func(*rego.Rego
 				if len(entries) == 0 {
 					return ast.ArrayTerm(), nil
 				}
-				// First present subject-type key wins — matches the typed
-				// Lookup<Perm><Resource>Resources method. Pass exactly one
-				// key for predictable results.
+				// First present subject-type key wins — direct keys sort before
+				// userset keys, matching the typed Lookup<Perm><Resource>Resources
+				// method's precedence (AUZ-027). Pass exactly one key for
+				// predictable results.
 				e := entries[0]
 				resType := authz.Type("bookingsvc/booking")
 				perm := authz.Permission("regional_write")
 				// Returns LookupResult.Definite only; Conditional entries dropped per
 				// scope-opa-go-builtins-codegen.md Out of Scope item 8.
+				var ctxMap map[string]any
+				if caveatCtx != nil {
+					ctxMap = structpbToMap(caveatCtx)
+				}
 				var result authz.LookupResult
-				if caveatCtx == nil {
+				switch {
+				case e.SubRelation != "":
+					// Userset subject `<type>:<id>#<subrelation>` (AUZ-029).
+					result, err = engine.LookupResourcesUserset(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, e.SubRelation, ctxMap)
+				case ctxMap == nil:
 					result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
-				} else {
-					ctxMap := structpbToMap(caveatCtx)
+				default:
 					result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 				}
 				if err != nil {
@@ -309,11 +340,18 @@ func SpiceDBBuiltins(engine authz.Engine, ctx context.Context) []func(*rego.Rego
 				// Check<X> method, which short-circuits to false on the first
 				// non-granted subject slice. (Single-key call: this is just one check.)
 				for _, e := range entries {
+					var ctxMap map[string]any
+					if caveatCtx != nil {
+						ctxMap = structpbToMap(caveatCtx)
+					}
 					var checkErr error
-					if caveatCtx == nil {
+					switch {
+					case e.SubRelation != "":
+						// Userset subject `<type>:<id>#<subrelation>` (AUZ-029).
+						checkErr = engine.CheckPermissionUserset(ctx, res, perm, authz.Type(e.Namespace), e.IDs, e.SubRelation, ctxMap)
+					case ctxMap == nil:
 						checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
-					} else {
-						ctxMap := structpbToMap(caveatCtx)
+					default:
 						checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 					}
 					granted, fatal := checkOneGranted(checkErr)
@@ -351,19 +389,27 @@ func SpiceDBBuiltins(engine authz.Engine, ctx context.Context) []func(*rego.Rego
 				if len(entries) == 0 {
 					return ast.ArrayTerm(), nil
 				}
-				// First present subject-type key wins — matches the typed
-				// Lookup<Perm><Resource>Resources method. Pass exactly one
-				// key for predictable results.
+				// First present subject-type key wins — direct keys sort before
+				// userset keys, matching the typed Lookup<Perm><Resource>Resources
+				// method's precedence (AUZ-027). Pass exactly one key for
+				// predictable results.
 				e := entries[0]
 				resType := authz.Type("bookingsvc/booking")
 				perm := authz.Permission("write")
 				// Returns LookupResult.Definite only; Conditional entries dropped per
 				// scope-opa-go-builtins-codegen.md Out of Scope item 8.
+				var ctxMap map[string]any
+				if caveatCtx != nil {
+					ctxMap = structpbToMap(caveatCtx)
+				}
 				var result authz.LookupResult
-				if caveatCtx == nil {
+				switch {
+				case e.SubRelation != "":
+					// Userset subject `<type>:<id>#<subrelation>` (AUZ-029).
+					result, err = engine.LookupResourcesUserset(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, e.SubRelation, ctxMap)
+				case ctxMap == nil:
 					result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
-				} else {
-					ctxMap := structpbToMap(caveatCtx)
+				default:
 					result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 				}
 				if err != nil {
@@ -417,11 +463,18 @@ func SpiceDBBuiltins(engine authz.Engine, ctx context.Context) []func(*rego.Rego
 				// Check<X> method, which short-circuits to false on the first
 				// non-granted subject slice. (Single-key call: this is just one check.)
 				for _, e := range entries {
+					var ctxMap map[string]any
+					if caveatCtx != nil {
+						ctxMap = structpbToMap(caveatCtx)
+					}
 					var checkErr error
-					if caveatCtx == nil {
+					switch {
+					case e.SubRelation != "":
+						// Userset subject `<type>:<id>#<subrelation>` (AUZ-029).
+						checkErr = engine.CheckPermissionUserset(ctx, res, perm, authz.Type(e.Namespace), e.IDs, e.SubRelation, ctxMap)
+					case ctxMap == nil:
 						checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
-					} else {
-						ctxMap := structpbToMap(caveatCtx)
+					default:
 						checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 					}
 					granted, fatal := checkOneGranted(checkErr)
@@ -459,19 +512,27 @@ func SpiceDBBuiltins(engine authz.Engine, ctx context.Context) []func(*rego.Rego
 				if len(entries) == 0 {
 					return ast.ArrayTerm(), nil
 				}
-				// First present subject-type key wins — matches the typed
-				// Lookup<Perm><Resource>Resources method. Pass exactly one
-				// key for predictable results.
+				// First present subject-type key wins — direct keys sort before
+				// userset keys, matching the typed Lookup<Perm><Resource>Resources
+				// method's precedence (AUZ-027). Pass exactly one key for
+				// predictable results.
 				e := entries[0]
 				resType := authz.Type("bookingsvc/brand")
 				perm := authz.Permission("create_booking")
 				// Returns LookupResult.Definite only; Conditional entries dropped per
 				// scope-opa-go-builtins-codegen.md Out of Scope item 8.
+				var ctxMap map[string]any
+				if caveatCtx != nil {
+					ctxMap = structpbToMap(caveatCtx)
+				}
 				var result authz.LookupResult
-				if caveatCtx == nil {
+				switch {
+				case e.SubRelation != "":
+					// Userset subject `<type>:<id>#<subrelation>` (AUZ-029).
+					result, err = engine.LookupResourcesUserset(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, e.SubRelation, ctxMap)
+				case ctxMap == nil:
 					result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
-				} else {
-					ctxMap := structpbToMap(caveatCtx)
+				default:
 					result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 				}
 				if err != nil {
@@ -525,11 +586,18 @@ func SpiceDBBuiltins(engine authz.Engine, ctx context.Context) []func(*rego.Rego
 				// Check<X> method, which short-circuits to false on the first
 				// non-granted subject slice. (Single-key call: this is just one check.)
 				for _, e := range entries {
+					var ctxMap map[string]any
+					if caveatCtx != nil {
+						ctxMap = structpbToMap(caveatCtx)
+					}
 					var checkErr error
-					if caveatCtx == nil {
+					switch {
+					case e.SubRelation != "":
+						// Userset subject `<type>:<id>#<subrelation>` (AUZ-029).
+						checkErr = engine.CheckPermissionUserset(ctx, res, perm, authz.Type(e.Namespace), e.IDs, e.SubRelation, ctxMap)
+					case ctxMap == nil:
 						checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
-					} else {
-						ctxMap := structpbToMap(caveatCtx)
+					default:
 						checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 					}
 					granted, fatal := checkOneGranted(checkErr)
@@ -567,19 +635,27 @@ func SpiceDBBuiltins(engine authz.Engine, ctx context.Context) []func(*rego.Rego
 				if len(entries) == 0 {
 					return ast.ArrayTerm(), nil
 				}
-				// First present subject-type key wins — matches the typed
-				// Lookup<Perm><Resource>Resources method. Pass exactly one
-				// key for predictable results.
+				// First present subject-type key wins — direct keys sort before
+				// userset keys, matching the typed Lookup<Perm><Resource>Resources
+				// method's precedence (AUZ-027). Pass exactly one key for
+				// predictable results.
 				e := entries[0]
 				resType := authz.Type("bookingsvc/brand")
 				perm := authz.Permission("manage")
 				// Returns LookupResult.Definite only; Conditional entries dropped per
 				// scope-opa-go-builtins-codegen.md Out of Scope item 8.
+				var ctxMap map[string]any
+				if caveatCtx != nil {
+					ctxMap = structpbToMap(caveatCtx)
+				}
 				var result authz.LookupResult
-				if caveatCtx == nil {
+				switch {
+				case e.SubRelation != "":
+					// Userset subject `<type>:<id>#<subrelation>` (AUZ-029).
+					result, err = engine.LookupResourcesUserset(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, e.SubRelation, ctxMap)
+				case ctxMap == nil:
 					result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
-				} else {
-					ctxMap := structpbToMap(caveatCtx)
+				default:
 					result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 				}
 				if err != nil {
@@ -633,11 +709,18 @@ func SpiceDBBuiltins(engine authz.Engine, ctx context.Context) []func(*rego.Rego
 				// Check<X> method, which short-circuits to false on the first
 				// non-granted subject slice. (Single-key call: this is just one check.)
 				for _, e := range entries {
+					var ctxMap map[string]any
+					if caveatCtx != nil {
+						ctxMap = structpbToMap(caveatCtx)
+					}
 					var checkErr error
-					if caveatCtx == nil {
+					switch {
+					case e.SubRelation != "":
+						// Userset subject `<type>:<id>#<subrelation>` (AUZ-029).
+						checkErr = engine.CheckPermissionUserset(ctx, res, perm, authz.Type(e.Namespace), e.IDs, e.SubRelation, ctxMap)
+					case ctxMap == nil:
 						checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
-					} else {
-						ctxMap := structpbToMap(caveatCtx)
+					default:
 						checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 					}
 					granted, fatal := checkOneGranted(checkErr)
@@ -675,19 +758,27 @@ func SpiceDBBuiltins(engine authz.Engine, ctx context.Context) []func(*rego.Rego
 				if len(entries) == 0 {
 					return ast.ArrayTerm(), nil
 				}
-				// First present subject-type key wins — matches the typed
-				// Lookup<Perm><Resource>Resources method. Pass exactly one
-				// key for predictable results.
+				// First present subject-type key wins — direct keys sort before
+				// userset keys, matching the typed Lookup<Perm><Resource>Resources
+				// method's precedence (AUZ-027). Pass exactly one key for
+				// predictable results.
 				e := entries[0]
 				resType := authz.Type("bookingsvc/employee")
 				perm := authz.Permission("manage")
 				// Returns LookupResult.Definite only; Conditional entries dropped per
 				// scope-opa-go-builtins-codegen.md Out of Scope item 8.
+				var ctxMap map[string]any
+				if caveatCtx != nil {
+					ctxMap = structpbToMap(caveatCtx)
+				}
 				var result authz.LookupResult
-				if caveatCtx == nil {
+				switch {
+				case e.SubRelation != "":
+					// Userset subject `<type>:<id>#<subrelation>` (AUZ-029).
+					result, err = engine.LookupResourcesUserset(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, e.SubRelation, ctxMap)
+				case ctxMap == nil:
 					result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
-				} else {
-					ctxMap := structpbToMap(caveatCtx)
+				default:
 					result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 				}
 				if err != nil {
@@ -741,11 +832,18 @@ func SpiceDBBuiltins(engine authz.Engine, ctx context.Context) []func(*rego.Rego
 				// Check<X> method, which short-circuits to false on the first
 				// non-granted subject slice. (Single-key call: this is just one check.)
 				for _, e := range entries {
+					var ctxMap map[string]any
+					if caveatCtx != nil {
+						ctxMap = structpbToMap(caveatCtx)
+					}
 					var checkErr error
-					if caveatCtx == nil {
+					switch {
+					case e.SubRelation != "":
+						// Userset subject `<type>:<id>#<subrelation>` (AUZ-029).
+						checkErr = engine.CheckPermissionUserset(ctx, res, perm, authz.Type(e.Namespace), e.IDs, e.SubRelation, ctxMap)
+					case ctxMap == nil:
 						checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
-					} else {
-						ctxMap := structpbToMap(caveatCtx)
+					default:
 						checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 					}
 					granted, fatal := checkOneGranted(checkErr)
@@ -783,19 +881,27 @@ func SpiceDBBuiltins(engine authz.Engine, ctx context.Context) []func(*rego.Rego
 				if len(entries) == 0 {
 					return ast.ArrayTerm(), nil
 				}
-				// First present subject-type key wins — matches the typed
-				// Lookup<Perm><Resource>Resources method. Pass exactly one
-				// key for predictable results.
+				// First present subject-type key wins — direct keys sort before
+				// userset keys, matching the typed Lookup<Perm><Resource>Resources
+				// method's precedence (AUZ-027). Pass exactly one key for
+				// predictable results.
 				e := entries[0]
 				resType := authz.Type("bookingsvc/employee")
 				perm := authz.Permission("view")
 				// Returns LookupResult.Definite only; Conditional entries dropped per
 				// scope-opa-go-builtins-codegen.md Out of Scope item 8.
+				var ctxMap map[string]any
+				if caveatCtx != nil {
+					ctxMap = structpbToMap(caveatCtx)
+				}
 				var result authz.LookupResult
-				if caveatCtx == nil {
+				switch {
+				case e.SubRelation != "":
+					// Userset subject `<type>:<id>#<subrelation>` (AUZ-029).
+					result, err = engine.LookupResourcesUserset(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, e.SubRelation, ctxMap)
+				case ctxMap == nil:
 					result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
-				} else {
-					ctxMap := structpbToMap(caveatCtx)
+				default:
 					result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 				}
 				if err != nil {
@@ -871,11 +977,18 @@ func RegisterSpiceDBBuiltinsGlobal(engine authz.Engine, ctx context.Context) {
 			// Check<X> method, which short-circuits to false on the first
 			// non-granted subject slice. (Single-key call: this is just one check.)
 			for _, e := range entries {
+				var ctxMap map[string]any
+				if caveatCtx != nil {
+					ctxMap = structpbToMap(caveatCtx)
+				}
 				var checkErr error
-				if caveatCtx == nil {
+				switch {
+				case e.SubRelation != "":
+					// Userset subject `<type>:<id>#<subrelation>` (AUZ-029).
+					checkErr = engine.CheckPermissionUserset(ctx, res, perm, authz.Type(e.Namespace), e.IDs, e.SubRelation, ctxMap)
+				case ctxMap == nil:
 					checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
-				} else {
-					ctxMap := structpbToMap(caveatCtx)
+				default:
 					checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 				}
 				granted, fatal := checkOneGranted(checkErr)
@@ -913,19 +1026,27 @@ func RegisterSpiceDBBuiltinsGlobal(engine authz.Engine, ctx context.Context) {
 			if len(entries) == 0 {
 				return ast.ArrayTerm(), nil
 			}
-			// First present subject-type key wins — matches the typed
-			// Lookup<Perm><Resource>Resources method. Pass exactly one
-			// key for predictable results.
+			// First present subject-type key wins — direct keys sort before
+			// userset keys, matching the typed Lookup<Perm><Resource>Resources
+			// method's precedence (AUZ-027). Pass exactly one key for
+			// predictable results.
 			e := entries[0]
 			resType := authz.Type("bookingsvc/booking")
 			perm := authz.Permission("change_owner")
 			// Returns LookupResult.Definite only; Conditional entries dropped per
 			// scope-opa-go-builtins-codegen.md Out of Scope item 8.
+			var ctxMap map[string]any
+			if caveatCtx != nil {
+				ctxMap = structpbToMap(caveatCtx)
+			}
 			var result authz.LookupResult
-			if caveatCtx == nil {
+			switch {
+			case e.SubRelation != "":
+				// Userset subject `<type>:<id>#<subrelation>` (AUZ-029).
+				result, err = engine.LookupResourcesUserset(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, e.SubRelation, ctxMap)
+			case ctxMap == nil:
 				result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
-			} else {
-				ctxMap := structpbToMap(caveatCtx)
+			default:
 				result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 			}
 			if err != nil {
@@ -979,11 +1100,18 @@ func RegisterSpiceDBBuiltinsGlobal(engine authz.Engine, ctx context.Context) {
 			// Check<X> method, which short-circuits to false on the first
 			// non-granted subject slice. (Single-key call: this is just one check.)
 			for _, e := range entries {
+				var ctxMap map[string]any
+				if caveatCtx != nil {
+					ctxMap = structpbToMap(caveatCtx)
+				}
 				var checkErr error
-				if caveatCtx == nil {
+				switch {
+				case e.SubRelation != "":
+					// Userset subject `<type>:<id>#<subrelation>` (AUZ-029).
+					checkErr = engine.CheckPermissionUserset(ctx, res, perm, authz.Type(e.Namespace), e.IDs, e.SubRelation, ctxMap)
+				case ctxMap == nil:
 					checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
-				} else {
-					ctxMap := structpbToMap(caveatCtx)
+				default:
 					checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 				}
 				granted, fatal := checkOneGranted(checkErr)
@@ -1021,19 +1149,27 @@ func RegisterSpiceDBBuiltinsGlobal(engine authz.Engine, ctx context.Context) {
 			if len(entries) == 0 {
 				return ast.ArrayTerm(), nil
 			}
-			// First present subject-type key wins — matches the typed
-			// Lookup<Perm><Resource>Resources method. Pass exactly one
-			// key for predictable results.
+			// First present subject-type key wins — direct keys sort before
+			// userset keys, matching the typed Lookup<Perm><Resource>Resources
+			// method's precedence (AUZ-027). Pass exactly one key for
+			// predictable results.
 			e := entries[0]
 			resType := authz.Type("bookingsvc/booking")
 			perm := authz.Permission("regional_write")
 			// Returns LookupResult.Definite only; Conditional entries dropped per
 			// scope-opa-go-builtins-codegen.md Out of Scope item 8.
+			var ctxMap map[string]any
+			if caveatCtx != nil {
+				ctxMap = structpbToMap(caveatCtx)
+			}
 			var result authz.LookupResult
-			if caveatCtx == nil {
+			switch {
+			case e.SubRelation != "":
+				// Userset subject `<type>:<id>#<subrelation>` (AUZ-029).
+				result, err = engine.LookupResourcesUserset(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, e.SubRelation, ctxMap)
+			case ctxMap == nil:
 				result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
-			} else {
-				ctxMap := structpbToMap(caveatCtx)
+			default:
 				result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 			}
 			if err != nil {
@@ -1087,11 +1223,18 @@ func RegisterSpiceDBBuiltinsGlobal(engine authz.Engine, ctx context.Context) {
 			// Check<X> method, which short-circuits to false on the first
 			// non-granted subject slice. (Single-key call: this is just one check.)
 			for _, e := range entries {
+				var ctxMap map[string]any
+				if caveatCtx != nil {
+					ctxMap = structpbToMap(caveatCtx)
+				}
 				var checkErr error
-				if caveatCtx == nil {
+				switch {
+				case e.SubRelation != "":
+					// Userset subject `<type>:<id>#<subrelation>` (AUZ-029).
+					checkErr = engine.CheckPermissionUserset(ctx, res, perm, authz.Type(e.Namespace), e.IDs, e.SubRelation, ctxMap)
+				case ctxMap == nil:
 					checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
-				} else {
-					ctxMap := structpbToMap(caveatCtx)
+				default:
 					checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 				}
 				granted, fatal := checkOneGranted(checkErr)
@@ -1129,19 +1272,27 @@ func RegisterSpiceDBBuiltinsGlobal(engine authz.Engine, ctx context.Context) {
 			if len(entries) == 0 {
 				return ast.ArrayTerm(), nil
 			}
-			// First present subject-type key wins — matches the typed
-			// Lookup<Perm><Resource>Resources method. Pass exactly one
-			// key for predictable results.
+			// First present subject-type key wins — direct keys sort before
+			// userset keys, matching the typed Lookup<Perm><Resource>Resources
+			// method's precedence (AUZ-027). Pass exactly one key for
+			// predictable results.
 			e := entries[0]
 			resType := authz.Type("bookingsvc/booking")
 			perm := authz.Permission("write")
 			// Returns LookupResult.Definite only; Conditional entries dropped per
 			// scope-opa-go-builtins-codegen.md Out of Scope item 8.
+			var ctxMap map[string]any
+			if caveatCtx != nil {
+				ctxMap = structpbToMap(caveatCtx)
+			}
 			var result authz.LookupResult
-			if caveatCtx == nil {
+			switch {
+			case e.SubRelation != "":
+				// Userset subject `<type>:<id>#<subrelation>` (AUZ-029).
+				result, err = engine.LookupResourcesUserset(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, e.SubRelation, ctxMap)
+			case ctxMap == nil:
 				result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
-			} else {
-				ctxMap := structpbToMap(caveatCtx)
+			default:
 				result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 			}
 			if err != nil {
@@ -1195,11 +1346,18 @@ func RegisterSpiceDBBuiltinsGlobal(engine authz.Engine, ctx context.Context) {
 			// Check<X> method, which short-circuits to false on the first
 			// non-granted subject slice. (Single-key call: this is just one check.)
 			for _, e := range entries {
+				var ctxMap map[string]any
+				if caveatCtx != nil {
+					ctxMap = structpbToMap(caveatCtx)
+				}
 				var checkErr error
-				if caveatCtx == nil {
+				switch {
+				case e.SubRelation != "":
+					// Userset subject `<type>:<id>#<subrelation>` (AUZ-029).
+					checkErr = engine.CheckPermissionUserset(ctx, res, perm, authz.Type(e.Namespace), e.IDs, e.SubRelation, ctxMap)
+				case ctxMap == nil:
 					checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
-				} else {
-					ctxMap := structpbToMap(caveatCtx)
+				default:
 					checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 				}
 				granted, fatal := checkOneGranted(checkErr)
@@ -1237,19 +1395,27 @@ func RegisterSpiceDBBuiltinsGlobal(engine authz.Engine, ctx context.Context) {
 			if len(entries) == 0 {
 				return ast.ArrayTerm(), nil
 			}
-			// First present subject-type key wins — matches the typed
-			// Lookup<Perm><Resource>Resources method. Pass exactly one
-			// key for predictable results.
+			// First present subject-type key wins — direct keys sort before
+			// userset keys, matching the typed Lookup<Perm><Resource>Resources
+			// method's precedence (AUZ-027). Pass exactly one key for
+			// predictable results.
 			e := entries[0]
 			resType := authz.Type("bookingsvc/brand")
 			perm := authz.Permission("create_booking")
 			// Returns LookupResult.Definite only; Conditional entries dropped per
 			// scope-opa-go-builtins-codegen.md Out of Scope item 8.
+			var ctxMap map[string]any
+			if caveatCtx != nil {
+				ctxMap = structpbToMap(caveatCtx)
+			}
 			var result authz.LookupResult
-			if caveatCtx == nil {
+			switch {
+			case e.SubRelation != "":
+				// Userset subject `<type>:<id>#<subrelation>` (AUZ-029).
+				result, err = engine.LookupResourcesUserset(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, e.SubRelation, ctxMap)
+			case ctxMap == nil:
 				result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
-			} else {
-				ctxMap := structpbToMap(caveatCtx)
+			default:
 				result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 			}
 			if err != nil {
@@ -1303,11 +1469,18 @@ func RegisterSpiceDBBuiltinsGlobal(engine authz.Engine, ctx context.Context) {
 			// Check<X> method, which short-circuits to false on the first
 			// non-granted subject slice. (Single-key call: this is just one check.)
 			for _, e := range entries {
+				var ctxMap map[string]any
+				if caveatCtx != nil {
+					ctxMap = structpbToMap(caveatCtx)
+				}
 				var checkErr error
-				if caveatCtx == nil {
+				switch {
+				case e.SubRelation != "":
+					// Userset subject `<type>:<id>#<subrelation>` (AUZ-029).
+					checkErr = engine.CheckPermissionUserset(ctx, res, perm, authz.Type(e.Namespace), e.IDs, e.SubRelation, ctxMap)
+				case ctxMap == nil:
 					checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
-				} else {
-					ctxMap := structpbToMap(caveatCtx)
+				default:
 					checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 				}
 				granted, fatal := checkOneGranted(checkErr)
@@ -1345,19 +1518,27 @@ func RegisterSpiceDBBuiltinsGlobal(engine authz.Engine, ctx context.Context) {
 			if len(entries) == 0 {
 				return ast.ArrayTerm(), nil
 			}
-			// First present subject-type key wins — matches the typed
-			// Lookup<Perm><Resource>Resources method. Pass exactly one
-			// key for predictable results.
+			// First present subject-type key wins — direct keys sort before
+			// userset keys, matching the typed Lookup<Perm><Resource>Resources
+			// method's precedence (AUZ-027). Pass exactly one key for
+			// predictable results.
 			e := entries[0]
 			resType := authz.Type("bookingsvc/brand")
 			perm := authz.Permission("manage")
 			// Returns LookupResult.Definite only; Conditional entries dropped per
 			// scope-opa-go-builtins-codegen.md Out of Scope item 8.
+			var ctxMap map[string]any
+			if caveatCtx != nil {
+				ctxMap = structpbToMap(caveatCtx)
+			}
 			var result authz.LookupResult
-			if caveatCtx == nil {
+			switch {
+			case e.SubRelation != "":
+				// Userset subject `<type>:<id>#<subrelation>` (AUZ-029).
+				result, err = engine.LookupResourcesUserset(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, e.SubRelation, ctxMap)
+			case ctxMap == nil:
 				result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
-			} else {
-				ctxMap := structpbToMap(caveatCtx)
+			default:
 				result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 			}
 			if err != nil {
@@ -1411,11 +1592,18 @@ func RegisterSpiceDBBuiltinsGlobal(engine authz.Engine, ctx context.Context) {
 			// Check<X> method, which short-circuits to false on the first
 			// non-granted subject slice. (Single-key call: this is just one check.)
 			for _, e := range entries {
+				var ctxMap map[string]any
+				if caveatCtx != nil {
+					ctxMap = structpbToMap(caveatCtx)
+				}
 				var checkErr error
-				if caveatCtx == nil {
+				switch {
+				case e.SubRelation != "":
+					// Userset subject `<type>:<id>#<subrelation>` (AUZ-029).
+					checkErr = engine.CheckPermissionUserset(ctx, res, perm, authz.Type(e.Namespace), e.IDs, e.SubRelation, ctxMap)
+				case ctxMap == nil:
 					checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
-				} else {
-					ctxMap := structpbToMap(caveatCtx)
+				default:
 					checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 				}
 				granted, fatal := checkOneGranted(checkErr)
@@ -1453,19 +1641,27 @@ func RegisterSpiceDBBuiltinsGlobal(engine authz.Engine, ctx context.Context) {
 			if len(entries) == 0 {
 				return ast.ArrayTerm(), nil
 			}
-			// First present subject-type key wins — matches the typed
-			// Lookup<Perm><Resource>Resources method. Pass exactly one
-			// key for predictable results.
+			// First present subject-type key wins — direct keys sort before
+			// userset keys, matching the typed Lookup<Perm><Resource>Resources
+			// method's precedence (AUZ-027). Pass exactly one key for
+			// predictable results.
 			e := entries[0]
 			resType := authz.Type("bookingsvc/employee")
 			perm := authz.Permission("manage")
 			// Returns LookupResult.Definite only; Conditional entries dropped per
 			// scope-opa-go-builtins-codegen.md Out of Scope item 8.
+			var ctxMap map[string]any
+			if caveatCtx != nil {
+				ctxMap = structpbToMap(caveatCtx)
+			}
 			var result authz.LookupResult
-			if caveatCtx == nil {
+			switch {
+			case e.SubRelation != "":
+				// Userset subject `<type>:<id>#<subrelation>` (AUZ-029).
+				result, err = engine.LookupResourcesUserset(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, e.SubRelation, ctxMap)
+			case ctxMap == nil:
 				result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
-			} else {
-				ctxMap := structpbToMap(caveatCtx)
+			default:
 				result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 			}
 			if err != nil {
@@ -1519,11 +1715,18 @@ func RegisterSpiceDBBuiltinsGlobal(engine authz.Engine, ctx context.Context) {
 			// Check<X> method, which short-circuits to false on the first
 			// non-granted subject slice. (Single-key call: this is just one check.)
 			for _, e := range entries {
+				var ctxMap map[string]any
+				if caveatCtx != nil {
+					ctxMap = structpbToMap(caveatCtx)
+				}
 				var checkErr error
-				if caveatCtx == nil {
+				switch {
+				case e.SubRelation != "":
+					// Userset subject `<type>:<id>#<subrelation>` (AUZ-029).
+					checkErr = engine.CheckPermissionUserset(ctx, res, perm, authz.Type(e.Namespace), e.IDs, e.SubRelation, ctxMap)
+				case ctxMap == nil:
 					checkErr = engine.CheckPermission(ctx, res, perm, authz.Type(e.Namespace), e.IDs)
-				} else {
-					ctxMap := structpbToMap(caveatCtx)
+				default:
 					checkErr = engine.CheckPermissionWithCaveat(ctx, res, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 				}
 				granted, fatal := checkOneGranted(checkErr)
@@ -1561,19 +1764,27 @@ func RegisterSpiceDBBuiltinsGlobal(engine authz.Engine, ctx context.Context) {
 			if len(entries) == 0 {
 				return ast.ArrayTerm(), nil
 			}
-			// First present subject-type key wins — matches the typed
-			// Lookup<Perm><Resource>Resources method. Pass exactly one
-			// key for predictable results.
+			// First present subject-type key wins — direct keys sort before
+			// userset keys, matching the typed Lookup<Perm><Resource>Resources
+			// method's precedence (AUZ-027). Pass exactly one key for
+			// predictable results.
 			e := entries[0]
 			resType := authz.Type("bookingsvc/employee")
 			perm := authz.Permission("view")
 			// Returns LookupResult.Definite only; Conditional entries dropped per
 			// scope-opa-go-builtins-codegen.md Out of Scope item 8.
+			var ctxMap map[string]any
+			if caveatCtx != nil {
+				ctxMap = structpbToMap(caveatCtx)
+			}
 			var result authz.LookupResult
-			if caveatCtx == nil {
+			switch {
+			case e.SubRelation != "":
+				// Userset subject `<type>:<id>#<subrelation>` (AUZ-029).
+				result, err = engine.LookupResourcesUserset(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, e.SubRelation, ctxMap)
+			case ctxMap == nil:
 				result, err = engine.LookupResources(ctx, resType, perm, authz.Type(e.Namespace), e.IDs)
-			} else {
-				ctxMap := structpbToMap(caveatCtx)
+			default:
 				result, err = engine.LookupResourcesWithCaveat(ctx, resType, perm, authz.Type(e.Namespace), e.IDs, ctxMap)
 			}
 			if err != nil {
@@ -1589,15 +1800,22 @@ func RegisterSpiceDBBuiltinsGlobal(engine authz.Engine, ctx context.Context) {
 }
 
 // subjectEntry is one (subject type, ids) pair parsed from the subject
-// object argument.
+// object argument. SubRelation is set for a userset key
+// "<namespace>#<subrelation>" (AUZ-029) and empty for a direct subject.
 type subjectEntry struct {
-	Namespace string
-	IDs       []authz.ID
+	Namespace   string
+	SubRelation string
+	IDs         []authz.ID
 }
 
 // subjectEntries parses the subject object {"<namespace>": id | [id, ...]}
-// into entries sorted by namespace (deterministic — OPA's ast.Object
-// iteration order is not). Keys with an empty id list are dropped, so an
+// into entries. A key "<namespace>#<subrelation>" names a userset subject
+// (AUZ-029). Keys are validated before their ids: an empty subject type,
+// an empty sub-relation ("<namespace>#") or a second '#' is an error, even
+// when the id list is empty. Entries
+// are sorted direct keys first, then userset keys, each by key
+// (deterministic — OPA's ast.Object iteration order is not); lookups use
+// the first entry, so direct subjects keep precedence as in the typed API. Keys with an empty id list are dropped, so an
 // empty key counts as absent — matching the typed Check<X> method, which
 // skips empty slices — and a subject with no ids at all yields no entries,
 // which the callers' len(entries) == 0 guard turns into false / [] (AUZ-026).
@@ -1619,6 +1837,20 @@ func subjectEntries(t *ast.Term) ([]subjectEntry, error) {
 			iterErr = subjectError("subject keys must be strings")
 			return
 		}
+		// Validate the key before looking at the ids, so a malformed key is
+		// reported even when its id list is empty.
+		ns, subRel, isUserset := strings.Cut(string(ks), "#")
+		switch {
+		case ns == "":
+			iterErr = subjectError(fmt.Sprintf("subject key %q: empty subject type", string(ks)))
+		case isUserset && subRel == "":
+			iterErr = subjectError(fmt.Sprintf("subject key %q: empty sub-relation after '#'", string(ks)))
+		case strings.Contains(subRel, "#"):
+			iterErr = subjectError(fmt.Sprintf("subject key %q: more than one '#'", string(ks)))
+		}
+		if iterErr != nil {
+			return
+		}
 		ids, err := idsFromTerm(v)
 		if err != nil {
 			iterErr = err
@@ -1627,12 +1859,21 @@ func subjectEntries(t *ast.Term) ([]subjectEntry, error) {
 		if len(ids) == 0 {
 			return
 		}
-		entries = append(entries, subjectEntry{Namespace: string(ks), IDs: ids})
+		entries = append(entries, subjectEntry{Namespace: ns, SubRelation: subRel, IDs: ids})
 	})
 	if iterErr != nil {
 		return nil, iterErr
 	}
-	sort.Slice(entries, func(i, j int) bool { return entries[i].Namespace < entries[j].Namespace })
+	sort.Slice(entries, func(i, j int) bool {
+		a, b := entries[i], entries[j]
+		if (a.SubRelation == "") != (b.SubRelation == "") {
+			return a.SubRelation == ""
+		}
+		if a.Namespace != b.Namespace {
+			return a.Namespace < b.Namespace
+		}
+		return a.SubRelation < b.SubRelation
+	})
 	return entries, nil
 }
 
