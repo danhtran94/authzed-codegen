@@ -4,6 +4,17 @@ All notable changes to this project are documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0] - Unreleased
+
+### Added
+
+- **Userset subjects in OPA builtins.** A subject key `"<type>#<subrelation>"`, e.g. `extsvc.check_folder_collab_view({"extsvc/team#admin": "t1"}, "f1", {})`, now routes through `Engine.CheckPermissionUserset` / `Engine.LookupResourcesUserset`. It uses the same literal-userset semantics as the typed userset inputs, and request-time caveat context is forwarded. Before this release, such a key reached SpiceDB as an invalid object type, and the builtin's error left the result undefined. This closes the OPA side of AUZ-027. See `jobs/AUZ-029-opa-userset-subjects.md`. Regenerate `opa.gen.go`.
+- In lookup builtins, direct keys now sort before userset keys, so with mixed keys the direct subject is used, as in the typed `Lookup<Perm><Resource>Resources`. Calls with direct keys only are unaffected.
+
+### Fixed
+
+- **README:** builtin errors were described as always failing the Rego evaluation. That only happens with `rego.StrictBuiltinErrors(true)`; by default OPA makes the call undefined, which a `default allow := false` policy treats as deny.
+
 ## [2.3.0] - 2026-11-18
 
 ### Added

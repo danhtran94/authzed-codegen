@@ -404,3 +404,91 @@ func TestOPA_Article_NeverGrantedSubjectsAndOperators(t *testing.T) {
 		})
 	}
 }
+
+// evalOPAErr is evalOPA with rego.StrictBuiltinErrors, for policies
+// expected to fail evaluation. Without strict mode OPA turns a builtin
+// error into an undefined result (see the non-strict assertion below).
+func evalOPAErr(t *testing.T, ctx context.Context, query, rule string) error {
+	t.Helper()
+	opts := []func(*rego.Rego){
+		rego.Query(query),
+		rego.Module("test.rego", "package test\nimport future.keywords.if\n\n"+rule+"\n"),
+		rego.StrictBuiltinErrors(true),
+	}
+	opts = append(opts, extsvc.SpiceDBBuiltins(sb.Engine, ctx)...)
+	_, err := rego.New(opts...).Eval(ctx)
+	return err
+}
+
+// AUZ-029 — userset subjects in OPA builtins: the key "<type>#<subrel>"
+// routes through CheckPermissionUserset / LookupResourcesUserset, with the
+// same literal-userset semantics as the typed API.
+func TestOPA_UsersetSubject_CheckAndLookup(t *testing.T) {
+	ctx := context.Background()
+
+	folder := extsvc.Folder("opa-us-folder")
+	require.NoError(t, folder.CreateCollabRelations(ctx, extsvc.FolderCollabObjects{
+		TeamAdmin: []extsvc.Team{"opa-us-team"},
+	}))
+
+	assert.Equal(t, true, evalOPA(t, ctx, "data.test.allow",
+		`allow := extsvc.check_folder_collab_view({"extsvc/team#admin": "opa-us-team"}, "opa-us-folder", {})`))
+	assert.Equal(t, false, evalOPA(t, ctx, "data.test.allow",
+		`allow := extsvc.check_folder_collab_view({"extsvc/team#admin": "opa-us-other"}, "opa-us-folder", {})`))
+	assert.Equal(t, []any{"opa-us-folder"}, evalOPA(t, ctx, "data.test.resources",
+		`resources := extsvc.lookup_folder_collab_view_resources({"extsvc/team#admin": ["opa-us-team"]}, {})`))
+}
+
+// AUZ-029 — a caveated userset: request-time context reaches the engine.
+func TestOPA_UsersetSubject_WithCaveat(t *testing.T) {
+	ctx := context.Background()
+
+	require.NoError(t, extsvc.Folder("opa-us-gated").CreateGatedCollabRelations(ctx, extsvc.FolderGatedCollabObjects{
+		TeamAdmin: []extsvc.Team{"opa-us-gated-team"},
+	}))
+
+	assert.Equal(t, true, evalOPA(t, ctx, "data.test.allow",
+		`allow := extsvc.check_folder_gated_collab_view({"extsvc/team#admin": "opa-us-gated-team"}, "opa-us-gated", {"tenant": "acme"})`))
+	assert.Equal(t, false, evalOPA(t, ctx, "data.test.allow",
+		`allow := extsvc.check_folder_gated_collab_view({"extsvc/team#admin": "opa-us-gated-team"}, "opa-us-gated", {"tenant": "other"})`))
+	assert.Equal(t, []any{"opa-us-gated"}, evalOPA(t, ctx, "data.test.resources",
+		`resources := extsvc.lookup_folder_gated_collab_view_resources({"extsvc/team#admin": ["opa-us-gated-team"]}, {"tenant": "acme"})`))
+}
+
+// AUZ-029 — mixed keys: check is AND across direct and userset keys;
+// lookup takes the direct key first, as the typed Lookup*Resources does,
+// even though "extsvc/team#admin" sorts before "extsvc/user".
+func TestOPA_UsersetSubject_MixedKeys(t *testing.T) {
+	ctx := context.Background()
+
+	require.NoError(t, extsvc.Folder("opa-us-mixed-user").CreateMixedViewRelations(ctx, extsvc.FolderMixedViewObjects{
+		User:      []extsvc.User{"opa-us-mixed-u"},
+		TeamAdmin: []extsvc.Team{"opa-us-mixed-t"},
+	}))
+	require.NoError(t, extsvc.Folder("opa-us-mixed-team").CreateMixedViewRelations(ctx, extsvc.FolderMixedViewObjects{
+		TeamAdmin: []extsvc.Team{"opa-us-mixed-t"},
+	}))
+
+	assert.Equal(t, true, evalOPA(t, ctx, "data.test.allow",
+		`allow := extsvc.check_folder_mixed_browse({"extsvc/user": "opa-us-mixed-u", "extsvc/team#admin": "opa-us-mixed-t"}, "opa-us-mixed-user", {})`))
+	assert.Equal(t, false, evalOPA(t, ctx, "data.test.allow",
+		`allow := extsvc.check_folder_mixed_browse({"extsvc/user": "opa-us-mixed-u", "extsvc/team#admin": "opa-us-mixed-t"}, "opa-us-mixed-team", {})`),
+		"AND: the user is not granted on the team-only folder")
+	assert.Equal(t, []any{"opa-us-mixed-user"}, evalOPA(t, ctx, "data.test.resources",
+		`resources := extsvc.lookup_folder_mixed_browse_resources({"extsvc/team#admin": ["opa-us-mixed-t"], "extsvc/user": ["opa-us-mixed-u"]}, {})`),
+		"direct key wins over the userset key")
+}
+
+// AUZ-029 — "<type>#" with an empty sub-relation is a caller error.
+func TestOPA_UsersetSubject_EmptySubRelation_Errors(t *testing.T) {
+	ctx := context.Background()
+
+	rule := `allow := extsvc.check_folder_collab_view({"extsvc/team#": "t"}, "opa-us-folder", {})`
+	err := evalOPAErr(t, ctx, "data.test.allow", rule)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "empty sub-relation")
+
+	// Default (non-strict) OPA: the builtin error leaves allow undefined,
+	// so a `default allow := false` policy denies — fail-closed.
+	assert.Nil(t, evalOPA(t, ctx, "data.test.allow", rule))
+}
