@@ -9436,7 +9436,9 @@ type subjectEntry struct {
 
 // subjectEntries parses the subject object {"<namespace>": id | [id, ...]}
 // into entries. A key "<namespace>#<subrelation>" names a userset subject
-// (AUZ-029); "<namespace>#" with an empty sub-relation is an error. Entries
+// (AUZ-029). Keys are validated before their ids: an empty subject type,
+// an empty sub-relation ("<namespace>#") or a second '#' is an error, even
+// when the id list is empty. Entries
 // are sorted direct keys first, then userset keys, each by key
 // (deterministic — OPA's ast.Object iteration order is not); lookups use
 // the first entry, so direct subjects keep precedence as in the typed API. Keys with an empty id list are dropped, so an
@@ -9461,17 +9463,26 @@ func subjectEntries(t *ast.Term) ([]subjectEntry, error) {
 			iterErr = subjectError("subject keys must be strings")
 			return
 		}
+		// Validate the key before looking at the ids, so a malformed key is
+		// reported even when its id list is empty.
+		ns, subRel, isUserset := strings.Cut(string(ks), "#")
+		switch {
+		case ns == "":
+			iterErr = subjectError(fmt.Sprintf("subject key %q: empty subject type", string(ks)))
+		case isUserset && subRel == "":
+			iterErr = subjectError(fmt.Sprintf("subject key %q: empty sub-relation after '#'", string(ks)))
+		case strings.Contains(subRel, "#"):
+			iterErr = subjectError(fmt.Sprintf("subject key %q: more than one '#'", string(ks)))
+		}
+		if iterErr != nil {
+			return
+		}
 		ids, err := idsFromTerm(v)
 		if err != nil {
 			iterErr = err
 			return
 		}
 		if len(ids) == 0 {
-			return
-		}
-		ns, subRel, isUserset := strings.Cut(string(ks), "#")
-		if isUserset && subRel == "" {
-			iterErr = subjectError(fmt.Sprintf("subject key %q: empty sub-relation after '#'", string(ks)))
 			return
 		}
 		entries = append(entries, subjectEntry{Namespace: ns, SubRelation: subRel, IDs: ids})

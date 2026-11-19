@@ -488,7 +488,26 @@ func TestOPA_UsersetSubject_EmptySubRelation_Errors(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "empty sub-relation")
 
-	// Default (non-strict) OPA: the builtin error leaves allow undefined,
-	// so a `default allow := false` policy denies — fail-closed.
+	// Default (non-strict) OPA: the builtin error leaves allow undefined.
 	assert.Nil(t, evalOPA(t, ctx, "data.test.allow", rule))
+}
+
+// AUZ-029 (review of #21) — malformed keys are rejected even when their id
+// list is empty, and even when a valid direct key would win the lookup.
+func TestOPA_UsersetSubject_MalformedKeys_Error(t *testing.T) {
+	ctx := context.Background()
+
+	cases := map[string]string{
+		"empty sub-relation, empty ids": `allow := extsvc.check_folder_collab_view({"extsvc/team#": []}, "f", {})`,
+		"second separator":              `allow := extsvc.check_folder_collab_view({"extsvc/team#admin#": "t"}, "f", {})`,
+		"empty subject type":            `allow := extsvc.check_folder_collab_view({"#admin": "t"}, "f", {})`,
+		"malformed beside direct key":   `allow := extsvc.lookup_folder_mixed_browse_resources({"extsvc/team#admin#": ["t"], "extsvc/user": ["u"]}, {})`,
+	}
+	for name, rule := range cases {
+		t.Run(name, func(t *testing.T) {
+			err := evalOPAErr(t, ctx, "data.test.allow", rule)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "invalid subject")
+		})
+	}
 }

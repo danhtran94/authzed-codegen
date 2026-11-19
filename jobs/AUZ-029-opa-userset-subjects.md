@@ -24,7 +24,7 @@ Since AUZ-027 the typed `Check<Perm>` and `Lookup<Perm><Resource>Resources` meth
 - **`checkImpl`:** a userset entry calls `CheckPermissionUserset` (with `nil` or the caveat context map). Direct entries work as before.
 - **`lookupImpl`:** a userset first entry calls `LookupResourcesUserset`.
 
-The key syntax mirrors SpiceDB's own userset notation (`team:t1#admin`). Before this change, a key containing `#` always produced an undefined result, so no working policy changes behavior.
+The key syntax mirrors SpiceDB's own userset notation (`team:t1#admin`). Calls with direct keys only are unaffected. A key containing `#` used to produce an undefined result, so a policy that relied on that, for example through a fallback rule or the old lexical lookup order, can now see a defined result (see CHANGELOG).
 
 ## Workstreams
 
@@ -37,6 +37,7 @@ The key syntax mirrors SpiceDB's own userset notation (`team:t1#admin`). Before 
 | 2.2 | `TestOPA_UsersetSubject_WithCaveat` (matching / wrong tenant, caveated lookup) | same | [x] |
 | 2.3 | `TestOPA_UsersetSubject_MixedKeys` (AND across direct + userset; lookup direct-first) | same | [x] |
 | 2.4 | `TestOPA_UsersetSubject_EmptySubRelation_Errors` (strict mode errors; default mode undefined) | same | [x] |
+| 2.5 | `TestOPA_UsersetSubject_MalformedKeys_Error`: empty sub-relation with empty ids, second `#`, empty type, malformed key beside a direct key (review of #21) | same | [x] |
 | 3.1 | README OPA section: userset keys; correct the builtin-error claim | `README.md` | [x] |
 | 3.2 | `## [2.4.0] - Unreleased` | `CHANGELOG.md` | [x] |
 
@@ -54,3 +55,15 @@ The key syntax mirrors SpiceDB's own userset notation (`team:t1#admin`). Before 
 ### [Implementer] Regression proven against pre-fix generated code
 
 `main`'s `opa.gen.go` files were temporarily checked out with the new tests in place. Every userset assertion returned `<nil>`. The new code was then restored, and a round-trip regeneration was zero-diff.
+
+### [Reviewer] CodeRabbit on #21: key validation order and overclaims
+
+All five findings were valid:
+
+- Key validation ran after the empty-id skip, so `{"extsvc/team#": []}` returned `false` / `[]` instead of an error.
+- `"extsvc/team#admin#"` passed `strings.Cut` with sub-relation `admin#`.
+- The template's header comment still described static compile-time-checked keys.
+- The job doc claimed no working policy changes behavior.
+- The README equated "undefined" with "denied" regardless of other rules.
+
+Fixes: keys are validated before ids (empty type, empty sub-relation, second `#`), and task 2.5 pins this with four cases, including a malformed key beside a valid direct key. The comment, job doc, CHANGELOG and README were reworded to match.
