@@ -6,7 +6,7 @@ require (
 	github.com/authzed/authzed-go v1.11.0
 	github.com/authzed/grpcutil v0.0.0-20261112214214-9968d92209a5
 	github.com/authzed/spicedb v1.57.1
-	github.com/open-policy-agent/opa v1.22.4
+	github.com/open-policy-agent/opa v1.23.0
 	github.com/stretchr/testify v1.12.1
 	github.com/testcontainers/testcontainers-go v0.45.0
 	google.golang.org/grpc v1.85.0
@@ -65,7 +65,7 @@ require (
 	github.com/huandu/go-sqlbuilder v1.44.1 // indirect
 	github.com/huandu/xstrings v1.4.0 // indirect
 	github.com/jzelinskie/stringz v0.0.3 // indirect
-	github.com/klauspost/compress v1.20.3 // indirect
+	github.com/klauspost/compress v1.20.4 // indirect
 	github.com/lestrrat-go/blackmagic v1.0.4 // indirect
 	github.com/lestrrat-go/dsig v1.4.0 // indirect
 	github.com/lestrrat-go/dsig-secp256k1 v1.0.0 // indirect
@@ -141,7 +141,7 @@ require (
 	golang.org/x/time v0.16.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260928230214-8a89bd6388cc // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20261110000943-09e21b237f2c // indirect
-	gopkg.in/ini.v1 v1.67.3 // indirect
+	gopkg.in/ini.v1 v1.68.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	oras.land/oras-go/v2 v2.7.0 // indirect
 )
